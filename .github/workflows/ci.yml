@@ -33,6 +33,7 @@ jobs:
         run: npm run lint
 
       - name: Run unit and integration tests
+        if: always()
         run: npx vitest run
 
       - name: Install Playwright browsers
