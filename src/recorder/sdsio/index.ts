@@ -26,6 +26,7 @@ export {
     MODE_WRITE,
 } from './protocol';
 export type { SdsioHeader } from './protocol';
+import { SdsioServerConfig, SdsioServerState } from '../../sds/types';
 
 // UsbTransport is intentionally NOT re-exported here.
 // It is only used by the child-process worker (usbWorker.ts).
@@ -42,27 +43,8 @@ import { fork, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SdsioManager } from './protocol';
-import { SerialTransport, SerialTransportOptions } from './serialTransport';
-import { SocketTransport, SocketTransportOptions } from './socketTransport';
-
-// ── Server config ───────────────────────────────────────────
-
-export interface SdsioServerConfig {
-    mode: 'usb' | 'serial' | 'socket';
-    workDir: string;
-    /** Serial-specific options */
-    serial?: SerialTransportOptions;
-    /** Socket-specific options */
-    socket?: SocketTransportOptions;
-}
-
-export type SdsioServerState =
-    | 'stopped'
-    | 'starting'
-    | 'waiting'
-    | 'connected'
-    | 'recording'
-    | 'error';
+import { SerialTransport } from './serialTransport';
+import { SocketTransport } from './socketTransport';
 
 /**
  * High-level SDSIO server.

@@ -13,19 +13,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import {
-    SdsRecord,
-    SdsMetadata,
-    SdsRecordingSession,
-    SDS_METADATA_EXTENSION,
-} from '../sds/types';
+import { SdsRecord, SdsMetadata, SdsRecordingSession, SdsRecorderConfig, SdsioServerConfig, SdsioServerState, SDS_METADATA_EXTENSION } from '../sds/types';
 import { writeSdsFile, writeMetadataFile, findNextFileIndex } from '../sds/writer';
-import {
-    SdsioServer,
-    SdsioServerConfig,
-    SdsioServerState,
-} from './sdsio';
+import { SdsioServer } from './sdsio';
 import { SerialTransport } from './sdsio/serialTransport';
+import { WebviewMessage } from '../webview/bridge';
 
 export class SdsRecorderPanel {
     public static readonly viewType = 'arm-sds.recorder';
@@ -87,7 +79,7 @@ export class SdsRecorderPanel {
     }
 
     /** Safe wrapper — silently drops messages if the panel has been disposed. */
-    private postMessage(message: any): void {
+    private postMessage(message: WebviewMessage): void {
         if (this.disposed) { return; }
         try {
             this.panel.webview.postMessage(message);
@@ -96,11 +88,11 @@ export class SdsRecorderPanel {
         }
     }
 
-    private async handleMessage(message: any): Promise<void> {
+    private async handleMessage(message: WebviewMessage): Promise<void> {
         try {
             switch (message.command) {
                 case 'startRecording':
-                    await this.startRecording(message.config);
+                    await this.startRecording(message.config as SdsRecorderConfig);
                     break;
                 case 'stopRecording':
                     await this.stopRecording();
@@ -115,8 +107,8 @@ export class SdsRecorderPanel {
                     });
                     break;
             }
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Recorder error: ${err.message}`);
+        } catch (err) {
+            vscode.window.showErrorMessage(`Recorder error: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -125,7 +117,7 @@ export class SdsRecorderPanel {
         return this.session;
     }
 
-    private async startRecording(config: any): Promise<void> {
+    private async startRecording(config: SdsRecorderConfig): Promise<void> {
         if (this.busy) {
             vscode.window.showWarningMessage('Recorder is busy — please wait.');
             return;
@@ -138,7 +130,7 @@ export class SdsRecorderPanel {
         }
     }
 
-    private async _doStartRecording(config: any): Promise<void> {
+    private async _doStartRecording(config: SdsRecorderConfig): Promise<void> {
         // Guard against starting while already recording — clean up previous session
         if (this.session) {
             if (this.recordingTimer) {
@@ -198,8 +190,8 @@ export class SdsRecorderPanel {
             // Real hardware — launch SDSIO server
             try {
                 await this.startHardwareRecording(config);
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Failed to start recording: ${err.message}`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to start recording: ${err instanceof Error ? err.message : String(err)}`);
                 this.session = undefined;
                 return;
             }
@@ -223,7 +215,7 @@ export class SdsRecorderPanel {
 
     // ── Hardware recording via native SDSIO server ────────────────
 
-    private async startHardwareRecording(config: any): Promise<void> {
+    private async startHardwareRecording(config: SdsRecorderConfig): Promise<void> {
         const workDir = this.session!.config.outputDirectory;
         this.outputChannel.appendLine(`[SDS Recorder] Mode: ${config.mode}`);
         this.outputChannel.appendLine(`[SDS Recorder] Working directory: ${workDir}`);
@@ -346,14 +338,18 @@ export class SdsRecorderPanel {
 
         try {
             ports = await SerialTransport.listPorts();
-        } catch (err: any) {
-            this.outputChannel.appendLine(`[SDS Recorder] Port enumeration error: ${err.message}`);
+        } catch (err) {
+            this.outputChannel.appendLine(`[SDS Recorder] Port enumeration error: ${err instanceof Error ? err.message : String(err)}`);
         }
 
         if (ports.length === 0) {
             ports.push('(no ports detected — enter manually)');
         }
 
+        this.postMessage({
+            type: 'serialPorts',
+            ports,
+        });
         this.postMessage({
             command: 'serialPorts',
             ports,
@@ -366,7 +362,7 @@ export class SdsRecorderPanel {
      * Generates a multi-channel sinewave demo signal.
      * Each channel uses a slightly different frequency so the traces are visually distinct.
      */
-    private startDemoRecording(config: any): void {
+    private startDemoRecording(config: SdsRecorderConfig): void {
         const frequency = config.frequency || 100;
         const channels = config.channels || ['x', 'y', 'z'];
         const intervalMs = Math.max(10, Math.round(1000 / frequency));
@@ -481,8 +477,8 @@ export class SdsRecorderPanel {
                     `SDS Recording saved: ${path.basename(stoppingSession.outputFile)} ` +
                     `(${stoppingSession.recordCount} records, ${formatBytes(stoppingSession.totalBytes)})`
                 );
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Failed to save recording: ${err.message}`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to save recording: ${err instanceof Error ? err.message : String(err)}`);
             }
         } else if (!isDemo) {
             const fileCount = stoppingServer?.fileCount ?? 0;
@@ -518,493 +514,45 @@ export class SdsRecorderPanel {
     }
 
     private getHtml(): string {
+        const webview = this.panel.webview;
         const config = vscode.workspace.getConfiguration('arm-sds.recorder');
-        const defaultPort = config.get<string>('serialPort', '');
-        const defaultBaud = config.get<number>('baudRate', 115200);
-        const defaultDir = config.get<string>('outputDirectory', './sds_recordings');
+        const initialState = {
+            defaultPort: config.get<string>('serialPort', ''),
+            defaultBaud: config.get<number>('baudRate', 115200),
+            defaultDir: config.get<string>('outputDirectory', './sds_recordings'),
+        };
+
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'out', 'recorderWebview.js')
+        );
+        const nonce = this._generateNonce();
+        const initialStateJson = JSON.stringify(initialState).replace(/</g, '\\u003c');
+
+        const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self';`;
 
         return /*html*/ `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDS Recorder</title>
-    <style>
-        :root {
-            --bg: var(--vscode-editor-background);
-            --fg: var(--vscode-editor-foreground);
-            --border: var(--vscode-panel-border);
-            --input-bg: var(--vscode-input-background);
-            --input-fg: var(--vscode-input-foreground);
-            --input-border: var(--vscode-input-border);
-            --btn-bg: var(--vscode-button-background);
-            --btn-fg: var(--vscode-button-foreground);
-            --btn-hover: var(--vscode-button-hoverBackground);
-            --error: var(--vscode-errorForeground);
-            --success: #4caf50;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            background: var(--bg);
-            color: var(--fg);
-            font-family: var(--vscode-font-family);
-            font-size: 13px;
-            padding: 20px;
-        }
-        h1 { font-size: 18px; margin-bottom: 20px; }
-        h2 { font-size: 14px; margin-bottom: 12px; opacity: 0.9; }
-        .section {
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            margin-bottom: 12px;
-        }
-        .form-row {
-            display: flex;
-            gap: 12px;
-        }
-        .form-row .form-group { flex: 1; }
-        label { font-size: 11px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.5px; }
-        input, select {
-            background: var(--input-bg);
-            color: var(--input-fg);
-            border: 1px solid var(--input-border);
-            padding: 6px 10px;
-            border-radius: 3px;
-            font-size: 13px;
-            font-family: inherit;
-        }
-        button {
-            background: var(--btn-bg);
-            color: var(--btn-fg);
-            border: none;
-            padding: 8px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            font-family: inherit;
-        }
-        button:hover { background: var(--btn-hover); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-record {
-            background: #d32f2f;
-            color: white;
-            font-weight: bold;
-            font-size: 14px;
-            padding: 10px 32px;
-        }
-        .btn-record:hover { background: #b71c1c; }
-        .btn-stop {
-            background: #555;
-            color: white;
-            font-size: 14px;
-            padding: 10px 32px;
-        }
-        .btn-secondary {
-            background: var(--btn-bg);
-            color: var(--btn-fg);
-            font-size: 12px;
-            padding: 6px 14px;
-        }
-        .controls { display: flex; gap: 12px; align-items: center; }
-        .status-panel {
-            display: none;
-            margin-top: 16px;
-        }
-        .status-panel.active { display: block; }
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-        }
-        .status-item {
-            padding: 8px 12px;
-            border-radius: 4px;
-            background: rgba(128,128,128,0.1);
-        }
-        .status-item .label { font-size: 10px; opacity: 0.7; text-transform: uppercase; }
-        .status-item .value { font-size: 16px; font-weight: 600; margin-top: 2px; }
-        .recording-indicator {
-            display: inline-block;
-            width: 10px; height: 10px;
-            background: #d32f2f;
-            border-radius: 50%;
-            animation: pulse 1s infinite;
-            margin-right: 8px;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        .live-preview {
-            width: 100%;
-            height: 120px;
-            margin-top: 12px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-        }
-        .server-state {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .server-state .dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-        }
-        .server-state.stopped .dot { background: #888; }
-        .server-state.starting .dot { background: #ff9800; }
-        .server-state.waiting .dot { background: #ff9800; animation: pulse 1s infinite; }
-        .server-state.connected .dot { background: #4caf50; }
-        .server-state.recording .dot { background: #d32f2f; animation: pulse 0.5s infinite; }
-        .server-state.error .dot { background: #d32f2f; }
-        .log-panel {
-            margin-top: 12px;
-            max-height: 200px;
-            overflow-y: auto;
-            background: rgba(0,0,0,0.15);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 8px;
-            font-family: var(--vscode-editor-font-family, monospace);
-            font-size: 12px;
-            line-height: 1.5;
-        }
-        .log-line { white-space: pre-wrap; word-break: break-all; }
-        .log-line.error { color: var(--error); }
-        .log-line.stream { color: var(--success); }
-        .streams-list {
-            margin-top: 8px;
-            padding: 0;
-            list-style: none;
-        }
-        .streams-list li {
-            padding: 4px 8px;
-            border-radius: 3px;
-            background: rgba(76,175,80,0.1);
-            margin-bottom: 4px;
-            font-size: 12px;
-        }
-        .streams-list li::before { content: "📡 "; }
-    </style>
 </head>
 <body>
-    <h1>⏺ SDS Recorder</h1>
-
-    <div class="section">
-        <h2>Connection Settings</h2>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Mode</label>
-                <select id="mode">
-                    <option value="usb">USB (Bulk)</option>
-                    <option value="serial">Serial (UART)</option>
-                    <option value="socket">Socket (TCP/IP)</option>
-                    <option value="demo">Demo Signal (Sinewave)</option>
-                </select>
-            </div>
-        </div>
-
-        <div id="serialConfig" style="display:none">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Serial Port</label>
-                    <div style="display:flex; gap:6px;">
-                        <select id="serialPort" style="flex:1;">
-                            <option value="">Select port...</option>
-                        </select>
-                        <button class="btn-secondary" id="btnRefreshPorts" title="Refresh ports">↻</button>
-                    </div>
-                    <input type="text" id="serialPortManual" placeholder="Or enter manually (e.g. /dev/ttyACM0)" style="margin-top:4px;" value="${defaultPort}">
-                </div>
-                <div class="form-group">
-                    <label>Baud Rate</label>
-                    <select id="baudRate">
-                        <option value="9600">9600</option>
-                        <option value="115200" ${defaultBaud === 115200 ? 'selected' : ''}>115200</option>
-                        <option value="230400">230400</option>
-                        <option value="460800">460800</option>
-                        <option value="921600">921600</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div id="socketConfig" style="display:none">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>IP Address</label>
-                    <input type="text" id="ipAddress" value="127.0.0.1">
-                </div>
-                <div class="form-group">
-                    <label>TCP Port</label>
-                    <input type="number" id="tcpPort" value="5050">
-                </div>
-            </div>
-        </div>
-
-        <div id="demoConfig" style="display:none">
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Stream Name</label>
-                    <input type="text" id="streamName" value="Sensors" placeholder="e.g. Sensors, Camera, Microphone">
-                </div>
-                <div class="form-group">
-                    <label>Frequency (Hz)</label>
-                    <input type="number" id="frequency" value="100" min="1" max="10000">
-                </div>
-                <div class="form-group">
-                    <label>Channels</label>
-                    <input type="text" id="channels" value="x, y, z" placeholder="Comma-separated">
-                </div>
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Output Directory</label>
-            <input type="text" id="outputDir" value="${defaultDir}">
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="controls">
-            <button class="btn-record" id="btnStart">⏺ Start Recording</button>
-            <button class="btn-stop" id="btnStop" disabled>⏹ Stop</button>
-            <span class="server-state stopped" id="serverState"><span class="dot"></span><span id="serverStateText">Stopped</span></span>
-        </div>
-
-        <div class="status-panel" id="statusPanel">
-            <h2><span class="recording-indicator"></span><span id="statusTitle">Starting...</span></h2>
-            <div class="status-grid">
-                <div class="status-item">
-                    <div class="label" id="statRecordsLabel">Records</div>
-                    <div class="value" id="statRecords">0</div>
-                </div>
-                <div class="status-item">
-                    <div class="label">Total Size</div>
-                    <div class="value" id="statSize">0 B</div>
-                </div>
-                <div class="status-item">
-                    <div class="label">Elapsed</div>
-                    <div class="value" id="statElapsed">0.0s</div>
-                </div>
-                <div class="status-item">
-                    <div class="label">Data Rate</div>
-                    <div class="value" id="statRate">0 B/s</div>
-                </div>
-            </div>
-
-            <ul class="streams-list" id="streamsList" style="display:none"></ul>
-
-            <canvas class="live-preview" id="livePreview"></canvas>
-
-            <div class="log-panel" id="logPanel" style="display:none"></div>
-        </div>
-    </div>
-
-    <script>
-    (function() {
-        const vscode = acquireVsCodeApi();
-        let isHardwareMode = true;
-        let startTime = 0;
-
-        const modeSelect = document.getElementById('mode');
-        const serialConfig = document.getElementById('serialConfig');
-        const socketConfig = document.getElementById('socketConfig');
-        const demoConfig = document.getElementById('demoConfig');
-        const btnStart = document.getElementById('btnStart');
-        const btnStop = document.getElementById('btnStop');
-        const statusPanel = document.getElementById('statusPanel');
-        const logPanel = document.getElementById('logPanel');
-        const streamsList = document.getElementById('streamsList');
-        const serverStateEl = document.getElementById('serverState');
-        const serverStateText = document.getElementById('serverStateText');
-        const statusTitle = document.getElementById('statusTitle');
-        const statRecordsLabel = document.getElementById('statRecordsLabel');
-
-        function updateModeUI() {
-            const mode = modeSelect.value;
-            isHardwareMode = mode !== 'demo';
-
-            serialConfig.style.display = mode === 'serial' ? 'block' : 'none';
-            socketConfig.style.display = mode === 'socket' ? 'block' : 'none';
-            demoConfig.style.display = mode === 'demo' ? 'block' : 'none';
-
-            if (mode === 'serial') {
-                vscode.postMessage({ command: 'getSerialPorts' });
-            }
-        }
-
-        modeSelect.addEventListener('change', updateModeUI);
-        updateModeUI();
-
-        document.getElementById('btnRefreshPorts').addEventListener('click', () => {
-            vscode.postMessage({ command: 'getSerialPorts' });
-        });
-
-        btnStart.addEventListener('click', () => {
-            const channels = document.getElementById('channels').value
-                .split(',').map(s => s.trim()).filter(Boolean);
-
-            let serialPort = document.getElementById('serialPort').value;
-            const manualPort = document.getElementById('serialPortManual').value.trim();
-            if (manualPort) { serialPort = manualPort; }
-
-            startTime = Date.now();
-
-            vscode.postMessage({
-                command: 'startRecording',
-                config: {
-                    mode: modeSelect.value,
-                    streamName: modeSelect.value === 'demo' ? (document.getElementById('streamName').value || 'Recording') : undefined,
-                    serialPort: serialPort,
-                    baudRate: parseInt(document.getElementById('baudRate').value),
-                    ipAddress: document.getElementById('ipAddress').value,
-                    tcpPort: parseInt(document.getElementById('tcpPort').value),
-                    frequency: parseInt(document.getElementById('frequency').value) || 100,
-                    channels: channels.length > 0 ? channels : ['x', 'y', 'z'],
-                    outputDirectory: document.getElementById('outputDir').value,
-                },
-            });
-        });
-
-        btnStop.addEventListener('click', () => {
-            vscode.postMessage({ command: 'stopRecording' });
-        });
-
-        function updateServerState(state) {
-            serverStateEl.className = 'server-state ' + state;
-            const labels = {
-                stopped: 'Stopped',
-                starting: 'Starting...',
-                waiting: 'Waiting for device...',
-                connected: 'Device connected',
-                recording: 'Recording data',
-                error: 'Error',
-            };
-            serverStateText.textContent = labels[state] || state;
-        }
-
-        function appendLog(text, className) {
-            const div = document.createElement('div');
-            div.className = 'log-line' + (className ? ' ' + className : '');
-            div.textContent = text;
-            logPanel.appendChild(div);
-            logPanel.scrollTop = logPanel.scrollHeight;
-            while (logPanel.children.length > 200) {
-                logPanel.removeChild(logPanel.firstChild);
-            }
-        }
-
-        window.addEventListener('message', (event) => {
-            const msg = event.data;
-            switch (msg.command) {
-                case 'serialPorts': {
-                    const select = document.getElementById('serialPort');
-                    select.innerHTML = '<option value="">Select port...</option>';
-                    msg.ports.forEach(p => {
-                        const opt = document.createElement('option');
-                        opt.value = p;
-                        opt.textContent = p;
-                        select.appendChild(opt);
-                    });
-                    break;
-                }
-
-                case 'recordingStarted': {
-                    btnStart.disabled = true;
-                    btnStop.disabled = false;
-                    statusPanel.classList.add('active');
-                    startTime = Date.now();
-                    const hwMode = msg.isHardwareMode !== undefined ? msg.isHardwareMode : isHardwareMode;
-                    if (hwMode) {
-                        logPanel.style.display = 'block';
-                        logPanel.innerHTML = '';
-                        streamsList.style.display = 'block';
-                        streamsList.innerHTML = '';
-                        statusTitle.textContent = 'Server starting — waiting for device...';
-                        statRecordsLabel.textContent = 'Streams';
-                    } else {
-                        logPanel.style.display = 'none';
-                        streamsList.style.display = 'none';
-                        statusTitle.textContent = 'Recording in progress...';
-                        statRecordsLabel.textContent = 'Records';
-                    }
-                    break;
-                }
-
-                case 'recordingStopped':
-                    btnStart.disabled = false;
-                    btnStop.disabled = true;
-                    statusPanel.classList.remove('active');
-                    updateServerState('stopped');
-                    break;
-
-                case 'recordingStatus':
-                    document.getElementById('statRecords').textContent = msg.recordCount;
-                    document.getElementById('statSize').textContent = formatBytes(msg.totalBytes);
-                    const elapsed = msg.elapsed || (Date.now() - startTime);
-                    document.getElementById('statElapsed').textContent = (elapsed / 1000).toFixed(1) + 's';
-                    const rate = elapsed > 0 ? Math.round(msg.totalBytes / (elapsed / 1000)) : 0;
-                    document.getElementById('statRate').textContent = formatBytes(rate) + '/s';
-
-                    if (msg.streams && msg.streams.length > 0) {
-                        streamsList.innerHTML = '';
-                        msg.streams.forEach(s => {
-                            const li = document.createElement('li');
-                            li.textContent = s.name + ' → ' + s.filePath;
-                            streamsList.appendChild(li);
-                        });
-                        streamsList.style.display = 'block';
-                    }
-                    break;
-
-                case 'serverStateChanged':
-                    updateServerState(msg.state);
-                    if (msg.state === 'recording') {
-                        statusTitle.textContent = 'Recording data from device...';
-                    } else if (msg.state === 'connected') {
-                        statusTitle.textContent = 'Device connected — waiting for data...';
-                    } else if (msg.state === 'waiting') {
-                        statusTitle.textContent = 'Server running — waiting for device...';
-                    } else if (msg.state === 'error') {
-                        statusTitle.textContent = 'Server error — check log';
-                    }
-                    break;
-
-                case 'serverEvent':
-                    if (msg.event) {
-                        const cls = msg.event.type === 'error' ? 'error' :
-                                    msg.event.type === 'stream-open' || msg.event.type === 'stream-close' ? 'stream' : '';
-                        appendLog(msg.event.message, cls);
-                    }
-                    break;
-            }
-        });
-
-        function formatBytes(b) {
-            if (b < 1024) return b + ' B';
-            if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
-            return (b/(1024*1024)).toFixed(1) + ' MB';
-        }
-
-        vscode.postMessage({ command: 'getServerState' });
-    })();
-    </script>
+    <div id="root"></div>
+    <script nonce="${nonce}">window.__INITIAL_STATE__ = ${initialStateJson};</script>
+    <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+    }
+
+    private _generateNonce(): string {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 16; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
     }
 
     private dispose(): void {

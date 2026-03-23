@@ -8,6 +8,8 @@
  * Based on the official SDS Framework specification:
  * https://arm-software.github.io/SDS-Framework/main/theory.html
  */
+import { SerialTransportOptions } from './../recorder/sdsio/serialTransport';
+import { SocketTransportOptions } from './../recorder/sdsio/socketTransport';
 
 /** Supported SDS data types as used in .sds.yml metadata */
 export type SdsDataType =
@@ -28,6 +30,24 @@ export type SdsPixelFormat =
     | 'NV16' | 'NV61'
     | 'YUYV' | 'UYVY' | 'YUV422P'
     | 'YUV444' | 'YUV444P';
+
+export interface SdsioServerConfig {
+    mode: ConfigMode;
+    workDir: string;
+    /** Serial-specific options */
+    serial?: SerialTransportOptions;
+    /** Socket-specific options */
+    socket?: SocketTransportOptions;
+}
+
+export type SdsioServerState =
+    | 'stopped'
+    | 'starting'
+    | 'waiting'
+    | 'connected'
+    | 'recording'
+    | 'error';
+
 
 /** Image metadata within a content value */
 export interface SdsImageMeta {
@@ -114,6 +134,18 @@ export interface SdsParsedFile {
     durationMs: number;
 }
 
+/** Aggregate statistics returned by getSdsFileStats. */
+export interface SdsFileStats {
+    fileSize: number;
+    totalRecords: number;
+    recordingTimeSeconds: number;
+    recordingIntervalMs: number;
+    avgBlockSize: number;
+    minBlockSize: number;
+    maxBlockSize: number;
+    dataRate: number;
+}
+
 /**
  * Decoded data point — one value from one record, after applying
  * scale and offset from the metadata.
@@ -124,14 +156,18 @@ export interface SdsDecodedSample {
     values: { [channelName: string]: number };
 }
 
+export type ConfigMode = 'serial' | 'socket' | 'usb' | 'demo';
+
 /**
  * Connection configuration for the SDS Recorder.
  */
 export interface SdsRecorderConfig {
-    mode: 'serial' | 'socket' | 'usb' | 'demo';
+    mode: ConfigMode;
     serialPort?: string;
     baudRate?: number;
-    parity?: 'N' | 'E' | 'O' | 'M' | 'S';
+    channels?: string[];
+    frequency?: number;
+    parity?: 'none' | 'even' | 'odd' | 'mark' | 'space';
     stopBits?: 1 | 1.5 | 2;
     ipAddress?: string;
     tcpPort?: number;

@@ -57,9 +57,9 @@ export class SocketTransport extends EventEmitter {
         while (this.running) {
             try {
                 await this._listenAndServe(ip, port);
-            } catch (err: any) {
+            } catch (err) {
                 if (!this.running) { break; }
-                this.emit('log', `Socket error: ${err.message}. Restarting...`);
+                this.emit('log', `Socket error: ${err instanceof Error ? err.message : String(err)}. Restarting...`);
                 this._cleanup();
                 await this._sleep(1000);
             }
@@ -151,13 +151,13 @@ export class SocketTransport extends EventEmitter {
         socket.on('data', (data: Buffer) => {
             try {
                 this._onData(data, socket);
-            } catch (err: any) {
-                this._safeEmit('log', `Socket data processing error: ${err.message}`);
+            } catch (err) {
+                this._safeEmit('log', `Socket data processing error: ${err instanceof Error ? err.message : String(err)}`);
             }
         });
 
         socket.on('error', (err: Error) => {
-            this._safeEmit('log', `Socket client error: ${err.message}`);
+            this._safeEmit('log', `Socket client error: ${err instanceof Error ? err.message : String(err)}`);
         });
 
         socket.on('close', () => {
@@ -180,8 +180,8 @@ export class SocketTransport extends EventEmitter {
             if (response && response.length > 0 && !socket.destroyed) {
                 try {
                     socket.write(response);
-                } catch (err: any) {
-                    this._safeEmit('log', `Socket write error: ${err.message}`);
+                } catch (err) {
+                    this._safeEmit('log', `Socket write error: ${err instanceof Error ? err.message : String(err)}`);
                 }
             }
         }
