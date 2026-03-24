@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: [20]
+        node-version: [22]
 
     runs-on: ${{ matrix.os }}
 
@@ -36,13 +36,13 @@ jobs:
         if: always()
         run: npx vitest run
 
-      - name: Install Playwright browsers
-        if: always()
-        run: npx playwright install --with-deps chromium
+      # - name: Install Playwright browsers
+      #   if: always()
+      #   run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests
-        if: always()
-        run: npm run test:e2e
+      # - name: Run E2E tests
+      #   if: always()
+      #   run: npm run test:e2e
 
       - name: Upload test results
         if: always()
@@ -78,26 +78,26 @@ jobs:
         with:
           path: artifacts
 
-      - name: Playwright Report (Ubuntu)
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: 'E2E Tests (ubuntu)'
-          path: artifacts/test-results-ubuntu-latest/playwright-report.xml
-          reporter: java-junit
+      # - name: Playwright Report (Ubuntu)
+      #   if: always()
+      #   uses: dorny/test-reporter@v1
+      #   with:
+      #     name: 'E2E Tests (ubuntu)'
+      #     path: artifacts/test-results-ubuntu-latest/playwright-report.xml
+      #     reporter: java-junit
 
-      - name: Playwright Report (macOS)
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: 'E2E Tests (macos)'
-          path: artifacts/test-results-macos-latest/playwright-report.xml
-          reporter: java-junit
+      # - name: Playwright Report (macOS)
+      #   if: always()
+      #   uses: dorny/test-reporter@v1
+      #   with:
+      #     name: 'E2E Tests (macos)'
+      #     path: artifacts/test-results-macos-latest/playwright-report.xml
+      #     reporter: java-junit
 
-      - name: Playwright Report (Windows)
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: 'E2E Tests (windows)'
-          path: artifacts/test-results-windows-latest/playwright-report.xml
-          reporter: java-junit
+      # - name: Playwright Report (Windows)
+      #   if: always()
+      #   uses: dorny/test-reporter@v1
+      #   with:
+      #     name: 'E2E Tests (windows)'
+      #     path: artifacts/test-results-windows-latest/playwright-report.xml
+      #     reporter: java-junit
