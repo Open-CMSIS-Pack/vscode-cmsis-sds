@@ -40,9 +40,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run unit and integration tests
+      - name: Run unit tests
         if: always()
-        run: npx vitest run
+        run: npm run test:unit
+      
+      - name: Run integration tests
+        if: always()
+        run: npm run test:integration
       
       - name: Package VSIX
         if: always()
