@@ -6,7 +6,9 @@
   "publisher": "open-cmsis",
   "license": "Apache-2.0",
   "engines": {
-    "vscode": "^1.85.0"
+    "node": "^22.22.0",
+    "npm": "^10.9.4",
+    "vscode": "^1.108.1"
   },
   "categories": [
     "Visualization",
@@ -123,8 +125,8 @@
     "package": "vsce package --allow-missing-repository --baseContentUrl ."
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@types/vscode": "^1.85.0",
+    "@types/node": "^22.19.0",
+    "@types/vscode": "^1.108.1",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "@vscode/vsce": "^2.19.0",
