@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -51,6 +51,13 @@ jobs:
 
       - name: Compile TypeScript
         run: npm run compile
+      
+      - name: Upload VSIX package
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: vscode-cmsis-sds
+          path: ./*.vsix
+          retention-days: 1
 
       # - name: Lint
       #   run: npm run lint
