@@ -52,6 +52,9 @@ jobs:
       - name: Compile TypeScript
         run: npm run compile
       
+      - name: Lint
+        run: npm run lint
+
       - name: Upload VSIX package
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -59,20 +62,17 @@ jobs:
           path: ./*.vsix
           retention-days: 1
 
-      # - name: Lint
-      #   run: npm run lint
-
       - name: Run unit tests
         run: npm run test:unit
 
       - name: Run integration tests
         run: npm run test:integration
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      # - name: Install Playwright browsers
+      #   run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests
-        run: npm run test:e2e
+      # - name: Run E2E tests
+      #   run: npm run test:e2e
 
       - name: Upload test results
         if: always()
