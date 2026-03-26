@@ -6,8 +6,7 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                // "--disable-extensions",
-                "C:\\etc\\git\\examples\\ModelNova",
+                "${workspaceFolder}/sds_recordings",
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "outFiles": [
