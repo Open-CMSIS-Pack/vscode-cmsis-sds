@@ -18,10 +18,7 @@ import {
     SdsDataType,
     SdsDecodedSample,
     sdsDataTypeSize,
-    SDS_METADATA_EXTENSION,
-    SdsImageMeta,
-    SdsAudioMeta,
-    SdsVideoMeta,
+    SdsPixelFormat,
 } from './types';
 
 /**
@@ -89,7 +86,7 @@ export function writeSdsFile(filePath: string, records: SdsRecord[]): void {
 export function encodeRecords(
     samples: SdsDecodedSample[],
     content: SdsContentValue[],
-    tickFrequency: number = 1000
+    _tickFrequency: number = 1000
 ): SdsRecord[] {
     const records: SdsRecord[] = [];
 
@@ -280,7 +277,7 @@ export function parseMetadataString(text: string): SdsMetadata {
         }
 
         // Detect indentation level (number of leading spaces)
-        const indent = line.length - line.trimStart().length;
+        // const indent = line.length - line.trimStart().length;
 
         // Check for content array
         if (trimmed === 'content:') {
@@ -334,7 +331,7 @@ export function parseMetadataString(text: string): SdsMetadata {
                 // Parse image sub-fields
                 if (inImage && currentContent.image) {
                     if (trimmed.startsWith('pixel_format:')) {
-                        currentContent.image.pixel_format = extractYamlValue(trimmed.replace('pixel_format:', '').trim()) as any;
+                        currentContent.image.pixel_format = extractYamlValue(trimmed.replace('pixel_format:', '').trim()) as SdsPixelFormat;
                     } else if (trimmed.startsWith('width:')) {
                         currentContent.image.width = parseInt(trimmed.replace('width:', '').trim(), 10);
                     } else if (trimmed.startsWith('height:')) {
@@ -364,7 +361,7 @@ export function parseMetadataString(text: string): SdsMetadata {
                 // Parse video sub-fields
                 if (inVideo && currentContent.video) {
                     if (trimmed.startsWith('pixel_format:')) {
-                        currentContent.video.pixel_format = extractYamlValue(trimmed.replace('pixel_format:', '').trim()) as any;
+                        currentContent.video.pixel_format = extractYamlValue(trimmed.replace('pixel_format:', '').trim()) as SdsPixelFormat;
                     } else if (trimmed.startsWith('width:')) {
                         currentContent.video.width = parseInt(trimmed.replace('width:', '').trim(), 10);
                     } else if (trimmed.startsWith('height:')) {

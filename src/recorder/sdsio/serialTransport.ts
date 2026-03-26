@@ -53,9 +53,9 @@ export class SerialTransport extends EventEmitter {
         while (this.running) {
             try {
                 await this._connectAndRun();
-            } catch (err: any) {
+            } catch (err) {
                 if (!this.running) { break; }
-                this.emit('log', `Serial error: ${err.message}. Reconnecting...`);
+                this.emit('log', `Serial error: ${err instanceof Error ? err.message : String(err)}. Reconnecting...`);
                 this._cleanup();
                 await this._sleep(1000);
             }
@@ -96,14 +96,14 @@ export class SerialTransport extends EventEmitter {
         port.on('data', (data: Buffer) => {
             try {
                 this._onData(data);
-            } catch (err: any) {
-                this._safeEmit('log', `Serial data processing error: ${err.message}`);
+            } catch (err) {
+                this._safeEmit('log', `Serial data processing error: ${err instanceof Error ? err.message : String(err)}`);
             }
         });
 
         port.on('error', (err: Error) => {
             if (!this.running) { return; }
-            this._safeEmit('log', `Serial error: ${err.message}`);
+            this._safeEmit('log', `Serial error: ${err instanceof Error ? err.message : String(err)}`);
         });
 
         port.on('close', () => {
@@ -163,7 +163,7 @@ export class SerialTransport extends EventEmitter {
                             resolve(port);
                         }
                     });
-                } catch (err: any) {
+                } catch {
                     if (firstAttempt) {
                         this.emit('log', `Waiting for serial port ${this.opts.port}...`);
                         firstAttempt = false;
@@ -185,11 +185,11 @@ export class SerialTransport extends EventEmitter {
                 try {
                     this.serialPort.write(response, (err) => {
                         if (err && this.running) {
-                            this._safeEmit('log', `Serial write error: ${err.message}`);
+                            this._safeEmit('log', `Serial write error: ${err instanceof Error ? err.message : String(err)}`);
                         }
                     });
-                } catch (err: any) {
-                    this._safeEmit('log', `Serial write error: ${err.message}`);
+                } catch (err) {
+                    this._safeEmit('log', `Serial write error: ${err instanceof Error ? err.message : String(err)}`);
                 }
             }
         }

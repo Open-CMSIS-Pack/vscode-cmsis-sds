@@ -16,6 +16,7 @@
  * Usage:  fork('usbWorker.js', [workDir])
  */
 
+import { ChildProcessMessage } from '../../sds';
 import { SdsioManager } from './protocol';
 import { UsbTransport } from './usbTransport';
 
@@ -23,16 +24,15 @@ import { UsbTransport } from './usbTransport';
 
 const workDir = process.argv[2];
 if (!workDir || !process.send) {
-    // eslint-disable-next-line no-console
     console.error('usbWorker: must be spawned via fork(path, [workDir])');
     process.exit(1);
 }
 
 // ── Create manager & transport ──────────────────────────────
 
-const manager   = new SdsioManager(workDir);
+const manager = new SdsioManager(workDir);
 const transport = new UsbTransport(manager);
-let   running   = true;
+let running = true;
 
 /** Send an IPC message to the parent — swallows errors if parent is gone. */
 function send(msg: Record<string, unknown>): void {
@@ -60,7 +60,7 @@ transport.on('stopped', () => {
 
 // ── Forward manager events ──────────────────────────────────
 
-manager.on('log',   (msg: string) => send({ type: 'log', msg }));
+manager.on('log', (msg: string) => send({ type: 'log', msg }));
 manager.on('error', (msg: string) => send({ type: 'error', msg }));
 
 manager.on('record', (name: string, filePath: string) => {
@@ -82,7 +82,7 @@ manager.on('close', (name: string, filePath: string) => {
 
 // ── Handle commands from parent ─────────────────────────────
 
-process.on('message', (msg: any) => {
+process.on('message', (msg: ChildProcessMessage) => {
     if (msg?.type === 'stop') {
         running = false;
         try { transport.stop(); } catch { /* ignore */ }

@@ -158,6 +158,12 @@ export interface SdsDecodedSample {
 
 export type ConfigMode = 'serial' | 'socket' | 'usb' | 'demo';
 
+export interface ChildProcessMessage {
+    type: string;
+    msg: string;
+    [key: string]: string | number;
+}
+
 /**
  * Connection configuration for the SDS Recorder.
  */

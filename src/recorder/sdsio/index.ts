@@ -26,7 +26,7 @@ export {
     MODE_WRITE,
 } from './protocol';
 export type { SdsioHeader } from './protocol';
-import { SdsioServerConfig, SdsioServerState } from '../../sds/types';
+import { ChildProcessMessage, SdsioServerConfig, SdsioServerState } from '../../sds/types';
 
 // UsbTransport is intentionally NOT re-exported here.
 // It is only used by the child-process worker (usbWorker.ts).
@@ -238,7 +238,7 @@ export class SdsioServer extends EventEmitter {
             });
             this._usbWorker = worker;
 
-            worker.on('message', (msg: any) => {
+            worker.on('message', (msg: ChildProcessMessage) => {
                 if (!msg || typeof msg.type !== 'string') { return; }
                 switch (msg.type) {
                     case 'log':

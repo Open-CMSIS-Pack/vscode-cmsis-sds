@@ -20,7 +20,9 @@ import {
     getSdsFileStats,
     SdsMetadata,
     SDS_METADATA_EXTENSION,
+    SdsDecodedSample,
 } from '../sds';
+import { WebviewMessage } from '../webview/bridge';
 
 export class SdsViewerPanel {
     public static readonly viewType = 'arm-sds.viewer';
@@ -88,7 +90,7 @@ export class SdsViewerPanel {
         );
     }
 
-    private async handleMessage(message: any): Promise<void> {
+    private async handleMessage(message: WebviewMessage): Promise<void> {
         try {
             switch (message.command) {
                 case 'exportCsv':
@@ -98,8 +100,8 @@ export class SdsViewerPanel {
                     this.update();
                     break;
             }
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Viewer error: ${err.message}`);
+        } catch (err) {
+            vscode.window.showErrorMessage(`Viewer error: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -119,7 +121,7 @@ export class SdsViewerPanel {
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             const stats = getSdsFileStats(parsed, tickFreq);
 
-            const samples: any[] = [];
+            const samples: SdsDecodedSample[] = [];
             let channelNames: string[] = [];
 
             if (metadata) {
@@ -140,7 +142,7 @@ export class SdsViewerPanel {
                         timestamp: record.timestamp,
                         timeSeconds: record.timestamp / tickFreq,
                         values: { data_size: record.dataSize },
-                    });
+                    } as SdsDecodedSample);
                 }
             }
 
@@ -151,8 +153,8 @@ export class SdsViewerPanel {
                 metadata,
                 fileName: path.basename(this.sdsFilePath),
             });
-        } catch (err: any) {
-            this.panel.webview.html = this.getErrorHtml(err.message);
+        } catch (err) {
+            this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
         }
     }
 
@@ -169,7 +171,7 @@ export class SdsViewerPanel {
         }
         return undefined;
     }
-    private getHtml(initialState: any): string {
+    private getHtml(initialState: Record<string, unknown>): string {
         const webview = this.panel.webview;
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'media', 'viewerWebview.js')

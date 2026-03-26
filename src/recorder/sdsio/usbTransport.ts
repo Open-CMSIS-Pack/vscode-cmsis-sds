@@ -13,13 +13,12 @@ import { EventEmitter } from 'events';
 import { usb, Device, InEndpoint, OutEndpoint, Interface, getDeviceList } from 'usb';
 import {
     SdsioManager,
-    FrameAccumulator,
-    HEADER_SIZE,
+    FrameAccumulator
 } from './protocol';
 
 const USB_PRODUCT_STRING = 'SDSIO Client';
 const POLL_TRANSFERS = 8;           // number of concurrent IN transfers
-const TRANSFER_SIZE  = 8 * 1024;    // 8 KiB per transfer
+const TRANSFER_SIZE = 8 * 1024;    // 8 KiB per transfer
 const DISCOVERY_INTERVAL_MS = 500;
 
 /**
@@ -56,9 +55,9 @@ export class UsbTransport extends EventEmitter {
         while (this.running) {
             try {
                 await this._discoverAndRun();
-            } catch (err: any) {
+            } catch (err) {
                 if (!this.running) { break; }
-                this.emit('log', `USB error: ${err.message}. Reconnecting...`);
+                this.emit('log', `USB error: ${err instanceof Error ? err.message : String(err)}. Reconnecting...`);
                 this._cleanup();
                 await this._sleep(1000);
             }
@@ -94,8 +93,8 @@ export class UsbTransport extends EventEmitter {
 
         try {
             device.open();
-        } catch (err: any) {
-            throw new Error(`Cannot open USB device: ${err.message}`);
+        } catch (err) {
+            throw new Error(`Cannot open USB device: ${err instanceof Error ? err.message : String(err)}`);
         }
 
         // Try auto-detach kernel driver
@@ -109,8 +108,8 @@ export class UsbTransport extends EventEmitter {
 
         try {
             iface.claim();
-        } catch (err: any) {
-            throw new Error(`Cannot claim interface: ${err.message}`);
+        } catch (err) {
+            throw new Error(`Cannot claim interface: ${err instanceof Error ? err.message : String(err)}`);
         }
         this.iface = iface;
 
@@ -157,14 +156,14 @@ export class UsbTransport extends EventEmitter {
             if (this.detached) { return; }
             try {
                 this._onData(data);
-            } catch (err: any) {
-                this._safeEmit('log', `USB data processing error: ${err.message}`);
+            } catch (err) {
+                this._safeEmit('log', `USB data processing error: ${err instanceof Error ? err.message : String(err)}`);
             }
         });
 
         inEp.on('error', (err: Error) => {
             if (!this.running || this.detached) { return; }
-            this._safeEmit('log', `USB IN error: ${err.message}`);
+            this._safeEmit('log', `USB IN error: ${err instanceof Error ? err.message : String(err)}`);
         });
 
         inEp.on('end', () => {
@@ -178,7 +177,7 @@ export class UsbTransport extends EventEmitter {
         // late-arriving transfer errors don't crash via ERR_UNHANDLED_ERROR.
         outEp.on('error', (err: Error) => {
             if (!this.running || this.detached) { return; }
-            this._safeEmit('log', `USB OUT endpoint error: ${err.message}`);
+            this._safeEmit('log', `USB OUT endpoint error: ${err instanceof Error ? err.message : String(err)}`);
         });
 
         // Start polling with multiple transfers
@@ -251,12 +250,12 @@ export class UsbTransport extends EventEmitter {
                 try {
                     this.outEndpoint.transfer(response, (err) => {
                         if (err && this.running && !this.detached) {
-                            this._safeEmit('log', `USB OUT error: ${err.message}`);
+                            this._safeEmit('log', `USB OUT error: ${err instanceof Error ? err.message : String(err)}`);
                         }
                     });
-                } catch (err: any) {
+                } catch (err) {
                     if (!this.detached) {
-                        this._safeEmit('log', `USB OUT transfer error: ${err.message}`);
+                        this._safeEmit('log', `USB OUT transfer error: ${err instanceof Error ? err.message : String(err)}`);
                     }
                 }
             }

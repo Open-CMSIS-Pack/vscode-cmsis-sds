@@ -25,13 +25,13 @@ import { EventEmitter } from 'events';
 
 export const HEADER_SIZE = 16;
 
-export const CMD_OPEN  = 1;
+export const CMD_OPEN = 1;
 export const CMD_CLOSE = 2;
 export const CMD_WRITE = 3;
-export const CMD_READ  = 4;
-export const CMD_PING  = 5;
+export const CMD_READ = 4;
+export const CMD_PING = 5;
 
-export const MODE_READ  = 0;
+export const MODE_READ = 0;
 export const MODE_WRITE = 1;
 
 /** Characters forbidden in stream names (mirrors Python validation). */
@@ -54,7 +54,7 @@ export function parseHeader(buf: Buffer, offset = 0): SdsioHeader {
         cmd: buf.readUInt32LE(offset),
         sid: buf.readUInt32LE(offset + 4),
         arg: buf.readUInt32LE(offset + 8),
-        sz:  buf.readUInt32LE(offset + 12),
+        sz: buf.readUInt32LE(offset + 12),
     };
 }
 
@@ -148,11 +148,11 @@ export class SdsioManager extends EventEmitter {
      */
     processMessage(header: SdsioHeader, payload: Buffer): Buffer | undefined {
         switch (header.cmd) {
-            case CMD_OPEN:  return this._handleOpen(header, payload);
+            case CMD_OPEN: return this._handleOpen(header, payload);
             case CMD_CLOSE: return this._handleClose(header);
             case CMD_WRITE: return this._handleWrite(header, payload);
-            case CMD_READ:  return this._handleRead(header);
-            case CMD_PING:  return this._handlePing(header);
+            case CMD_READ: return this._handleRead(header);
+            case CMD_PING: return this._handlePing(header);
             default:
                 this.emit('error', `Unknown command: ${header.cmd}`);
                 return undefined;
@@ -161,7 +161,7 @@ export class SdsioManager extends EventEmitter {
 
     /** Close all open streams (cleanup on disconnect). */
     closeAll(): void {
-        for (const [sid, stream] of this.streams.entries()) {
+        for (const stream of this.streams.values()) {
             try {
                 fs.closeSync(stream.fd);
             } catch { /* ignore */ }
@@ -204,7 +204,7 @@ export class SdsioManager extends EventEmitter {
         // Find next available file index
         let idx = 0;
         let filePath: string;
-        // eslint-disable-next-line no-constant-condition
+
         while (true) {
             filePath = path.join(this.workDir, `${name}.${idx}.sds`);
             if (!fs.existsSync(filePath)) { break; }
@@ -222,8 +222,8 @@ export class SdsioManager extends EventEmitter {
             this.emit('record', name, filePath);
 
             return buildResponse(CMD_OPEN, sid, mode);
-        } catch (err: any) {
-            this.emit('error', `Failed to open file "${filePath}": ${err.message}`);
+        } catch (err) {
+            this.emit('error', `Failed to open file "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
             return buildResponse(CMD_OPEN, 0, mode);
         }
     }
@@ -266,8 +266,8 @@ export class SdsioManager extends EventEmitter {
             this.emit('play', name, filePath);
 
             return buildResponse(CMD_OPEN, sid, mode);
-        } catch (err: any) {
-            this.emit('error', `Failed to open file "${filePath}": ${err.message}`);
+        } catch (err) {
+            this.emit('error', `Failed to open file "${filePath}": ${err instanceof Error ? err.message : String(err)}`);
             return buildResponse(CMD_OPEN, 0, mode);
         }
     }
@@ -305,8 +305,8 @@ export class SdsioManager extends EventEmitter {
 
         try {
             fs.writeSync(stream.fd, payload);
-        } catch (err: any) {
-            this.emit('error', `Write error on stream ${header.sid}: ${err.message}`);
+        } catch (err) {
+            this.emit('error', `Write error on stream ${header.sid}: ${err instanceof Error ? err.message : String(err)}`);
         }
 
         return undefined; // No response for write

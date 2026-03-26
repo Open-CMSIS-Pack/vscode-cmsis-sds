@@ -18,14 +18,7 @@ import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsRecorderPanel } from './recorder/sdsRecorderPanel';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
-import {
-    parseSdsFile,
-    decodeAllRecords,
-    parseMetadataFile,
-    exportToCsv,
-    SDS_METADATA_EXTENSION,
-    SdsMetadata,
-} from './sds';
+import { parseSdsFile, decodeAllRecords, parseMetadataFile, exportToCsv, SDS_METADATA_EXTENSION, } from './sds';
 
 export function activate(context: vscode.ExtensionContext) {
     // ── Diagnostics Output Channel ──────────────────────────────
@@ -58,8 +51,8 @@ export function activate(context: vscode.ExtensionContext) {
                     filePath = fp;
                 }
                 SdsViewerPanel.createOrShow(context.extensionUri, filePath);
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Failed to open viewer: ${err.message}`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open viewer: ${err instanceof Error ? err.message : String(err)}`);
             }
         })
     );
@@ -99,8 +92,8 @@ export function activate(context: vscode.ExtensionContext) {
                 fs.writeFileSync(metaPath, template, 'utf-8');
                 const doc = await vscode.workspace.openTextDocument(metaPath);
                 await vscode.window.showTextDocument(doc);
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Failed to create metadata: ${err.message}`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to create metadata: ${err instanceof Error ? err.message : String(err)}`);
             }
         })
     );
@@ -124,8 +117,8 @@ export function activate(context: vscode.ExtensionContext) {
                     return;
                 }
                 await doExportCsv(filePath);
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Export failed: ${err.message}`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
             }
         })
     );
@@ -141,99 +134,99 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.initWorkspace', async () => {
             try {
-            if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
-                const action = await vscode.window.showInformationMessage(
-                    'CMSIS SDS needs an open workspace folder to store recordings and data.',
-                    'Open Folder',
-                    'Create New Folder'
-                );
+                if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+                    const action = await vscode.window.showInformationMessage(
+                        'CMSIS SDS needs an open workspace folder to store recordings and data.',
+                        'Open Folder',
+                        'Create New Folder'
+                    );
 
-                if (action === 'Open Folder') {
-                    const uris = await vscode.window.showOpenDialog({
-                        canSelectFolders: true,
-                        canSelectFiles: false,
-                        canSelectMany: false,
-                        openLabel: 'Open as SDS Workspace',
-                    });
-                    if (uris && uris.length > 0) {
-                        await vscode.commands.executeCommand('vscode.openFolder', uris[0]);
+                    if (action === 'Open Folder') {
+                        const uris = await vscode.window.showOpenDialog({
+                            canSelectFolders: true,
+                            canSelectFiles: false,
+                            canSelectMany: false,
+                            openLabel: 'Open as SDS Workspace',
+                        });
+                        if (uris && uris.length > 0) {
+                            await vscode.commands.executeCommand('vscode.openFolder', uris[0]);
+                        }
+                        return;
+                    } else if (action === 'Create New Folder') {
+                        const parentUri = await vscode.window.showOpenDialog({
+                            canSelectFolders: true,
+                            canSelectFiles: false,
+                            canSelectMany: false,
+                            openLabel: 'Select Parent Folder',
+                        });
+                        if (!parentUri || parentUri.length === 0) { return; }
+
+                        const folderName = await vscode.window.showInputBox({
+                            prompt: 'Name for the new SDS project folder',
+                            value: 'sds-project',
+                            validateInput: (v) => {
+                                if (!v || v.trim().length === 0) { return 'Name cannot be empty'; }
+                                if (/[/:]/.test(v)) { return 'Invalid characters in name'; }
+                                return undefined;
+                            },
+                        });
+                        if (!folderName) { return; }
+
+                        const newFolder = vscode.Uri.joinPath(parentUri[0], folderName.trim());
+                        await vscode.workspace.fs.createDirectory(newFolder);
+                        await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(newFolder, 'sds_recordings'));
+
+                        const readmeContent = Buffer.from([
+                            `# ${folderName.trim()}`,
+                            '',
+                            'SDS (Synchronous Data Stream) workspace created with CMSIS SDS.',
+                            '',
+                            '## Directory Structure',
+                            '',
+                            '- `sds_recordings/` — Raw SDS binary recordings and metadata',
+                            '',
+                            '## Getting Started',
+                            '',
+                            '1. Use **CMSIS SDS: Open SDS Recorder** to capture data',
+                            '2. View recordings with **CMSIS SDS: Open SDS Viewer**',
+                            '3. Export with **CMSIS SDS: Export SDS to CSV**',
+                            '',
+                            '## Resources',
+                            '',
+                            '- [SDS Framework](https://arm-software.github.io/SDS-Framework/)',
+                            '',
+                        ].join('\n'));
+                        await vscode.workspace.fs.writeFile(
+                            vscode.Uri.joinPath(newFolder, 'README.md'),
+                            readmeContent
+                        );
+
+                        const gitignoreContent = Buffer.from([
+                            '# SDS workspace',
+                            '.cmsis-sds',
+                            '*.log',
+                            '',
+                        ].join('\n'));
+                        await vscode.workspace.fs.writeFile(
+                            vscode.Uri.joinPath(newFolder, '.gitignore'),
+                            gitignoreContent
+                        );
+
+                        await vscode.commands.executeCommand('vscode.openFolder', newFolder);
+                        return;
                     }
                     return;
-                } else if (action === 'Create New Folder') {
-                    const parentUri = await vscode.window.showOpenDialog({
-                        canSelectFolders: true,
-                        canSelectFiles: false,
-                        canSelectMany: false,
-                        openLabel: 'Select Parent Folder',
-                    });
-                    if (!parentUri || parentUri.length === 0) { return; }
-
-                    const folderName = await vscode.window.showInputBox({
-                        prompt: 'Name for the new SDS project folder',
-                        value: 'sds-project',
-                        validateInput: (v) => {
-                            if (!v || v.trim().length === 0) { return 'Name cannot be empty'; }
-                            if (/[/:]/.test(v)) { return 'Invalid characters in name'; }
-                            return undefined;
-                        },
-                    });
-                    if (!folderName) { return; }
-
-                    const newFolder = vscode.Uri.joinPath(parentUri[0], folderName.trim());
-                    await vscode.workspace.fs.createDirectory(newFolder);
-                    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(newFolder, 'sds_recordings'));
-
-                    const readmeContent = Buffer.from([
-                        `# ${folderName.trim()}`,
-                        '',
-                        'SDS (Synchronous Data Stream) workspace created with CMSIS SDS.',
-                        '',
-                        '## Directory Structure',
-                        '',
-                        '- `sds_recordings/` — Raw SDS binary recordings and metadata',
-                        '',
-                        '## Getting Started',
-                        '',
-                        '1. Use **CMSIS SDS: Open SDS Recorder** to capture data',
-                        '2. View recordings with **CMSIS SDS: Open SDS Viewer**',
-                        '3. Export with **CMSIS SDS: Export SDS to CSV**',
-                        '',
-                        '## Resources',
-                        '',
-                        '- [SDS Framework](https://arm-software.github.io/SDS-Framework/)',
-                        '',
-                    ].join('\n'));
-                    await vscode.workspace.fs.writeFile(
-                        vscode.Uri.joinPath(newFolder, 'README.md'),
-                        readmeContent
-                    );
-
-                    const gitignoreContent = Buffer.from([
-                        '# SDS workspace',
-                        '.cmsis-sds',
-                        '*.log',
-                        '',
-                    ].join('\n'));
-                    await vscode.workspace.fs.writeFile(
-                        vscode.Uri.joinPath(newFolder, '.gitignore'),
-                        gitignoreContent
-                    );
-
-                    await vscode.commands.executeCommand('vscode.openFolder', newFolder);
-                    return;
                 }
-                return;
-            }
 
-            // Workspace already open — ensure recordings directory exists, then open recorder
-            const wsRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
-            const recordingsDir = path.join(wsRoot, 'sds_recordings');
-            if (!fs.existsSync(recordingsDir)) {
-                fs.mkdirSync(recordingsDir, { recursive: true });
-            }
-            SdsRecorderPanel.createOrShow(context.extensionUri);
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Workspace init failed: ${err.message}`);
+                // Workspace already open — ensure recordings directory exists, then open recorder
+                const wsRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+                const recordingsDir = path.join(wsRoot, 'sds_recordings');
+                if (!fs.existsSync(recordingsDir)) {
+                    fs.mkdirSync(recordingsDir, { recursive: true });
+                }
+                SdsRecorderPanel.createOrShow(context.extensionUri);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Workspace init failed: ${err instanceof Error ? err.message : String(err)}`);
             }
         })
     );
@@ -254,8 +247,8 @@ export function activate(context: vscode.ExtensionContext) {
                     fs.unlinkSync(item.filePath);
                     explorerProvider.refresh();
                     vscode.window.showInformationMessage(`Deleted ${path.basename(item.filePath)}`);
-                } catch (err: any) {
-                    vscode.window.showErrorMessage(`Failed to delete: ${err.message}`);
+                } catch (err) {
+                    vscode.window.showErrorMessage(`Failed to delete: ${err instanceof Error ? err.message : String(err)}`);
                 }
             }
         })
@@ -286,8 +279,8 @@ export function activate(context: vscode.ExtensionContext) {
                     filePath = fp;
                 }
                 SdsMediaViewerPanel.createOrShow(context.extensionUri, filePath);
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Failed to open media viewer: ${err.message}`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open media viewer: ${err instanceof Error ? err.message : String(err)}`);
             }
         })
     );
@@ -314,8 +307,8 @@ export function activate(context: vscode.ExtensionContext) {
                 if (pick) {
                     SdsViewerPanel.createOrShow(context.extensionUri, pick.uri.fsPath);
                 }
-            } catch (err: any) {
-                vscode.window.showErrorMessage(`Quick open failed: ${err.message}`);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Quick open failed: ${err instanceof Error ? err.message : String(err)}`);
             }
         })
     );
@@ -409,7 +402,7 @@ async function doExportCsv(sdsPath: string): Promise<void> {
         vscode.window.showInformationMessage(
             `Exported ${samples.length} samples to ${path.basename(csvUri.fsPath)}`
         );
-    } catch (err: any) {
-        vscode.window.showErrorMessage(`Export failed: ${err.message}`);
+    } catch (err) {
+        vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 }

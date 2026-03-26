@@ -22,8 +22,10 @@ import {
     SdsMetadata,
     SdsMediaType,
     SDS_METADATA_EXTENSION,
-    detectMediaType
+    detectMediaType,
+    SdsParsedFile
 } from '../sds';
+import { WebviewMessage } from '../webview/bridge';
 
 export class SdsMediaViewerPanel {
     public static readonly viewType = 'arm-sds.mediaViewer';
@@ -91,15 +93,15 @@ export class SdsMediaViewerPanel {
         );
     }
 
-    private async handleMessage(message: any): Promise<void> {
+    private async handleMessage(message: WebviewMessage): Promise<void> {
         try {
             switch (message.command) {
                 case 'refresh':
                     this.update();
                     break;
             }
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Media viewer error: ${err.message}`);
+        } catch (err) {
+            vscode.window.showErrorMessage(`Media viewer error: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -122,11 +124,11 @@ export class SdsMediaViewerPanel {
 
             const initialState = this.buildInitialState(parsed, metadata);
             this.panel.webview.html = this.getHtml(initialState);
-        } catch (err: any) {
-            this.panel.webview.html = this.getErrorHtml(err.message);
+        } catch (err) {
+            this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
         }
     }
-    private buildInitialState(parsed: any, metadata: SdsMetadata) {
+    private buildInitialState(parsed: SdsParsedFile, metadata: SdsMetadata) {
         const base = { fileName: path.basename(this.sdsFilePath) };
         switch (this.mediaType) {
             case 'image': {
@@ -213,7 +215,7 @@ export class SdsMediaViewerPanel {
         }
     }
 
-    private getHtml(initialState: any): string {
+    private getHtml(initialState: Record<string, unknown>): string {
         const webview = this.panel.webview;
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'media', 'mediaViewerWebview.js')
@@ -271,8 +273,4 @@ export class SdsMediaViewerPanel {
             this.disposables.pop()?.dispose();
         }
     }
-}
-
-function escapeHtml(text: string): string {
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

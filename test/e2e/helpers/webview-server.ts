@@ -97,11 +97,13 @@ export function getViewerHtml(): string {
         avgBlockSize: 12,
     };
     const metadata = {
-        sds: { name: 'TestAccel', frequency: 100, content: [
-            { value: 'x', type: 'float', unit: 'mG' },
-            { value: 'y', type: 'float', unit: 'mG' },
-            { value: 'z', type: 'float', unit: 'mG' },
-        ]},
+        sds: {
+            name: 'TestAccel', frequency: 100, content: [
+                { value: 'x', type: 'float', unit: 'mG' },
+                { value: 'y', type: 'float', unit: 'mG' },
+                { value: 'z', type: 'float', unit: 'mG' },
+            ]
+        },
     };
 
     let html = extractHtml('viewer/sdsViewerPanel.ts');
@@ -283,16 +285,20 @@ export async function startServer(port = 0): Promise<{ server: http.Server; base
                         res.statusCode = 404;
                         res.end('Not found');
                 }
-            } catch (err: any) {
+            } catch (err) {
                 res.statusCode = 500;
-                res.end(`Error: ${err.message}
-${err.stack}`);
+                res.end(`Error: ${err instanceof Error ? err.message : String(err)}
+${err instanceof Error ? err.stack : ''}`);
             }
         });
 
         server.listen(port, '127.0.0.1', () => {
-            const addr = server.address() as any;
-            resolve({ server, baseUrl: `http://127.0.0.1:${addr.port}` });
+            const addr = server.address();
+            if (addr && typeof addr === 'object' && 'port' in addr) {
+                resolve({ server, baseUrl: `http://127.0.0.1:${addr.port}` });
+            } else {
+                reject(new Error('Failed to get server address'));
+            }
         });
 
         server.on('error', reject);
