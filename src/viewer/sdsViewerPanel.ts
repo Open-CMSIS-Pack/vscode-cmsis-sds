@@ -174,7 +174,7 @@ export class SdsViewerPanel {
     private getHtml(initialState: Record<string, unknown>): string {
         const webview = this.panel.webview;
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'media', 'viewerWebview.js')
+            vscode.Uri.joinPath(this.extensionUri, 'out', 'viewerWebview.js')
         );
         const nonce = this.generateNonce();
         const stateJson = JSON.stringify(initialState).replace(/</g, '\\u003c');
