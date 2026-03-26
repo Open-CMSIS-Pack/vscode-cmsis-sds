@@ -6,10 +6,12 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "C:\\etc\\git\\examples\\ModelNova",
+                "${workspaceFolder}/sds_recordings",
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ],
-            "outFiles": [ "${workspaceFolder}/out/**/*.js" ],
+            "outFiles": [
+                "${workspaceFolder}/out/**/*.js"
+            ],
             "preLaunchTask": "npm: compile"
         }
     ]
