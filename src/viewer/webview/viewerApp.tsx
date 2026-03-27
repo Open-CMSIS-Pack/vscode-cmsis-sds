@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { WebviewMessenger, getInitialState, WebviewMessage } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
+import { Button, Col, Row, Space } from 'antd';
+import { ExpandOutlined, ExportOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
 
@@ -22,8 +24,7 @@ function ViewerApp() {
     const initial = getInitialState<InitialState>({});
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const tooltipRef = useRef<HTMLDivElement | null>(null);
-    const togglesRef = useRef<HTMLDivElement | null>(null);
-    const statsBarRef = useRef<HTMLDivElement | null>(null);
+    const [activeChannels, setActiveChannels] = useState(() => new Set(initial.channelNames));
 
     const samples = useMemo(() => initial.samples ?? [], [initial.samples]);
     const channelNames = useMemo(() => initial.channelNames ?? [], [initial.channelNames]);
@@ -31,18 +32,44 @@ function ViewerApp() {
     const metadata = initial.metadata ?? null;
     const fileName = initial.fileName ?? 'SDS Viewer';
 
+    const viewStartRef = useRef(0);
+    const viewEndRef = useRef(1);
+    const drawRef = useRef<() => void>(() => { });
+
+    const onZoomIn = () => {
+        const center = (viewStartRef.current + viewEndRef.current) / 2;
+        const range = (viewEndRef.current - viewStartRef.current) * 0.5;
+        viewStartRef.current = center - range / 2;
+        viewEndRef.current = center + range / 2;
+        drawRef.current();
+    }
+    const onZoomOut = () => {
+        const center = (viewStartRef.current + viewEndRef.current) / 2;
+        const range = (viewEndRef.current - viewStartRef.current) * 2;
+        viewStartRef.current = center - range / 2;
+        viewEndRef.current = center + range / 2;
+        drawRef.current();
+    }
+    const onFit = () => {
+        if (samples.length > 0) {
+            viewStartRef.current = samples[0].timeSeconds;
+            viewEndRef.current = samples[samples.length - 1].timeSeconds;
+            const pad = (viewEndRef.current - viewStartRef.current) * 0.02;
+            viewStartRef.current -= pad;
+            viewEndRef.current += pad;
+        }
+        drawRef.current();
+    }
+
+    const onExport = () => messenger.send({ command: 'exportCsv' });
+    const COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'];
+
     useEffect(() => {
         if (initial.error) { return; }
         const canvas = canvasRef.current;
         const tooltip = tooltipRef.current;
-        const toggles = togglesRef.current;
-        const statsBar = statsBarRef.current;
-        if (!canvas || !tooltip || !toggles || !statsBar) { return; }
+        if (!canvas || !tooltip) { return; }
 
-        const COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'];
-        const activeChannels = new Set(channelNames);
-        let viewStart = 0;
-        let viewEnd = samples.length > 0 ? samples[samples.length - 1].timeSeconds : 1;
         let isDragging = false;
         let dragStartX = 0;
         let dragViewStart = 0;
@@ -54,34 +81,6 @@ function ViewerApp() {
             if (value === undefined || value === null) { return ''; }
             return `<span><span class="stat-label">${escape(label)}:</span> ${escape(value)}</span>`;
         };
-
-        statsBar.innerHTML = [
-            stat('Records', stats.totalRecords),
-            stat('Duration', (stats.recordingTimeSeconds ?? 0).toFixed(2) + ' s'),
-            stat('Interval', (stats.recordingIntervalMs || 0).toFixed(1) + ' ms'),
-            stat('Data Rate', (stats.dataRate ?? 0) + ' B/s'),
-            stat('Avg Block', (stats.avgBlockSize ?? 0) + ' B'),
-            metadata ? stat('Frequency', metadata?.sds?.frequency + ' Hz') : '',
-            metadata ? stat('Stream', metadata?.sds?.name) : '',
-        ].filter(Boolean).join('');
-
-        toggles.innerHTML = '';
-        channelNames.forEach((name, i) => {
-            const el = document.createElement('div');
-            el.className = 'channel-toggle active';
-            el.innerHTML = `<span class="dot" style="background:${COLORS[i % COLORS.length]}"></span>${name}`;
-            el.addEventListener('click', () => {
-                if (activeChannels.has(name)) {
-                    activeChannels.delete(name);
-                    el.classList.remove('active');
-                } else {
-                    activeChannels.add(name);
-                    el.classList.add('active');
-                }
-                draw();
-            });
-            toggles.appendChild(el);
-        });
 
         const ctx = canvas.getContext('2d');
         if (!ctx || !canvas) { return; }
@@ -97,7 +96,7 @@ function ViewerApp() {
             canvas.style.width = `${rect.width}px`;
             canvas.style.height = `${rect.height}px`;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            draw();
+            drawRef.current();
         }
 
         function getPlotArea() {
@@ -107,7 +106,7 @@ function ViewerApp() {
             return { x: MARGIN.left, y: MARGIN.top, w: w - MARGIN.left - MARGIN.right, h: h - MARGIN.top - MARGIN.bottom };
         }
 
-        function draw() {
+        drawRef.current = function draw() {
             if (!canvas || !ctx) { return; }
             const w = canvas.width / dpr;
             const h = canvas.height / dpr;
@@ -116,7 +115,7 @@ function ViewerApp() {
             const plot = getPlotArea();
             if (!plot || plot.w <= 0 || plot.h <= 0 || samples.length === 0) return;
 
-            const visible = samples.filter(s => s.timeSeconds >= viewStart && s.timeSeconds <= viewEnd);
+            const visible = samples.filter(s => s.timeSeconds >= viewStartRef.current && s.timeSeconds <= viewEndRef.current);
             if (visible.length === 0) return;
 
             let yMin = Infinity, yMax = -Infinity;
@@ -133,12 +132,12 @@ function ViewerApp() {
             const yPad = (yMax - yMin) * 0.05;
             yMin -= yPad; yMax += yPad;
 
-            const xToPixel = (t: number) => plot.x + (t - viewStart) / (viewEnd - viewStart) * plot.w;
+            const xToPixel = (t: number) => plot.x + (t - viewStartRef.current) / (viewEndRef.current - viewStartRef.current) * plot.w;
             const yToPixel = (v: number) => plot.y + plot.h - (v - yMin) / (yMax - yMin) * plot.h;
 
             ctx.strokeStyle = 'rgba(128,128,128,0.15)';
             ctx.lineWidth = 1;
-            const xTicks = niceScale(viewStart, viewEnd, 8);
+            const xTicks = niceScale(viewStartRef.current, viewEndRef.current, 8);
             const yTicks = niceScale(yMin, yMax, 6);
 
             ctx.beginPath();
@@ -216,20 +215,20 @@ function ViewerApp() {
             const plot = getPlotArea();
             if (!plot) { return; }
             const ratio = (mouseX - plot.x) / plot.w;
-            const range = viewEnd - viewStart;
+            const range = viewEndRef.current - viewStartRef.current;
             const factor = e.deltaY > 0 ? 1.2 : 0.8;
             const newRange = range * factor;
-            const center = viewStart + ratio * range;
-            viewStart = center - ratio * newRange;
-            viewEnd = center + (1 - ratio) * newRange;
-            draw();
+            const center = viewStartRef.current + ratio * range;
+            viewStartRef.current = center - ratio * newRange;
+            viewEndRef.current = center + (1 - ratio) * newRange;
+            drawRef.current();
         }
 
         function onMouseDown(e: MouseEvent) {
             isDragging = true;
             dragStartX = e.clientX;
-            dragViewStart = viewStart;
-            dragViewEnd = viewEnd;
+            dragViewStart = viewStartRef.current;
+            dragViewEnd = viewEndRef.current;
         }
 
         function onMouseMove(e: MouseEvent) {
@@ -240,9 +239,9 @@ function ViewerApp() {
                 const dx = e.clientX - dragStartX;
                 const range = dragViewEnd - dragViewStart;
                 const shift = -dx / plot.w * range;
-                viewStart = dragViewStart + shift;
-                viewEnd = dragViewEnd + shift;
-                draw();
+                viewStartRef.current = dragViewStart + shift;
+                viewEndRef.current = dragViewEnd + shift;
+                drawRef.current();
                 return;
             }
 
@@ -253,7 +252,7 @@ function ViewerApp() {
 
             if (!plot) { return; }
             if (mx >= plot.x && mx <= plot.x + plot.w && my >= plot.y && my <= plot.y + plot.h) {
-                const t = viewStart + (mx - plot.x) / plot.w * (viewEnd - viewStart);
+                const t = viewStartRef.current + (mx - plot.x) / plot.w * (viewEndRef.current - viewStartRef.current);
                 let best: Sample | null = null; let bestDist = Infinity;
                 for (const s of samples) {
                     const d = Math.abs(s.timeSeconds - t);
@@ -269,8 +268,8 @@ function ViewerApp() {
                     }
                     if (!tooltip) { return; }
                     tooltip.style.display = 'block';
-                    tooltip.style.left = `${mx + 12}px`;
-                    tooltip.style.top = `${my - 10}px`;
+                    tooltip.style.left = `${mx}px`;
+                    tooltip.style.top = `${my + 30}px`;
                     tooltip.textContent = text.trimEnd();
                 }
             } else {
@@ -282,40 +281,6 @@ function ViewerApp() {
         function onMouseUp() { isDragging = false; }
         function onMouseLeave() { isDragging = false; if (tooltip) { tooltip.style.display = 'none'; } }
 
-        function onZoomIn() {
-            const center = (viewStart + viewEnd) / 2;
-            const range = (viewEnd - viewStart) * 0.5;
-            viewStart = center - range / 2;
-            viewEnd = center + range / 2;
-            draw();
-        }
-        function onZoomOut() {
-            const center = (viewStart + viewEnd) / 2;
-            const range = (viewEnd - viewStart) * 2;
-            viewStart = center - range / 2;
-            viewEnd = center + range / 2;
-            draw();
-        }
-        function onFit() {
-            if (samples.length > 0) {
-                viewStart = samples[0].timeSeconds;
-                viewEnd = samples[samples.length - 1].timeSeconds;
-                const pad = (viewEnd - viewStart) * 0.02;
-                viewStart -= pad;
-                viewEnd += pad;
-            }
-            draw();
-        }
-
-        const btnZoomIn = document.getElementById('btnZoomIn');
-        const btnZoomOut = document.getElementById('btnZoomOut');
-        const btnFit = document.getElementById('btnFit');
-        const btnExport = document.getElementById('btnExport');
-        const onExport = () => messenger.send({ command: 'exportCsv' });
-        btnZoomIn?.addEventListener('click', onZoomIn);
-        btnZoomOut?.addEventListener('click', onZoomOut);
-        btnFit?.addEventListener('click', onFit);
-        btnExport?.addEventListener('click', onExport);
 
         canvas.addEventListener('wheel', onWheel, { passive: false });
         canvas.addEventListener('mousedown', onMouseDown);
@@ -331,13 +296,9 @@ function ViewerApp() {
             canvas.removeEventListener('mousemove', onMouseMove);
             canvas.removeEventListener('mouseup', onMouseUp);
             canvas.removeEventListener('mouseleave', onMouseLeave);
-            btnZoomIn?.removeEventListener('click', onZoomIn);
-            btnZoomOut?.removeEventListener('click', onZoomOut);
-            btnFit?.removeEventListener('click', onFit);
-            btnExport?.removeEventListener('click', onExport);
             window.removeEventListener('resize', resize);
         };
-    }, [channelNames, initial.error, metadata, samples, stats]);
+    }, [channelNames, initial.error, metadata, samples, stats, activeChannels]);
 
     if (initial.error) {
         return (
@@ -350,23 +311,100 @@ function ViewerApp() {
         );
     }
 
+    const toggleChannel = (name: string) => {
+        setActiveChannels(prev => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name);
+            else next.add(name);
+            return next;
+        });
+        drawRef.current();
+    };
+
+    const statsTitleStyle: React.CSSProperties = {
+        opacity: 0.5,
+        fontSize: '80%'
+    };
+
+    const statsValueStyle: React.CSSProperties = {
+        paddingRight: 32,
+        fontSize: '80%'
+    };
+
+    const canvasContainerStyle: React.CSSProperties = {
+        position: 'relative',
+        width: '100%',
+        flex: 1,
+        minHeight: 0
+    };
+
+    const canvasStyle: React.CSSProperties = {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%'
+    };
+
+    const toolTipStyle: React.CSSProperties = {
+        position: 'absolute',
+        background: 'var(--vscode-editorHoverWidget-background)',
+        border: '1px solid var(--vscode-editorHoverWidget-border)',
+        padding: '6px 10px',
+        borderRadius: 4,
+        fontSize: 11,
+        pointerEvents: 'none',
+        display: 'none',
+        zIndex: 10,
+        whiteSpace: 'pre'
+    };
+
     return (
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
-            <style>{`.toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);flex-wrap:wrap;} .toolbar h2{font-size:14px;font-weight:600;margin-right:16px;} .toolbar button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;} .toolbar button:hover{background:var(--vscode-button-hoverBackground);} .channel-toggles{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;} .channel-toggle{display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer;border:1px solid var(--vscode-panel-border);} .channel-toggle.active{background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);} .channel-toggle .dot{width:8px;height:8px;border-radius:50%;} .stats-bar{display:flex;gap:16px;padding:6px 12px;font-size:11px;opacity:0.8;border-bottom:1px solid var(--vscode-panel-border);flex-wrap:wrap;} .stats-bar .stat-label{opacity:0.7;} .canvas-container{position:relative;width:100%;flex:1;min-height:0;} canvas{position:absolute;top:0;left:0;width:100%;height:100%;} .tooltip{position:absolute;background:var(--vscode-editorHoverWidget-background);border:1px solid var(--vscode-editorHoverWidget-border);padding:6px 10px;border-radius:4px;font-size:11px;pointer-events:none;display:none;z-index:10;white-space:pre;}`}</style>
-            <div className="toolbar">
-                <h2>{fileName}</h2>
-                <button id="btnZoomIn" title="Zoom In">🔍+</button>
-                <button id="btnZoomOut" title="Zoom Out">🔍−</button>
-                <button id="btnFit" title="Fit to Window">⊞ Fit</button>
-                <button id="btnExport" title="Export CSV">📤 Export</button>
-                <div className="channel-toggles" id="channelToggles" ref={togglesRef}></div>
+            <Row>
+                <Col span={4} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {fileName}
+                </Col>
+                <Col span={10} >
+                    <Space>
+                        <Button icon={<ZoomInOutlined />} type="primary" title="Zoom In" onClick={onZoomIn}></Button>
+                        <Button icon={<ZoomOutOutlined />} type="primary" title="Zoom Out" onClick={onZoomOut}></Button>
+                        <Button icon={<ExpandOutlined />} type="primary" title="Fit to Window" onClick={onFit}></Button>
+                        <Button icon={<ExportOutlined />} type="primary" title="Export CSV" onClick={onExport}></Button>
+                    </Space>
+                </Col>
+                <Col span={10} style={{ textAlign: 'right' }}>
+                    <Space.Compact>
+                        {channelNames.map((name, i) => {
+                            const cColor = COLORS[i % COLORS.length];
+                            const active = activeChannels.has(name);
+                            return (
+                                <Button key={name} style={{ borderColor: cColor, backgroundColor: active ? cColor : 'transparent' }} ghost onClick={() => toggleChannel(name)}>
+                                    {name}
+                                </Button>
+                            )
+                        })}
+                    </Space.Compact>
+                </Col>
+            </Row>
+            <Row gutter={8}>
+                <Col style={statsTitleStyle}>Records</Col><Col style={statsValueStyle}>{stats.totalRecords}</Col>
+                <Col style={statsTitleStyle}>Duration</Col><Col style={statsValueStyle}>{(stats.recordingTimeSeconds ?? 0).toFixed(2)} s</Col>
+                <Col style={statsTitleStyle}>Interval</Col><Col style={statsValueStyle}>{(stats.recordingIntervalMs || 0).toFixed(1)} ms</Col>
+                <Col style={statsTitleStyle}>Data Rate</Col><Col style={statsValueStyle}>{(stats.dataRate ?? 0)} B/s</Col>
+                <Col style={statsTitleStyle}>Avg Block</Col><Col style={statsValueStyle}>{(stats.avgBlockSize ?? 0)} B</Col>
+                {metadata &&
+                    <>
+                        <Col style={statsTitleStyle}>Frequency</Col><Col style={statsValueStyle}>{metadata?.sds?.frequency} Hz</Col>
+                        <Col style={statsTitleStyle}>Stream</Col><Col style={statsValueStyle}>{metadata?.sds?.name}</Col>
+                    </>
+                }
+            </Row>
+            <div style={canvasContainerStyle}>
+                <canvas id="chart" ref={canvasRef} style={canvasStyle}></canvas>
+                <div id="tooltip" ref={tooltipRef} style={toolTipStyle}></div>
             </div>
-            <div className="stats-bar" id="statsBar" ref={statsBarRef}></div>
-            <div className="canvas-container">
-                <canvas id="chart" ref={canvasRef}></canvas>
-                <div className="tooltip" id="tooltip" ref={tooltipRef}></div>
-            </div>
-        </div>
+        </div >
     );
 }
 

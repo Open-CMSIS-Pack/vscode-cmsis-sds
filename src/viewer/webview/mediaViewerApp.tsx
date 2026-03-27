@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { WebviewMessenger, getInitialState, WebviewMessage } from '../../webview/bridge';
+import { getInitialState } from '../../webview/bridge';
+import Button from 'antd/lib/button/Button';
+import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { Col, Row, Slider, Space } from 'antd';
 
 type Frame = { timestamp: number; rgbaBase64: string };
 
@@ -13,9 +16,9 @@ type InitialState = {
     error?: string;
 };
 
-type OutboundMessage = WebviewMessage;
+// type OutboundMessage = WebviewMessage;
 
-const messenger = new WebviewMessenger<WebviewMessage, OutboundMessage>();
+// const messenger = new WebviewMessenger<WebviewMessage, OutboundMessage>();
 
 function decodeFrame(frame: Frame, width: number, height: number): ImageData {
     const raw = atob(frame.rgbaBase64);
@@ -23,6 +26,16 @@ function decodeFrame(frame: Frame, width: number, height: number): ImageData {
     for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
     return new ImageData(arr, width, height);
 }
+
+const statsTitleStyle: React.CSSProperties = {
+    opacity: 0.5,
+    fontSize: '80%'
+};
+
+const statsValueStyle: React.CSSProperties = {
+    paddingRight: 32,
+    fontSize: '80%'
+};
 
 function ImageViewer({ state }: { state: NonNullable<InitialState['image']> }) {
     const { frames, width, height, totalFrames } = state;
@@ -46,26 +59,47 @@ function ImageViewer({ state }: { state: NonNullable<InitialState['image']> }) {
 
     return (
         <div className="media-page">
-            <div className="toolbar">
-                <h2>🖼 Image Viewer</h2>
-                <button onClick={() => setZoom(z => Math.min(8, z * 1.5))}>🔍+</button>
-                <button onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}>🔍−</button>
-                <button onClick={() => setZoom(1)}>Fit</button>
-            </div>
+            <Row>
+                <Col span={4} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    🖼 Image Viewer
+                </Col>
+                <Col span={10} >
+                    <Space>
+                        <Button icon={<ZoomInOutlined />} type="primary" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
+                        <Button icon={<ZoomOutOutlined />} type="primary" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
+                        <Button icon={<ExpandOutlined />} type="primary" title="Fit to Window" onClick={() => setZoom(1)}></Button>
+                    </Space>
+                </Col>
+                <Col span={10} style={{ textAlign: 'right' }}>
+                </Col>
+            </Row>
             <div className="info-bar">
-                <span>{width}×{height}</span>
-                <span>{totalFrames} frames</span>
-                <span>Showing {frames.length} of {totalFrames}</span>
+                <Row gutter={8}>
+                    <Col style={statsTitleStyle}>Dimensions</Col>
+                    <Col style={statsValueStyle}>{width}×{height}</Col>
+                    <Col style={statsTitleStyle}>Frames</Col>
+                    <Col style={statsValueStyle}>{totalFrames}</Col>
+                    <Col style={statsTitleStyle}>Showing</Col>
+                    <Col style={statsValueStyle}>{frames.length} of {totalFrames}</Col>
+                </Row>
             </div>
             <div className="canvas-area">
                 <canvas ref={canvasRef} width={width} height={height}></canvas>
             </div>
-            <div className="controls">
-                <button onClick={() => setIndex(i => Math.max(0, i - 1))}>◀</button>
-                <input type="range" min={0} max={Math.max(0, frames.length - 1)} value={index} onChange={e => setIndex(parseInt(e.target.value, 10))} />
-                <button onClick={() => setIndex(i => Math.min(frames.length - 1, i + 1))}>▶</button>
-                <div className="frame-info">Frame {Math.min(index + 1, frames.length)}/{frames.length}</div>
-            </div>
+            <Row>
+                <Col span="2" style={{ textAlign: 'center' }}>
+                    <Button icon={<LeftCircleOutlined />} type="link" title="Previous Frame" onClick={() => setIndex(i => Math.max(0, i - 1))} />
+                </Col>
+                <Col span="16">
+                    <Slider min={0} max={Math.max(0, frames.length - 1)} value={index} onChange={value => setIndex(value)} style={{ width: '100%' }} />
+                </Col>
+                <Col span="2" style={{ textAlign: 'center' }}>
+                    <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => setIndex(i => Math.min(frames.length - 1, i + 1))} />
+                </Col>
+                <Col span="2" style={{ textAlign: 'right' }}>
+                    <div className="frame-info">Frame {Math.min(index + 1, frames.length)}/{frames.length}</div>
+                </Col>
+            </Row>
         </div>
     );
 }
@@ -305,7 +339,23 @@ function MediaViewerApp() {
 
     return (
         <div className="page">
-            <style>{`body,html,#root,.page{margin:0;padding:0;width:100%;height:100%;background:var(--vscode-editor-background);color:var(--vscode-editor-foreground);font-family:var(--vscode-font-family);font-size:13px;} .toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);} .toolbar h2{font-size:14px;margin-right:16px;} .toolbar button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;} .toolbar button:hover{background:var(--vscode-button-hoverBackground);} .info-bar{display:flex;gap:16px;padding:6px 12px;font-size:11px;opacity:0.8;border-bottom:1px solid var(--vscode-panel-border);} .canvas-area{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:20px;} canvas{image-rendering:pixelated;border:1px solid var(--vscode-panel-border);} .controls{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--vscode-panel-border);} .controls input[type=range]{flex:1;} .frame-info{font-size:11px;min-width:140px;text-align:center;} .media-page{display:flex;flex-direction:column;height:100%;} .error-page{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--vscode-editor-background);color:var(--vscode-editor-foreground);} .error{text-align:center;} .error h2{color:var(--vscode-errorForeground);margin-bottom:16px;}`}</style>
+            <style>{`
+            body,html,#root,.page{margin:0;padding:0;width:100%;height:100%;background:var(--vscode-editor-background);color:var(--vscode-editor-foreground);font-family:var(--vscode-font-family);font-size:13px;}
+            .toolbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);}
+            .toolbar h2{font-size:14px;margin-right:16px;}
+            .toolbarX button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:4px 12px;border-radius:3px;cursor:pointer;font-size:12px;}
+            .toolbarX button:hover{background:var(--vscode-button-hoverBackground);}
+            .info-bar{display:flex;gap:16px;padding:6px 12px;font-size:11px;opacity:0.8;border-bottom:1px solid var(--vscode-panel-border);}
+            .canvas-area{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;padding:20px;}
+            canvas{image-rendering:pixelated;border:1px solid var(--vscode-panel-border);}
+            .controls {display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--vscode-panel-border);}
+            .controls input[type=range]{flex:1;}
+            .frame-info{font-size:11px;min-width:140px;text-align:center;}
+            .media-page{display:flex;flex-direction:column;height:100%;}
+            .error-page{display:flex;align-items:center;justify-content:center;height:100vh;background:var(--vscode-editor-background);color:var(--vscode-editor-foreground);}
+            .error{text-align:center;}
+            .error h2{color:var(--vscode-errorForeground);margin-bottom:16px;}
+            `}</style>
             {body}
         </div>
     );
