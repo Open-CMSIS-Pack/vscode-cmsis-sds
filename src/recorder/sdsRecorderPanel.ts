@@ -15,7 +15,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { SdsRecord, SdsMetadata, SdsRecordingSession, SdsRecorderConfig, SdsioServerConfig, SdsioServerState, SDS_METADATA_EXTENSION } from '../sds/types';
 import { writeSdsFile, writeMetadataFile, findNextFileIndex } from '../sds/writer';
-import { SdsioServer } from './sdsio';
+import { SdsioServer } from './sdsio/sdsIoServer';
 import { SerialTransport } from './sdsio/serialTransport';
 import { WebviewMessage } from '../webview/bridge';
 
