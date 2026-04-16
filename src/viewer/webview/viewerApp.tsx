@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { WebviewMessenger, getInitialState, WebviewMessage } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
-import { Button, Col, Row, Space } from 'antd';
+import { Button, Col, Row, Slider, Space } from 'antd';
 import { ExpandOutlined, ExportOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
@@ -35,7 +35,59 @@ function ViewerApp() {
     const viewStartRef = useRef(0);
     const viewEndRef = useRef(1);
     const drawRef = useRef<() => void>(() => { });
-    const lastAutoFitKeyRef = useRef<string | null>(null);
+
+    const domainStart = samples.length > 0 ? samples[0].timeSeconds : 0;
+    const domainEnd = samples.length > 0 ? samples[samples.length - 1].timeSeconds : 1;
+    const domainSpan = Math.max(domainEnd - domainStart, 0.001);
+    const minViewSpan = Math.max(domainSpan / 1000, 0.001);
+    const sliderStep = Math.max(domainSpan / 1000, 0.0001);
+
+    const [viewRange, setViewRange] = useState<[number, number]>(() => [domainStart, domainEnd]);
+
+    const clampRange = useCallback((start: number, end: number): [number, number] => {
+        if (samples.length === 0) {
+            return [0, 1];
+        }
+
+        if (start > end) {
+            [start, end] = [end, start];
+        }
+
+        let span = end - start;
+        if (span < minViewSpan) {
+            const center = (start + end) / 2;
+            start = center - minViewSpan / 2;
+            end = center + minViewSpan / 2;
+            span = end - start;
+        }
+
+        if (start < domainStart) {
+            end += domainStart - start;
+            start = domainStart;
+        }
+        if (end > domainEnd) {
+            start -= end - domainEnd;
+            end = domainEnd;
+        }
+
+        if (start < domainStart) {
+            start = domainStart;
+        }
+        if (end > domainEnd) {
+            end = domainEnd;
+        }
+
+        if (end - start < Math.min(minViewSpan, domainSpan)) {
+            end = Math.min(domainEnd, start + Math.min(minViewSpan, domainSpan));
+            start = Math.max(domainStart, end - Math.min(minViewSpan, domainSpan));
+        }
+
+        if (span <= 0) {
+            return [domainStart, domainEnd];
+        }
+
+        return [start, end];
+    }, [domainEnd, domainSpan, domainStart, minViewSpan, samples.length]);
 
     const autoFitKey = useMemo(() => {
         if (samples.length === 0) {
@@ -47,27 +99,43 @@ function ViewerApp() {
     const onZoomIn = () => {
         const center = (viewStartRef.current + viewEndRef.current) / 2;
         const range = (viewEndRef.current - viewStartRef.current) * 0.5;
-        viewStartRef.current = center - range / 2;
-        viewEndRef.current = center + range / 2;
-        drawRef.current();
+        const [start, end] = clampRange(center - range / 2, center + range / 2);
+        setViewRange([start, end]);
     }
     const onZoomOut = () => {
         const center = (viewStartRef.current + viewEndRef.current) / 2;
         const range = (viewEndRef.current - viewStartRef.current) * 2;
-        viewStartRef.current = center - range / 2;
-        viewEndRef.current = center + range / 2;
-        drawRef.current();
+        const [start, end] = clampRange(center - range / 2, center + range / 2);
+        setViewRange([start, end]);
     }
     const onFit = () => {
         if (samples.length > 0) {
-            viewStartRef.current = samples[0].timeSeconds;
-            viewEndRef.current = samples[samples.length - 1].timeSeconds;
-            const pad = (viewEndRef.current - viewStartRef.current) * 0.02;
-            viewStartRef.current -= pad;
-            viewEndRef.current += pad;
+            setViewRange([domainStart, domainEnd]);
         }
-        drawRef.current();
     }
+
+    useEffect(() => {
+        viewStartRef.current = viewRange[0];
+        viewEndRef.current = viewRange[1];
+        drawRef.current();
+    }, [viewRange]);
+
+    useEffect(() => {
+        if (samples.length === 0) {
+            setViewRange([0, 1]);
+            return;
+        }
+        //setViewRange([domainStart, Math.min(domainSpan, minViewSpan * 100) + domainStart]);
+        setViewRange([domainStart, domainEnd]);
+    }, [autoFitKey, domainEnd, domainStart, samples.length]);
+
+    const onSliderChange = (value: number[]) => {
+        if (value.length !== 2) {
+            return;
+        }
+        const [start, end] = clampRange(value[0], value[1]);
+        setViewRange([start, end]);
+    };
 
     const onExport = () => messenger.send({ command: 'exportCsv' });
     const COLORS = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'];
@@ -227,9 +295,8 @@ function ViewerApp() {
             const factor = e.deltaY > 0 ? 1.2 : 0.8;
             const newRange = range * factor;
             const center = viewStartRef.current + ratio * range;
-            viewStartRef.current = center - ratio * newRange;
-            viewEndRef.current = center + (1 - ratio) * newRange;
-            drawRef.current();
+            const [start, end] = clampRange(center - ratio * newRange, center + (1 - ratio) * newRange);
+            setViewRange([start, end]);
         }
 
         function onMouseDown(e: MouseEvent) {
@@ -247,9 +314,8 @@ function ViewerApp() {
                 const dx = e.clientX - dragStartX;
                 const range = dragViewEnd - dragViewStart;
                 const shift = -dx / plot.w * range;
-                viewStartRef.current = dragViewStart + shift;
-                viewEndRef.current = dragViewEnd + shift;
-                drawRef.current();
+                const [start, end] = clampRange(dragViewStart + shift, dragViewEnd + shift);
+                setViewRange([start, end]);
                 return;
             }
 
@@ -298,11 +364,6 @@ function ViewerApp() {
         window.addEventListener('resize', resize);
         resize();
 
-        if (samples.length > 0 && lastAutoFitKeyRef.current !== autoFitKey) {
-            lastAutoFitKeyRef.current = autoFitKey;
-            onFit();
-        }
-
         return () => {
             canvas.removeEventListener('wheel', onWheel);
             canvas.removeEventListener('mousedown', onMouseDown);
@@ -311,7 +372,7 @@ function ViewerApp() {
             canvas.removeEventListener('mouseleave', onMouseLeave);
             window.removeEventListener('resize', resize);
         };
-    }, [autoFitKey, channelNames, initial.error, metadata, samples, stats, activeChannels]);
+    }, [channelNames, clampRange, initial.error, metadata, samples, stats, activeChannels]);
 
     if (initial.error) {
         return (
@@ -372,6 +433,23 @@ function ViewerApp() {
         whiteSpace: 'pre'
     };
 
+    const sliderContainerStyle: React.CSSProperties = {
+        padding: '2px 8px 8px 8px'
+    };
+
+    const sliderMetaStyle: React.CSSProperties = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12
+    };
+
+    const sliderStyle: React.CSSProperties = {
+        flex: 1,
+        margin: 0
+    };
+
+    const windowLength = Math.max(0, viewRange[1] - viewRange[0]);
+
     return (
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Row>
@@ -402,7 +480,7 @@ function ViewerApp() {
             </Row>
             <Row gutter={8}>
                 <Col style={statsTitleStyle}>Records</Col><Col style={statsValueStyle}>{stats.totalRecords}</Col>
-                <Col style={statsTitleStyle}>Duration</Col><Col style={statsValueStyle}>{(stats.recordingTimeSeconds ?? 0).toFixed(2)} s</Col>
+                <Col style={statsTitleStyle}>Duration</Col><Col style={statsValueStyle}>{(stats.recordingTimeSeconds ?? 0).toFixed(3)} s</Col>
                 <Col style={statsTitleStyle}>Interval</Col><Col style={statsValueStyle}>{(stats.recordingIntervalMs || 0).toFixed(1)} ms</Col>
                 <Col style={statsTitleStyle}>Data Rate</Col><Col style={statsValueStyle}>{(stats.dataRate ?? 0)} B/s</Col>
                 <Col style={statsTitleStyle}>Avg Block</Col><Col style={statsValueStyle}>{(stats.avgBlockSize ?? 0)} B</Col>
@@ -416,6 +494,26 @@ function ViewerApp() {
             <div style={canvasContainerStyle}>
                 <canvas id="chart" ref={canvasRef} style={canvasStyle}></canvas>
                 <div id="tooltip" ref={tooltipRef} style={toolTipStyle}></div>
+            </div>
+            <div style={sliderContainerStyle}>
+                <div style={sliderMetaStyle}>
+                    <Slider
+                        range={{ draggableTrack: true }}
+                        min={domainStart}
+                        max={domainEnd}
+                        step={sliderStep}
+                        value={viewRange}
+                        onChange={onSliderChange}
+                        style={sliderStyle}
+                        tooltip={{ formatter: (v) => `${(v ?? 0).toFixed(3)}s` }}
+                        disabled={samples.length === 0 || domainEnd <= domainStart}
+                    />
+                    <span style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
+                        Window: {windowLength.toFixed(3)} s
+                    </span>
+                    <Button icon={<ZoomInOutlined />} type="link" title="Zoom In" onClick={onZoomIn}></Button>
+                    <Button icon={<ZoomOutOutlined />} type="link" title="Zoom Out" onClick={onZoomOut} disabled={domainSpan === windowLength}></Button>
+                </div>
             </div>
         </div >
     );
