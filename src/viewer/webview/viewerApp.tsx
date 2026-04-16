@@ -35,6 +35,14 @@ function ViewerApp() {
     const viewStartRef = useRef(0);
     const viewEndRef = useRef(1);
     const drawRef = useRef<() => void>(() => { });
+    const lastAutoFitKeyRef = useRef<string | null>(null);
+
+    const autoFitKey = useMemo(() => {
+        if (samples.length === 0) {
+            return `${fileName}:empty`;
+        }
+        return `${fileName}:${samples.length}:${samples[0].timeSeconds}:${samples[samples.length - 1].timeSeconds}`;
+    }, [fileName, samples]);
 
     const onZoomIn = () => {
         const center = (viewStartRef.current + viewEndRef.current) / 2;
@@ -290,6 +298,11 @@ function ViewerApp() {
         window.addEventListener('resize', resize);
         resize();
 
+        if (samples.length > 0 && lastAutoFitKeyRef.current !== autoFitKey) {
+            lastAutoFitKeyRef.current = autoFitKey;
+            onFit();
+        }
+
         return () => {
             canvas.removeEventListener('wheel', onWheel);
             canvas.removeEventListener('mousedown', onMouseDown);
@@ -298,7 +311,7 @@ function ViewerApp() {
             canvas.removeEventListener('mouseleave', onMouseLeave);
             window.removeEventListener('resize', resize);
         };
-    }, [channelNames, initial.error, metadata, samples, stats, activeChannels]);
+    }, [autoFitKey, channelNames, initial.error, metadata, samples, stats, activeChannels]);
 
     if (initial.error) {
         return (
