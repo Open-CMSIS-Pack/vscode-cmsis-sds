@@ -161,6 +161,7 @@ function ViewerApp() {
         const ctx = canvas.getContext('2d');
         if (!ctx || !canvas) { return; }
         const MARGIN = { top: 20, right: 40, bottom: 40, left: 60 };
+        let envelopeModeActive = false;
 
         function resize() {
             dpr = window.devicePixelRatio || 1;
@@ -182,6 +183,52 @@ function ViewerApp() {
             return { x: MARGIN.left, y: MARGIN.top, w: w - MARGIN.left - MARGIN.right, h: h - MARGIN.top - MARGIN.bottom };
         }
 
+        function lowerBoundTime(target: number) {
+            let lo = 0;
+            let hi = samples.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (samples[mid].timeSeconds < target) {
+                    lo = mid + 1;
+                } else {
+                    hi = mid;
+                }
+            }
+            return lo;
+        }
+
+        function upperBoundTime(target: number) {
+            let lo = 0;
+            let hi = samples.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (samples[mid].timeSeconds <= target) {
+                    lo = mid + 1;
+                } else {
+                    hi = mid;
+                }
+            }
+            return lo;
+        }
+
+        function nearestSampleByTime(target: number) {
+            if (samples.length === 0) {
+                return null;
+            }
+            const right = lowerBoundTime(target);
+            if (right <= 0) {
+                return samples[0];
+            }
+            if (right >= samples.length) {
+                return samples[samples.length - 1];
+            }
+            const leftSample = samples[right - 1];
+            const rightSample = samples[right];
+            return Math.abs(leftSample.timeSeconds - target) <= Math.abs(rightSample.timeSeconds - target)
+                ? leftSample
+                : rightSample;
+        }
+
         drawRef.current = function draw() {
             if (!canvas || !ctx) { return; }
             const w = canvas.width / dpr;
@@ -191,12 +238,20 @@ function ViewerApp() {
             const plot = getPlotArea();
             if (!plot || plot.w <= 0 || plot.h <= 0 || samples.length === 0) return;
 
-            const visible = samples.filter(s => s.timeSeconds >= viewStartRef.current && s.timeSeconds <= viewEndRef.current);
-            if (visible.length === 0) return;
+            const viewStart = viewStartRef.current;
+            const viewEnd = viewEndRef.current;
+            const viewSpan = Math.max(viewEnd - viewStart, 0.000001);
+            const visibleStartIndex = lowerBoundTime(viewStart);
+            const visibleEndIndex = upperBoundTime(viewEnd);
+            if (visibleEndIndex <= visibleStartIndex) return;
+            const visibleCount = visibleEndIndex - visibleStartIndex;
+            const activeChannelNames = channelNames.filter(ch => activeChannels.has(ch));
+            if (activeChannelNames.length === 0) return;
 
             let yMin = Infinity, yMax = -Infinity;
-            for (const s of visible) {
-                for (const ch of activeChannels) {
+            for (let idx = visibleStartIndex; idx < visibleEndIndex; idx++) {
+                const s = samples[idx];
+                for (const ch of activeChannelNames) {
                     const v = s.values[ch];
                     if (v !== undefined) {
                         if (v < yMin) yMin = v;
@@ -204,16 +259,17 @@ function ViewerApp() {
                     }
                 }
             }
+            if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) return;
             if (yMin === yMax) { yMin -= 1; yMax += 1; }
             const yPad = (yMax - yMin) * 0.05;
             yMin -= yPad; yMax += yPad;
 
-            const xToPixel = (t: number) => plot.x + (t - viewStartRef.current) / (viewEndRef.current - viewStartRef.current) * plot.w;
+            const xToPixel = (t: number) => plot.x + (t - viewStart) / viewSpan * plot.w;
             const yToPixel = (v: number) => plot.y + plot.h - (v - yMin) / (yMax - yMin) * plot.h;
 
             ctx.strokeStyle = 'rgba(128,128,128,0.15)';
             ctx.lineWidth = 1;
-            const xTicks = niceScale(viewStartRef.current, viewEndRef.current, 8);
+            const xTicks = niceScale(viewStart, viewEnd, 8);
             const yTicks = niceScale(yMin, yMax, 6);
 
             ctx.beginPath();
@@ -241,21 +297,72 @@ function ViewerApp() {
             ctx.fillText('Time (s)', plot.x + plot.w / 2, plot.y + plot.h + 34);
             ctx.restore();
 
+            const binCount = Math.max(1, Math.floor(plot.w));
+            const samplesPerPixel = visibleCount / binCount;
+            const envelopeEnterSpp = 1.4;
+            const envelopeExitSpp = 0.9;
+            if (envelopeModeActive) {
+                envelopeModeActive = samplesPerPixel >= envelopeExitSpp;
+            } else {
+                envelopeModeActive = samplesPerPixel >= envelopeEnterSpp;
+            }
+            const useEnvelope = envelopeModeActive;
+
             channelNames.forEach((ch, i) => {
                 if (!activeChannels.has(ch)) return;
                 ctx.strokeStyle = COLORS[i % COLORS.length];
                 ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                let started = false;
-                for (const s of visible) {
-                    const v = s.values[ch];
-                    if (v === undefined) continue;
-                    const px = xToPixel(s.timeSeconds);
-                    const py = yToPixel(v);
-                    if (!started) { ctx.moveTo(px, py); started = true; }
-                    else { ctx.lineTo(px, py); }
+
+                if (useEnvelope) {
+                    const binMin = new Float32Array(binCount);
+                    const binMax = new Float32Array(binCount);
+                    for (let b = 0; b < binCount; b++) {
+                        binMin[b] = Infinity;
+                        binMax[b] = -Infinity;
+                    }
+
+                    for (let idx = visibleStartIndex; idx < visibleEndIndex; idx++) {
+                        const s = samples[idx];
+                        const v = s.values[ch];
+                        if (v === undefined) continue;
+                        const normalized = (s.timeSeconds - viewStart) / viewSpan;
+                        const xBin = Math.min(binCount - 1, Math.max(0, Math.floor(normalized * (binCount - 1))));
+                        if (v < binMin[xBin]) binMin[xBin] = v;
+                        if (v > binMax[xBin]) binMax[xBin] = v;
+                    }
+
+                    ctx.beginPath();
+                    for (let b = 0; b < binCount; b++) {
+                        if (!Number.isFinite(binMin[b]) || !Number.isFinite(binMax[b])) {
+                            continue;
+                        }
+                        const px = plot.x + b;
+                        const pyMin = yToPixel(binMin[b]);
+                        const pyMax = yToPixel(binMax[b]);
+                        ctx.moveTo(px, pyMin);
+                        ctx.lineTo(px, pyMax);
+                    }
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    let started = false;
+                    let lastXBin = -1;
+                    for (let idx = visibleStartIndex; idx < visibleEndIndex; idx++) {
+                        const s = samples[idx];
+                        const v = s.values[ch];
+                        if (v === undefined) continue;
+                        const px = xToPixel(s.timeSeconds);
+                        const xBin = Math.round(px);
+                        if (started && xBin === lastXBin) {
+                            continue;
+                        }
+                        const py = yToPixel(v);
+                        if (!started) { ctx.moveTo(px, py); started = true; }
+                        else { ctx.lineTo(px, py); }
+                        lastXBin = xBin;
+                    }
+                    ctx.stroke();
                 }
-                ctx.stroke();
             });
 
             ctx.strokeStyle = 'rgba(128,128,128,0.3)';
@@ -327,11 +434,7 @@ function ViewerApp() {
             if (!plot) { return; }
             if (mx >= plot.x && mx <= plot.x + plot.w && my >= plot.y && my <= plot.y + plot.h) {
                 const t = viewStartRef.current + (mx - plot.x) / plot.w * (viewEndRef.current - viewStartRef.current);
-                let best: Sample | null = null; let bestDist = Infinity;
-                for (const s of samples) {
-                    const d = Math.abs(s.timeSeconds - t);
-                    if (d < bestDist) { bestDist = d; best = s; }
-                }
+                const best = nearestSampleByTime(t);
                 if (best) {
                     let text = `Time: ${best.timeSeconds.toFixed(4)}s\n`;
                     text += `Timestamp: ${best.timestamp}\n`;
