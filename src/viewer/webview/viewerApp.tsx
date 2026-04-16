@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { WebviewMessenger, getInitialState, WebviewMessage } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
-import { Button, Col, Row, Slider, Space } from 'antd';
-import { ExpandOutlined, ExportOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { Button, Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
+import { ExpandOutlined, SaveOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
 
@@ -316,6 +316,8 @@ function ViewerApp() {
                 if (useEnvelope) {
                     const binMin = new Float32Array(binCount);
                     const binMax = new Float32Array(binCount);
+                    const binSum = new Float32Array(binCount);
+                    const binCountValues = new Uint16Array(binCount);
                     for (let b = 0; b < binCount; b++) {
                         binMin[b] = Infinity;
                         binMax[b] = -Infinity;
@@ -329,8 +331,12 @@ function ViewerApp() {
                         const xBin = Math.min(binCount - 1, Math.max(0, Math.floor(normalized * (binCount - 1))));
                         if (v < binMin[xBin]) binMin[xBin] = v;
                         if (v > binMax[xBin]) binMax[xBin] = v;
+                        binSum[xBin] += v;
+                        binCountValues[xBin]++;
                     }
 
+                    const prevAlpha = ctx.globalAlpha;
+                    ctx.globalAlpha = 0.45;
                     ctx.beginPath();
                     for (let b = 0; b < binCount; b++) {
                         if (!Number.isFinite(binMin[b]) || !Number.isFinite(binMax[b])) {
@@ -343,23 +349,38 @@ function ViewerApp() {
                         ctx.lineTo(px, pyMax);
                     }
                     ctx.stroke();
+                    ctx.globalAlpha = prevAlpha;
+
+                    // Draw a representative center line so dense views remain readable.
+                    ctx.beginPath();
+                    let started = false;
+                    for (let b = 0; b < binCount; b++) {
+                        const count = binCountValues[b];
+                        if (count === 0) {
+                            started = false;
+                            continue;
+                        }
+                        const px = plot.x + b;
+                        const pyMid = yToPixel(binSum[b] / count);
+                        if (!started) {
+                            ctx.moveTo(px, pyMid);
+                            started = true;
+                        } else {
+                            ctx.lineTo(px, pyMid);
+                        }
+                    }
+                    ctx.stroke();
                 } else {
                     ctx.beginPath();
                     let started = false;
-                    let lastXBin = -1;
                     for (let idx = visibleStartIndex; idx < visibleEndIndex; idx++) {
                         const s = samples[idx];
                         const v = s.values[ch];
                         if (v === undefined) continue;
                         const px = xToPixel(s.timeSeconds);
-                        const xBin = Math.round(px);
-                        if (started && xBin === lastXBin) {
-                            continue;
-                        }
                         const py = yToPixel(v);
                         if (!started) { ctx.moveTo(px, py); started = true; }
                         else { ctx.lineTo(px, py); }
-                        lastXBin = xBin;
                     }
                     ctx.stroke();
                 }
@@ -512,7 +533,8 @@ function ViewerApp() {
         position: 'relative',
         width: '100%',
         flex: 1,
-        minHeight: 0
+        minHeight: 0,
+        maxHeight: 500
     };
 
     const canvasStyle: React.CSSProperties = {
@@ -560,25 +582,22 @@ function ViewerApp() {
                     {fileName}
                 </Col>
                 <Col span={10} >
-                    <Space>
-                        <Button icon={<ZoomInOutlined />} type="primary" title="Zoom In" onClick={onZoomIn}></Button>
-                        <Button icon={<ZoomOutOutlined />} type="primary" title="Zoom Out" onClick={onZoomOut}></Button>
-                        <Button icon={<ExpandOutlined />} type="primary" title="Fit to Window" onClick={onFit}></Button>
-                        <Button icon={<ExportOutlined />} type="primary" title="Export CSV" onClick={onExport}></Button>
-                    </Space>
                 </Col>
                 <Col span={10} style={{ textAlign: 'right' }}>
-                    <Space.Compact>
-                        {channelNames.map((name, i) => {
-                            const cColor = COLORS[i % COLORS.length];
-                            const active = activeChannels.has(name);
-                            return (
-                                <Button key={name} style={{ borderColor: cColor, backgroundColor: active ? cColor : 'transparent' }} ghost onClick={() => toggleChannel(name)}>
-                                    {name}
-                                </Button>
-                            )
-                        })}
-                    </Space.Compact>
+                    <Space>
+                        <Space.Compact>
+                            {channelNames.map((name, i) => {
+                                const cColor = COLORS[i % COLORS.length];
+                                const active = activeChannels.has(name);
+                                return (
+                                    <Button key={name} style={{ borderColor: cColor, backgroundColor: active ? cColor : 'transparent' }} ghost onClick={() => toggleChannel(name)}>
+                                        {name}
+                                    </Button>
+                                )
+                            })}
+                        </Space.Compact>
+                        <Button icon={<SaveOutlined />} type="text" title="Export CSV" onClick={onExport}></Button>
+                    </Space>
                 </Col>
             </Row>
             <Row gutter={8}>
@@ -614,16 +633,44 @@ function ViewerApp() {
                     <span style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
                         Window: {windowLength.toFixed(3)} s
                     </span>
-                    <Button icon={<ZoomInOutlined />} type="link" title="Zoom In" onClick={onZoomIn}></Button>
-                    <Button icon={<ZoomOutOutlined />} type="link" title="Zoom Out" onClick={onZoomOut} disabled={domainSpan === windowLength}></Button>
+                    <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={onZoomIn}></Button>
+                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onZoomOut} disabled={domainSpan === windowLength}></Button>
+                    <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={onFit}></Button>
                 </div>
             </div>
         </div >
     );
 }
 
+
+function ThemedViewerApp() {
+    const getIsDarkTheme = () => {
+        const classList = document.body.classList;
+        return classList.contains('vscode-dark') || classList.contains('vscode-high-contrast');
+    };
+
+    const [isDarkTheme, setIsDarkTheme] = useState(getIsDarkTheme);
+
+    useEffect(() => {
+        const updateTheme = () => setIsDarkTheme(getIsDarkTheme());
+        const observer = new MutationObserver(updateTheme);
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        updateTheme();
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    return (
+        <ConfigProvider theme={{ algorithm: isDarkTheme ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
+            <ViewerApp />
+        </ConfigProvider>
+    );
+}
+
 const container = document.getElementById('root');
 if (container) {
     const root = createRoot(container);
-    root.render(<ViewerApp />);
+    root.render(<ThemedViewerApp />);
 }

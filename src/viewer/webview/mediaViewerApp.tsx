@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { getInitialState } from '../../webview/bridge';
 import Button from 'antd/lib/button/Button';
 import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
-import { Col, Row, Slider, Space } from 'antd';
+import { Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
 
 type Frame = { timestamp: number; rgbaBase64: string };
 
@@ -37,11 +37,12 @@ const statsValueStyle: React.CSSProperties = {
     fontSize: '80%'
 };
 
-function ImageViewer({ state }: { state: NonNullable<InitialState['image']> }) {
+function ImageViewer({ state, filename }: { state: NonNullable<InitialState['image']>; filename?: string }) {
     const { frames, width, height, totalFrames } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [index, setIndex] = useState(0);
     const [zoom, setZoom] = useState(1);
+
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -61,7 +62,7 @@ function ImageViewer({ state }: { state: NonNullable<InitialState['image']> }) {
         <div className="media-page">
             <Row>
                 <Col span={4} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    🖼 Image Viewer
+                    🖼 {filename ? filename : 'Image Viewer'}
                 </Col>
                 <Col span={10} >
                     <Space>
@@ -98,13 +99,14 @@ function ImageViewer({ state }: { state: NonNullable<InitialState['image']> }) {
                 </Col>
                 <Col span="2" style={{ textAlign: 'right' }}>
                     <div className="frame-info">Frame {Math.min(index + 1, frames.length)}/{frames.length}</div>
+                    <div className="frame-info">Timestamp {frames[index]?.timestamp}</div>
                 </Col>
             </Row>
         </div>
     );
 }
 
-function AudioViewer({ state }: { state: NonNullable<InitialState['audio']> }) {
+function AudioViewer({ state, filename }: { state: NonNullable<InitialState['audio']>; filename?: string }) {
     const { samples, sampleRate, bitDepth, channels, totalSamples, totalRecords } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [view, setView] = useState<{ start: number; end: number }>({ start: 0, end: 1 });
@@ -237,7 +239,7 @@ function AudioViewer({ state }: { state: NonNullable<InitialState['audio']> }) {
     return (
         <div className="media-page">
             <div className="toolbar">
-                <h2>🔊 Audio Viewer</h2>
+                <h2>🔊 {filename ? filename : 'Audio Viewer'}</h2>
                 <button onClick={() => setView(v => ({ start: v.start + (v.end - v.start) * 0.25, end: v.end - (v.end - v.start) * 0.25 }))}>🔍+</button>
                 <button onClick={() => setView(v => ({ start: Math.max(0, v.start - (v.end - v.start)), end: Math.min(1, v.end + (v.end - v.start)) }))}>🔍−</button>
                 <button onClick={() => setView({ start: 0, end: 1 })}>Fit</button>
@@ -257,7 +259,7 @@ function AudioViewer({ state }: { state: NonNullable<InitialState['audio']> }) {
     );
 }
 
-function VideoViewer({ state }: { state: NonNullable<InitialState['video']> }) {
+function VideoViewer({ state, filename }: { state: NonNullable<InitialState['video']>; filename?: string }) {
     const { frames, width, height, fps, totalFrames } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [index, setIndex] = useState(0);
@@ -292,7 +294,7 @@ function VideoViewer({ state }: { state: NonNullable<InitialState['video']> }) {
     return (
         <div className="media-page">
             <div className="toolbar">
-                <h2>🎬 Video Viewer</h2>
+                <h2>🎬 {filename ? filename : 'Video Viewer'}</h2>
                 <button onClick={() => setZoom(z => Math.min(8, z * 1.5))}>🔍+</button>
                 <button onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}>🔍−</button>
                 <button onClick={() => setZoom(1)}>Fit</button>
@@ -332,9 +334,9 @@ function MediaViewerApp() {
     }
 
     let body: React.ReactNode = null;
-    if (initial.mediaType === 'image' && initial.image) { body = <ImageViewer state={initial.image} />; }
-    else if (initial.mediaType === 'audio' && initial.audio) { body = <AudioViewer state={initial.audio} />; }
-    else if (initial.mediaType === 'video' && initial.video) { body = <VideoViewer state={initial.video} />; }
+    if (initial.mediaType === 'image' && initial.image) { body = <ImageViewer state={initial.image} filename={initial.fileName} />; }
+    else if (initial.mediaType === 'audio' && initial.audio) { body = <AudioViewer state={initial.audio} filename={initial.fileName} />; }
+    else if (initial.mediaType === 'video' && initial.video) { body = <VideoViewer state={initial.video} filename={initial.fileName} />; }
     else { body = <div style={{ padding: 16 }}>No media content available.</div>; }
 
     return (
@@ -361,8 +363,34 @@ function MediaViewerApp() {
     );
 }
 
+function ThemedViewerApp() {
+    const getIsDarkTheme = () => {
+        const classList = document.body.classList;
+        return classList.contains('vscode-dark') || classList.contains('vscode-high-contrast');
+    };
+
+    const [isDarkTheme, setIsDarkTheme] = useState(getIsDarkTheme);
+
+    useEffect(() => {
+        const updateTheme = () => setIsDarkTheme(getIsDarkTheme());
+        const observer = new MutationObserver(updateTheme);
+        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        updateTheme();
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
+    return (
+        <ConfigProvider theme={{ algorithm: isDarkTheme ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
+            <MediaViewerApp />
+        </ConfigProvider>
+    );
+}
+
 const container = document.getElementById('root');
 if (container) {
     const root = createRoot(container);
-    root.render(<MediaViewerApp />);
+    root.render(<ThemedViewerApp />);
 }

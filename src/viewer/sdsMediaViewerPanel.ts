@@ -56,7 +56,7 @@ export class SdsMediaViewerPanel {
 
         const panel = vscode.window.createWebviewPanel(
             SdsMediaViewerPanel.viewType,
-            `Media: ${path.basename(sdsFilePath)}`,
+            `SDS Media Viewer: ${path.basename(sdsFilePath)}`,
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -120,7 +120,7 @@ export class SdsMediaViewerPanel {
             }
 
             this.mediaType = detectMediaType(metadata);
-            this.panel.title = `${this.mediaType === 'image' ? '🖼' : this.mediaType === 'audio' ? '🔊' : '🎬'} ${path.basename(this.sdsFilePath)}`;
+            this.panel.title = `${this.mediaType === 'image' ? '🖼 SDS Media Viewer' : this.mediaType === 'audio' ? '🔊 SDS Media Viewer' : '🎬 SDS Media Viewer'}: ${path.basename(this.sdsFilePath)}`;
 
             const initialState = this.buildInitialState(parsed, metadata);
             this.panel.webview.html = this.getHtml(initialState);
@@ -230,7 +230,7 @@ export class SdsMediaViewerPanel {
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDS Media Viewer</title>
+    <title>${initialState.fileName ? initialState.fileName : 'SDS Media Viewer'}</title>
 </head>
 <body>
     <div id="root"></div>
