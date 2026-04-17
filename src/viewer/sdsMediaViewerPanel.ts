@@ -25,7 +25,9 @@ import {
     detectMediaType,
     SdsParsedFile
 } from '../sds';
-import { WebviewMessage } from '../webview/bridge';
+import { webviewBus } from '../webview/webview-bus';
+import { isMessage } from '../webview/guard';
+import { WebviewMessage } from '../webview/protocol';
 
 export class SdsMediaViewerPanel {
     public static readonly viewType = 'arm-sds.mediaViewer';
@@ -66,6 +68,7 @@ export class SdsMediaViewerPanel {
         );
 
         const viewer = new SdsMediaViewerPanel(panel, extensionUri, sdsFilePath, metadataPath);
+
         SdsMediaViewerPanel.panels.set(sdsFilePath, viewer);
         return viewer;
     }
@@ -84,6 +87,7 @@ export class SdsMediaViewerPanel {
 
         this.panel.iconPath = new vscode.ThemeIcon('device-camera');
         this.update();
+        this.setupWebview(this.panel.webview);
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
         this.panel.webview.onDidReceiveMessage(
@@ -268,9 +272,22 @@ export class SdsMediaViewerPanel {
 
     private dispose(): void {
         SdsMediaViewerPanel.panels.delete(this.sdsFilePath);
+        webviewBus.unregister(this.panel.webview);
         this.panel.dispose();
         while (this.disposables.length) {
             this.disposables.pop()?.dispose();
         }
+    }
+
+    private setupWebview(webview: vscode.Webview) {
+        webviewBus.register(webview);
+
+        webview.onDidReceiveMessage((raw) => {
+            if (!isMessage(raw)) return;
+
+            webviewBus.handleIncoming(webview, raw);
+        });
+
+        webviewBus.sendInit(webview);
     }
 }

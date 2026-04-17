@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getInitialState } from '../../webview/bridge';
 import Button from 'antd/lib/button/Button';
-import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, SaveOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
+import { BroadcastMessage, Message } from '../../webview/protocol';
+import { broadcastMessage } from '../../webview/vscode-api';
 
 type Frame = { timestamp: number; rgbaBase64: string };
 
@@ -15,10 +17,6 @@ type InitialState = {
     fileName?: string;
     error?: string;
 };
-
-// type OutboundMessage = WebviewMessage;
-
-// const messenger = new WebviewMessenger<WebviewMessage, OutboundMessage>();
 
 function decodeFrame(frame: Frame, width: number, height: number): ImageData {
     const raw = atob(frame.rgbaBase64);
@@ -43,6 +41,69 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
     const [index, setIndex] = useState(0);
     const [zoom, setZoom] = useState(1);
 
+    function isTimestampInFrameRange(timeStamp: number | undefined) {
+        if (timeStamp === undefined || frames.length === 0) {
+            return false;
+        }
+
+        const firstTimestamp = frames[0].timestamp;
+        const lastTimestamp = frames[frames.length - 1].timestamp;
+        const minTimestamp = Math.min(firstTimestamp, lastTimestamp);
+        const maxTimestamp = Math.max(firstTimestamp, lastTimestamp);
+        return timeStamp >= minTimestamp && timeStamp <= maxTimestamp;
+    }
+
+    function lowerBoundFrameTimestamp(target: number) {
+        let lo = 0;
+        let hi = frames.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (frames[mid].timestamp < target) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
+
+    function getNearestFrameIndexAtTimestamp(target: number) {
+        if (!isTimestampInFrameRange(target)) {
+            return null;
+        }
+
+        const right = lowerBoundFrameTimestamp(target);
+        if (right < 0) {
+            // return 0;
+            return null;
+        }
+        if (right >= frames.length) {
+            // return frames.length - 1;
+            return null;
+        }
+
+        const left = right - 1;
+        return Math.abs(frames[left].timestamp - target) <= Math.abs(frames[right].timestamp - target)
+            ? left
+            : right;
+    }
+
+    window.addEventListener('message', (event) => {
+        const msg = event.data as Message;
+
+        switch (msg.type) {
+            case 'broadcast':
+                if (isTimestampInFrameRange((msg as BroadcastMessage).timeStamp)) {
+                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number);
+                    if (nextIndex !== null) {
+                        setIndex(nextIndex);
+                    }
+                    break;
+                }
+                // setIndex(Math.max(0, Math.min(frames.length - 1, (msg as BroadcastMessage).currentFrame)));
+                break;
+        }
+    });
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -58,6 +119,15 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
         ctx.putImageData(img, 0, 0);
     }, [frames, height, index, width, zoom]);
 
+    function onChangeIndex(nextIndex: number) {
+        setIndex(nextIndex);
+        broadcastMessage({
+            type: 'broadcast',
+            currentFrame: nextIndex,
+            timeStamp: frames[nextIndex]?.timestamp,
+        });
+    }
+
     return (
         <div className="media-page">
             <Row>
@@ -66,9 +136,10 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
                 </Col>
                 <Col span={10} >
                     <Space>
-                        <Button icon={<ZoomInOutlined />} type="primary" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
-                        <Button icon={<ZoomOutOutlined />} type="primary" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
-                        <Button icon={<ExpandOutlined />} type="primary" title="Fit to Window" onClick={() => setZoom(1)}></Button>
+                        <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
+                        <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
+                        <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={() => setZoom(1)}></Button>
+                        <Button icon={<SaveOutlined />} type="text" title="Export CSV" onClick={() => { /* TODO: Implement CSV export */ }}></Button>
                     </Space>
                 </Col>
                 <Col span={10} style={{ textAlign: 'right' }}>
@@ -82,6 +153,8 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
                     <Col style={statsValueStyle}>{totalFrames}</Col>
                     <Col style={statsTitleStyle}>Showing</Col>
                     <Col style={statsValueStyle}>{frames.length} of {totalFrames}</Col>
+                    <Col style={statsTitleStyle}>Timestamp</Col>
+                    <Col style={statsValueStyle}>{frames[index]?.timestamp}</Col>
                 </Row>
             </div>
             <div className="canvas-area">
@@ -89,17 +162,16 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
             </div>
             <Row>
                 <Col span="2" style={{ textAlign: 'center' }}>
-                    <Button icon={<LeftCircleOutlined />} type="link" title="Previous Frame" onClick={() => setIndex(i => Math.max(0, i - 1))} />
+                    <Button icon={<LeftCircleOutlined />} type="link" title="Previous Frame" onClick={() => onChangeIndex(Math.max(0, index - 1))} />
                 </Col>
                 <Col span="16">
-                    <Slider min={0} max={Math.max(0, frames.length - 1)} value={index} onChange={value => setIndex(value)} style={{ width: '100%' }} />
+                    <Slider min={0} max={Math.max(0, frames.length - 1)} value={index} onChange={value => onChangeIndex(value)} style={{ width: '100%' }} />
                 </Col>
                 <Col span="2" style={{ textAlign: 'center' }}>
-                    <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => setIndex(i => Math.min(frames.length - 1, i + 1))} />
+                    <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => onChangeIndex(Math.min(frames.length - 1, index + 1))} />
                 </Col>
                 <Col span="2" style={{ textAlign: 'right' }}>
                     <div className="frame-info">Frame {Math.min(index + 1, frames.length)}/{frames.length}</div>
-                    <div className="frame-info">Timestamp {frames[index]?.timestamp}</div>
                 </Col>
             </Row>
         </div>
@@ -110,6 +182,16 @@ function AudioViewer({ state, filename }: { state: NonNullable<InitialState['aud
     const { samples, sampleRate, bitDepth, channels, totalSamples, totalRecords } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [view, setView] = useState<{ start: number; end: number }>({ start: 0, end: 1 });
+
+    window.addEventListener('message', (event) => {
+        const msg = event.data as Message;
+
+        switch (msg.type) {
+            case 'broadcast':
+                console.log(msg.payload);
+                break;
+        }
+    });
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -266,6 +348,16 @@ function VideoViewer({ state, filename }: { state: NonNullable<InitialState['vid
     const [zoom, setZoom] = useState(1);
     const [playing, setPlaying] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    window.addEventListener('message', (event) => {
+        const msg = event.data as Message;
+
+        switch (msg.type) {
+            case 'broadcast':
+                console.log(msg.payload);
+                break;
+        }
+    });
 
     useEffect(() => {
         if (!playing) { return; }

@@ -22,7 +22,9 @@ import {
     SDS_METADATA_EXTENSION,
     SdsDecodedSample,
 } from '../sds';
-import { WebviewMessage } from '../webview/bridge';
+import { webviewBus } from '../webview/webview-bus';
+import { isMessage } from '../webview/guard';
+import { WebviewMessage } from '../webview/protocol';
 
 export class SdsViewerPanel {
     public static readonly viewType = 'arm-sds.viewer';
@@ -77,6 +79,8 @@ export class SdsViewerPanel {
         this.extensionUri = extensionUri;
         this.sdsFilePath = sdsFilePath;
         this.metadataPath = metadataPath;
+
+        this.setupWebview(panel.webview);
 
         this.panel.iconPath = new vscode.ThemeIcon('graph-line');
         this.update();
@@ -211,9 +215,22 @@ export class SdsViewerPanel {
 
     private dispose(): void {
         SdsViewerPanel.panels.delete(this.sdsFilePath);
+        webviewBus.unregister(this.panel.webview);
         this.panel.dispose();
         while (this.disposables.length) {
             this.disposables.pop()?.dispose();
         }
+    }
+
+    private setupWebview(webview: vscode.Webview) {
+        webviewBus.register(webview);
+
+        webview.onDidReceiveMessage((raw) => {
+            if (!isMessage(raw)) return;
+
+            webviewBus.handleIncoming(webview, raw);
+        });
+
+        webviewBus.sendInit(webview);
     }
 }

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { WebviewMessenger, getInitialState, WebviewMessage } from '../../webview/bridge';
+import { WebviewMessenger, getInitialState } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
 import { Button, Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
 import { ExpandOutlined, SaveOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { BroadcastMessage, Message, WebviewMessage } from '../../webview/protocol';
+import { broadcastMessage } from '../../webview/vscode-api';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
 
@@ -41,6 +43,7 @@ function ViewerApp() {
     const domainSpan = Math.max(domainEnd - domainStart, 0.001);
     const minViewSpan = Math.max(domainSpan / 1000, 0.001);
     const sliderStep = Math.max(domainSpan / 1000, 0.0001);
+    let cursor = -1;
 
     const [viewRange, setViewRange] = useState<[number, number]>(() => [domainStart, domainEnd]);
 
@@ -146,22 +149,36 @@ function ViewerApp() {
         const tooltip = tooltipRef.current;
         if (!canvas || !tooltip) { return; }
 
-        let isDragging = false;
-        let dragStartX = 0;
+        let pointerMode: 'idle' | 'cursor' | 'pan' = 'idle';
+        let pointerDownX = 0;
         let dragViewStart = 0;
         let dragViewEnd = 0;
         let dpr = window.devicePixelRatio || 1;
-
-        const escape = (val: unknown) => String(val).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const stat = (label: string, value: unknown) => {
-            if (value === undefined || value === null) { return ''; }
-            return `<span><span class="stat-label">${escape(label)}:</span> ${escape(value)}</span>`;
-        };
 
         const ctx = canvas.getContext('2d');
         if (!ctx || !canvas) { return; }
         const MARGIN = { top: 20, right: 40, bottom: 40, left: 60 };
         let envelopeModeActive = false;
+
+        window.addEventListener('message', (event) => {
+            const msg = event.data as Message;
+
+            switch (msg.type) {
+                case 'broadcast':
+                    if (!isTimestampInSampleRange((msg as BroadcastMessage).timeStamp)) {
+                        break;
+                    }
+
+                    const nextCursor = getNearestSampleIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number);
+                    if (nextCursor === null) {
+                        break;
+                    }
+
+                    cursor = nextCursor;
+                    drawRef.current();
+                    break;
+            }
+        });
 
         function resize() {
             dpr = window.devicePixelRatio || 1;
@@ -181,6 +198,28 @@ function ViewerApp() {
             const w = canvas.width / dpr;
             const h = canvas.height / dpr;
             return { x: MARGIN.left, y: MARGIN.top, w: w - MARGIN.left - MARGIN.right, h: h - MARGIN.top - MARGIN.bottom };
+        }
+
+        function getCanvasPoint(clientX: number, clientY: number) {
+            if (!canvas) {
+                return null;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function isPointInPlot(clientX: number, clientY: number) {
+            const plot = getPlotArea();
+            const point = getCanvasPoint(clientX, clientY);
+            if (!plot || !point) {
+                return false;
+            }
+
+            return point.x >= plot.x && point.x <= plot.x + plot.w && point.y >= plot.y && point.y <= plot.y + plot.h;
         }
 
         function lowerBoundTime(target: number) {
@@ -211,22 +250,49 @@ function ViewerApp() {
             return lo;
         }
 
-        function nearestSampleByTime(target: number) {
-            if (samples.length === 0) {
+        function isTimestampInSampleRange(timeStamp: number | undefined) {
+            if (timeStamp === undefined || samples.length === 0) {
+                return false;
+            }
+
+            const firstTimestamp = samples[0].timeSeconds;
+            const lastTimestamp = samples[samples.length - 1].timeSeconds;
+            const minTimestamp = Math.min(firstTimestamp, lastTimestamp);
+            const maxTimestamp = Math.max(firstTimestamp, lastTimestamp);
+            return timeStamp >= minTimestamp && timeStamp <= maxTimestamp;
+        }
+
+        function lowerBoundTimestamp(target: number) {
+            let lo = 0;
+            let hi = samples.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (samples[mid].timeSeconds < target) {
+                    lo = mid + 1;
+                } else {
+                    hi = mid;
+                }
+            }
+            return lo;
+        }
+
+        function getNearestSampleIndexAtTimestamp(target: number) {
+            if (!isTimestampInSampleRange(target)) {
                 return null;
             }
-            const right = lowerBoundTime(target);
+
+            const right = lowerBoundTimestamp(target);
             if (right <= 0) {
-                return samples[0];
+                return 0;
             }
             if (right >= samples.length) {
-                return samples[samples.length - 1];
+                return samples.length - 1;
             }
-            const leftSample = samples[right - 1];
-            const rightSample = samples[right];
-            return Math.abs(leftSample.timeSeconds - target) <= Math.abs(rightSample.timeSeconds - target)
-                ? leftSample
-                : rightSample;
+
+            const left = right - 1;
+            return Math.abs(samples[left].timeSeconds - target) <= Math.abs(samples[right].timeSeconds - target)
+                ? left
+                : right;
         }
 
         drawRef.current = function draw() {
@@ -389,6 +455,17 @@ function ViewerApp() {
             ctx.strokeStyle = 'rgba(128,128,128,0.3)';
             ctx.lineWidth = 1;
             ctx.strokeRect(plot.x, plot.y, plot.w, plot.h);
+
+            if (cursor >= 0) {
+                const s = samples[cursor];
+                const px = xToPixel(s.timeSeconds);
+                ctx.strokeStyle = 'rgba(200,0,0,0.8)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(px, plot.y);
+                ctx.lineTo(px, plot.y + plot.h);
+                ctx.stroke();
+            }
         }
 
         function niceScale(min: number, max: number, maxTicks: number) {
@@ -411,6 +488,102 @@ function ViewerApp() {
             return t.toFixed(3) + 's';
         }
 
+        function getNearestSampleIndexAtClientX(clientX: number) {
+            if (!canvas || samples.length === 0) {
+                return null;
+            }
+
+            const plot = getPlotArea();
+            if (!plot) {
+                return null;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = clientX - rect.left;
+            if (mouseX < plot.x || mouseX > plot.x + plot.w) {
+                return null;
+            }
+
+            const targetTime = viewStartRef.current + ((mouseX - plot.x) / plot.w) * (viewEndRef.current - viewStartRef.current);
+            const right = lowerBoundTime(targetTime);
+
+            if (right <= 0) {
+                return 0;
+            }
+            if (right >= samples.length) {
+                return samples.length - 1;
+            }
+
+            const left = right - 1;
+            return Math.abs(samples[left].timeSeconds - targetTime) <= Math.abs(samples[right].timeSeconds - targetTime)
+                ? left
+                : right;
+        }
+
+        function getCursorScreenX() {
+            if (cursor < 0 || cursor >= samples.length) {
+                return null;
+            }
+
+            const plot = getPlotArea();
+            if (!plot) {
+                return null;
+            }
+
+            const cursorSample = samples[cursor];
+            const viewSpan = Math.max(viewEndRef.current - viewStartRef.current, 0.000001);
+            return plot.x + ((cursorSample.timeSeconds - viewStartRef.current) / viewSpan) * plot.w;
+        }
+
+        function updateCursorFromClientX(clientX: number) {
+            const nextCursor = getNearestSampleIndexAtClientX(clientX);
+            if (nextCursor === null || nextCursor === cursor) {
+                return false;
+            }
+
+            cursor = nextCursor;
+            broadcastMessage({
+                type: 'broadcast',
+                currentFrame: cursor,
+                timeStamp: samples[cursor].timeSeconds
+            });
+            drawRef.current();
+            return true;
+        }
+
+        function updateTooltip(clientX: number, clientY: number) {
+            if (!tooltip) {
+                return;
+            }
+
+            const plot = getPlotArea();
+            const point = getCanvasPoint(clientX, clientY);
+            if (!plot || !point || point.x < plot.x || point.x > plot.x + plot.w || point.y < plot.y || point.y > plot.y + plot.h) {
+                tooltip.style.display = 'none';
+                return;
+            }
+
+            const bestIndex = getNearestSampleIndexAtClientX(clientX);
+            if (bestIndex === null) {
+                tooltip.style.display = 'none';
+                return;
+            }
+
+            const best = samples[bestIndex];
+            let text = `Time: ${best.timeSeconds.toFixed(4)}s\n`;
+            text += `Timestamp: ${best.timestamp}\n`;
+            for (const ch of channelNames) {
+                if (activeChannels.has(ch) && best.values[ch] !== undefined) {
+                    text += `${ch}: ${best.values[ch].toFixed(4)}\n`;
+                }
+            }
+
+            tooltip.style.display = 'block';
+            tooltip.style.left = `${point.x}px`;
+            tooltip.style.top = `${point.y + 30}px`;
+            tooltip.textContent = text.trimEnd();
+        }
+
         function onWheel(e: WheelEvent) {
             if (!canvas) { return; }
             e.preventDefault();
@@ -427,19 +600,18 @@ function ViewerApp() {
             setViewRange([start, end]);
         }
 
-        function onMouseDown(e: MouseEvent) {
-            isDragging = true;
-            dragStartX = e.clientX;
-            dragViewStart = viewStartRef.current;
-            dragViewEnd = viewEndRef.current;
-        }
-
         function onMouseMove(e: MouseEvent) {
             if (!canvas) { return; }
-            if (isDragging) {
+            if (pointerMode === 'cursor') {
+                updateCursorFromClientX(e.clientX);
+                updateTooltip(e.clientX, e.clientY);
+                return;
+            }
+
+            if (pointerMode === 'pan') {
                 const plot = getPlotArea();
                 if (!plot) { return; }
-                const dx = e.clientX - dragStartX;
+                const dx = e.clientX - pointerDownX;
                 const range = dragViewEnd - dragViewStart;
                 const shift = -dx / plot.w * range;
                 const [start, end] = clampRange(dragViewStart + shift, dragViewEnd + shift);
@@ -447,38 +619,56 @@ function ViewerApp() {
                 return;
             }
 
-            const rect = canvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
-            const plot = getPlotArea();
+            updateTooltip(e.clientX, e.clientY);
+        }
 
-            if (!plot) { return; }
-            if (mx >= plot.x && mx <= plot.x + plot.w && my >= plot.y && my <= plot.y + plot.h) {
-                const t = viewStartRef.current + (mx - plot.x) / plot.w * (viewEndRef.current - viewStartRef.current);
-                const best = nearestSampleByTime(t);
-                if (best) {
-                    let text = `Time: ${best.timeSeconds.toFixed(4)}s\n`;
-                    text += `Timestamp: ${best.timestamp}\n`;
-                    for (const ch of channelNames) {
-                        if (activeChannels.has(ch) && best.values[ch] !== undefined) {
-                            text += `${ch}: ${best.values[ch].toFixed(4)}\n`;
-                        }
-                    }
-                    if (!tooltip) { return; }
-                    tooltip.style.display = 'block';
-                    tooltip.style.left = `${mx}px`;
-                    tooltip.style.top = `${my + 30}px`;
-                    tooltip.textContent = text.trimEnd();
-                }
-            } else {
-                if (!tooltip) { return; }
+        function onMouseDown(e: MouseEvent) {
+            const cursorHitTolerancePx = 10;
+            if (!isPointInPlot(e.clientX, e.clientY)) {
+                pointerMode = 'idle';
+                return;
+            }
+
+            pointerDownX = e.clientX;
+            dragViewStart = viewStartRef.current;
+            dragViewEnd = viewEndRef.current;
+
+            const point = getCanvasPoint(e.clientX, e.clientY);
+            const cursorX = getCursorScreenX();
+            if (point && cursorX !== null && Math.abs(point.x - cursorX) <= cursorHitTolerancePx) {
+                pointerMode = 'cursor';
+                return;
+            }
+
+            pointerMode = 'pan';
+        }
+
+        function onMouseUp(e: MouseEvent) {
+            const clickTolerancePx = 3;
+            const wasClick = Math.abs(e.clientX - pointerDownX) <= clickTolerancePx;
+            const activeMode = pointerMode;
+            pointerMode = 'idle';
+
+            if (activeMode === 'cursor') {
+                updateCursorFromClientX(e.clientX);
+                updateTooltip(e.clientX, e.clientY);
+                return;
+            }
+
+            if (!wasClick || !isPointInPlot(e.clientX, e.clientY)) {
+                updateTooltip(e.clientX, e.clientY);
+                return;
+            }
+
+            updateCursorFromClientX(e.clientX);
+            updateTooltip(e.clientX, e.clientY);
+        }
+        function onMouseLeave() {
+            pointerMode = 'idle';
+            if (tooltip) {
                 tooltip.style.display = 'none';
             }
         }
-
-        function onMouseUp() { isDragging = false; }
-        function onMouseLeave() { isDragging = false; if (tooltip) { tooltip.style.display = 'none'; } }
-
 
         canvas.addEventListener('wheel', onWheel, { passive: false });
         canvas.addEventListener('mousedown', onMouseDown);
@@ -508,6 +698,8 @@ function ViewerApp() {
             </div>
         );
     }
+
+
 
     const toggleChannel = (name: string) => {
         setActiveChannels(prev => {

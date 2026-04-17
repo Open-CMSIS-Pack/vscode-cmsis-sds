@@ -17,7 +17,7 @@ import { SdsRecord, SdsMetadata, SdsRecordingSession, SdsRecorderConfig, SdsioSe
 import { writeSdsFile, writeMetadataFile, findNextFileIndex } from '../sds/writer';
 import { SdsioServer } from './sdsio/sdsIoServer';
 import { SerialTransport } from './sdsio/serialTransport';
-import { WebviewMessage } from '../webview/bridge';
+import { WebviewMessage } from '../webview/protocol';
 
 export class SdsRecorderPanel {
     public static readonly viewType = 'arm-sds.recorder';

@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { WebviewMessenger, getInitialState, WebviewMessage } from '../../webview/bridge';
+import { WebviewMessenger, getInitialState } from '../../webview/bridge';
 import { SdsRecorderConfig } from '../../sds';
+import { WebviewMessage } from '../../webview/protocol';
 
 type RecorderMode = 'usb' | 'serial' | 'socket' | 'demo';
 

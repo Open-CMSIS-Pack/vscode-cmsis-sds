@@ -4,23 +4,24 @@
  * so each webview app can register handlers consistently.
  */
 
+import { WebviewMessage } from "./protocol";
+import { broadcastMessage } from "./vscode-api";
+
 // Minimal VS Code webview API surface used by the webview bundles.
-type VsCodeApi = {
-    postMessage(message: unknown): void;
-    getState?<T>(): T | undefined;
-    setState?<T>(state: T): void;
-};
+// type VsCodeApi = {
+//     postMessage(message: unknown): void;
+//     getState?<T>(): T | undefined;
+//     setState?<T>(state: T): void;
+// };
 
-// Declared globally by VS Code inside the webview; we provide a local declaration for TS.
-declare function acquireVsCodeApi(): VsCodeApi;
-
-export type WebviewMessage = { type?: string; command?: string; message?: string, [key: string]: unknown };
+// // Declared globally by VS Code inside the webview; we provide a local declaration for TS.
+// declare function acquireVsCodeApi(): VsCodeApi;
 
 export class WebviewMessenger<Inbound extends WebviewMessage, Outbound extends WebviewMessage> {
     private handlers = new Map<string, Set<(message: Inbound) => void>>();
-    private vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : {
-        postMessage: (_: unknown) => undefined
-    };
+    // private vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : {
+    //     postMessage: (_: unknown) => undefined
+    // };
 
     constructor() {
         this.handleMessage = this.handleMessage.bind(this);
@@ -28,7 +29,7 @@ export class WebviewMessenger<Inbound extends WebviewMessage, Outbound extends W
     }
 
     public send(message: Outbound): void {
-        this.vscode.postMessage(message);
+        broadcastMessage(message);
     }
 
     public on(type: Inbound['type'], handler: (message: Inbound) => void): () => void {
