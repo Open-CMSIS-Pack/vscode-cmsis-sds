@@ -33,10 +33,58 @@ export type WebviewMessage = {
     [key: string]: unknown;
 };
 
+export type ImageFrame = { timestamp: number; rgbaBase64: string };
+
 export function getIndexedSdsSuffix(value: unknown) {
     if (typeof value !== 'string') {
         return null;
     }
 
     return value.match(/\.\d+\.sds$/i)?.[0].toLowerCase() ?? null;
+}
+
+export function isTimestampInFrameRange(timeStamp: number | undefined, frames: ImageFrame[]) {
+    if (timeStamp === undefined || frames.length === 0) {
+        return false;
+    }
+
+    const firstTimestamp = frames[0].timestamp;
+    const lastTimestamp = frames[frames.length - 1].timestamp;
+    const minTimestamp = Math.min(firstTimestamp, lastTimestamp);
+    const maxTimestamp = Math.max(firstTimestamp, lastTimestamp);
+    return timeStamp >= minTimestamp && timeStamp <= maxTimestamp;
+}
+
+function lowerBoundFrameTimestamp(target: number, frames: ImageFrame[]) {
+    let lo = 0;
+    let hi = frames.length;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (frames[mid].timestamp < target) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
+}
+
+
+export function getNearestFrameIndexAtTimestamp(target: number, frames: ImageFrame[]) {
+    if (!isTimestampInFrameRange(target, frames)) {
+        return null;
+    }
+
+    const right = lowerBoundFrameTimestamp(target, frames);
+    if (right <= 0) {
+        return 0;
+    }
+    if (right >= frames.length) {
+        return frames.length - 1;
+    }
+
+    const left = right - 1;
+    return Math.abs(frames[left].timestamp - target) <= Math.abs(frames[right].timestamp - target)
+        ? left
+        : right;
 }

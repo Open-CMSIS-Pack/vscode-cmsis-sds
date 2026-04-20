@@ -1,3 +1,4 @@
+import './components/viewer.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { WebviewMessenger, getInitialState } from '../../webview/bridge';
@@ -462,28 +463,41 @@ function ViewerApp() {
             ctx.strokeRect(plot.x, plot.y, plot.w, plot.h);
 
             if (cursor >= 0) {
-                const s = samples[cursor];
-                const px = xToPixel(s.timeSeconds);
-                ctx.strokeStyle = 'rgba(200,0,0,0.8)';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(px, plot.y);
-                ctx.lineTo(px, plot.y + plot.h);
-                ctx.stroke();
+                const px = xToPixel(samples[cursor].timeSeconds);
+                if (px >= plot.x && px <= plot.x + plot.w) {
+                    ctx.strokeStyle = 'rgba(200,0,0,0.8)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(px, plot.y);
+                    ctx.lineTo(px, plot.y + plot.h);
+                    ctx.stroke();
+                }
             }
         }
 
         function niceScale(min: number, max: number, maxTicks: number) {
             const range = max - min;
-            if (range <= 0) return [min];
+            if (range <= 0) {
+                return [min];
+            }
+
             const rough = range / maxTicks;
             const pow = Math.pow(10, Math.floor(Math.log10(rough)));
             let step = pow;
-            if (rough / pow >= 5) step = pow * 5;
-            else if (rough / pow >= 2) step = pow * 2;
+
+            if (rough / pow >= 5) {
+                step = pow * 5;
+            }
+            else if (rough / pow >= 2) {
+                step = pow * 2;
+            }
+
             const ticks: number[] = [];
             let t = Math.ceil(min / step) * step;
-            while (t <= max) { ticks.push(t); t += step; }
+
+            while (t <= max) {
+                ticks.push(t); t += step;
+            }
             return ticks;
         }
 
@@ -718,9 +732,9 @@ function ViewerApp() {
     const canvasContainerStyle: React.CSSProperties = {
         position: 'relative',
         width: '100%',
+        height: '100vh',
         flex: 1,
         minHeight: 0,
-        maxHeight: 500
     };
 
     const canvasStyle: React.CSSProperties = {
@@ -803,8 +817,8 @@ function ViewerApp() {
                 <canvas id="chart" ref={canvasRef} style={canvasStyle}></canvas>
                 <div id="tooltip" ref={tooltipRef} style={toolTipStyle}></div>
             </div>
-            <div style={sliderContainerStyle}>
-                <div style={sliderMetaStyle}>
+            <Row className="controls" gutter={12}>
+                <Col flex="auto">
                     <Slider
                         range={{ draggableTrack: true }}
                         min={domainStart}
@@ -816,14 +830,16 @@ function ViewerApp() {
                         tooltip={{ formatter: (v) => `${(v ?? 0).toFixed(3)}s` }}
                         disabled={samples.length === 0 || domainEnd <= domainStart}
                     />
-                    <span style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
-                        Window: {windowLength.toFixed(3)} s
-                    </span>
+                </Col>
+                <Col flex="none" style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
+                    Window: {windowLength.toFixed(3)} s
+                </Col>
+                <Col flex="none">
                     <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={onZoomIn}></Button>
                     <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onZoomOut} disabled={domainSpan === windowLength}></Button>
                     <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={onFit}></Button>
-                </div>
-            </div>
+                </Col>
+            </Row>
         </div >
     );
 }

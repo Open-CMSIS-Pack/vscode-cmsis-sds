@@ -6,3 +6,5 @@ declare function acquireVsCodeApi(): {
     getState(): any;
     setState(state: any): void;
 };
+
+declare module '*.css';

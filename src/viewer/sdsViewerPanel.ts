@@ -177,12 +177,15 @@ export class SdsViewerPanel {
     }
     private getHtml(initialState: Record<string, unknown>): string {
         const webview = this.panel.webview;
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this.extensionUri, 'out', 'viewerWebview.css')
+        );
         const scriptUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this.extensionUri, 'out', 'viewerWebview.js')
         );
         const nonce = this.generateNonce();
         const stateJson = JSON.stringify(initialState).replace(/</g, '\\u003c');
-        const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self';`;
+        const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} data: blob:; font-src ${webview.cspSource}; connect-src 'self';`;
 
         return /*html*/ `<!DOCTYPE html>
 <html lang="en">
@@ -191,6 +194,7 @@ export class SdsViewerPanel {
     <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDS Viewer</title>
+    <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
     <div id="root"></div>
