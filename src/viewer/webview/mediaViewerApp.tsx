@@ -148,10 +148,10 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
     return (
         <div className="media-page">
             <Row>
-                <Col span={4} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Col flex="none" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     🖼 {filename ? filename : 'Image Viewer'}
                 </Col>
-                <Col span={10} >
+                <Col flex="auto" style={{ textAlign: 'right' }}>
                     <Space>
                         <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
                         <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
@@ -159,36 +159,33 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
                         <Button icon={<SaveOutlined />} type="text" title="Export CSV" onClick={() => { /* TODO: Implement CSV export */ }}></Button>
                     </Space>
                 </Col>
-                <Col span={10} style={{ textAlign: 'right' }}>
+            </Row>
+            <Row className="info-bar">
+                <Col style={statsTitleStyle}>Dimensions</Col>
+                <Col style={statsValueStyle}>{width}×{height}</Col>
+                <Col style={statsTitleStyle}>Frame</Col>
+                <Col style={statsValueStyle}>{Math.min(index + 1, frames.length)} of {totalFrames}</Col>
+                <Col style={statsTitleStyle}>Showing</Col>
+                <Col style={statsValueStyle}>{frames.length} of {totalFrames}</Col>
+                <Col style={statsTitleStyle}>Timestamp</Col>
+                <Col style={statsValueStyle}>{frames[index]?.timestamp}</Col>
+            </Row>
+            <Row>
+                <Col span={24}>
+                    <div className="canvas-area">
+                        <canvas ref={canvasRef} width={width} height={height}></canvas>
+                    </div>
                 </Col>
             </Row>
-            <div className="info-bar">
-                <Row gutter={8}>
-                    <Col style={statsTitleStyle}>Dimensions</Col>
-                    <Col style={statsValueStyle}>{width}×{height}</Col>
-                    <Col style={statsTitleStyle}>Frames</Col>
-                    <Col style={statsValueStyle}>{totalFrames}</Col>
-                    <Col style={statsTitleStyle}>Showing</Col>
-                    <Col style={statsValueStyle}>{frames.length} of {totalFrames}</Col>
-                    <Col style={statsTitleStyle}>Timestamp</Col>
-                    <Col style={statsValueStyle}>{frames[index]?.timestamp}</Col>
-                </Row>
-            </div>
-            <div className="canvas-area">
-                <canvas ref={canvasRef} width={width} height={height}></canvas>
-            </div>
             <Row>
-                <Col span="2" style={{ textAlign: 'center' }}>
+                <Col flex="none" style={{ textAlign: 'center' }}>
                     <Button icon={<LeftCircleOutlined />} type="link" title="Previous Frame" onClick={() => onChangeIndex(Math.max(0, index - 1))} />
                 </Col>
-                <Col span="16">
+                <Col flex="auto">
                     <Slider min={0} max={Math.max(0, frames.length - 1)} value={index} onChange={value => onChangeIndex(value)} style={{ width: '100%' }} />
                 </Col>
-                <Col span="2" style={{ textAlign: 'center' }}>
+                <Col flex="none" style={{ textAlign: 'center' }}>
                     <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => onChangeIndex(Math.min(frames.length - 1, index + 1))} />
-                </Col>
-                <Col span="2" style={{ textAlign: 'right' }}>
-                    <div className="frame-info">Frame {Math.min(index + 1, frames.length)}/{frames.length}</div>
                 </Col>
             </Row>
         </div>
