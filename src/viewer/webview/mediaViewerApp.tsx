@@ -4,7 +4,7 @@ import { getInitialState } from '../../webview/bridge';
 import Button from 'antd/lib/button/Button';
 import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, SaveOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
-import { BroadcastMessage, Message } from '../../webview/protocol';
+import { BroadcastMessage, getIndexedSdsSuffix, Message } from '../../webview/protocol';
 import { broadcastMessage } from '../../webview/vscode-api';
 
 type Frame = { timestamp: number; rgbaBase64: string };
@@ -93,6 +93,10 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
 
         switch (msg.type) {
             case 'broadcast':
+                if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
+                    break;
+                }
+
                 if (isTimestampInFrameRange((msg as BroadcastMessage).timeStamp)) {
                     const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number);
                     if (nextIndex !== null) {
@@ -123,8 +127,8 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
         setIndex(nextIndex);
         broadcastMessage({
             type: 'broadcast',
-            currentFrame: nextIndex,
             timeStamp: frames[nextIndex]?.timestamp,
+            fileName: filename,
         });
     }
 

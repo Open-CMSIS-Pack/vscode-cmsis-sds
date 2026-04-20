@@ -8,8 +8,8 @@ export type Message =
 
 export type BroadcastMessage = WebviewMessage & {
     type: 'broadcast';
-    currentFrame: number;
-    timeStamp?: number;
+    timeStamp: number;
+    fileName: string;
 };
 
 export type InitMessage = WebviewMessage & {
@@ -33,19 +33,10 @@ export type WebviewMessage = {
     [key: string]: unknown;
 };
 
-// export function createBroadcastSourceId(startTimestamp: number, endTimestamp: number): string {
-//     const input = `${startTimestamp}:${endTimestamp}`;
-//     let hash = 0xcbf29ce484222325n;
-//     const prime = 0x100000001b3n;
-//     const mask = 0xffffffffffffffffn;
+export function getIndexedSdsSuffix(value: unknown) {
+    if (typeof value !== 'string') {
+        return null;
+    }
 
-//     for (let index = 0; index < input.length; index++) {
-//         hash ^= BigInt(input.charCodeAt(index));
-//         hash = (hash * prime) & mask;
-//     }
-
-//     console.log(`Generated broadcast source ID ${hash.toString(16)} for range ${input}`);
-
-//     return hash.toString(36);
-// }
-
+    return value.match(/\.\d+\.sds$/i)?.[0].toLowerCase() ?? null;
+}

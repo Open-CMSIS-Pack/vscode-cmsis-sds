@@ -128,7 +128,6 @@ function ViewerApp() {
             setViewRange([0, 1]);
             return;
         }
-        //setViewRange([domainStart, Math.min(domainSpan, minViewSpan * 100) + domainStart]);
         setViewRange([domainStart, domainEnd]);
     }, [autoFitKey, domainEnd, domainStart, samples.length]);
 
@@ -160,11 +159,23 @@ function ViewerApp() {
         const MARGIN = { top: 20, right: 40, bottom: 40, left: 60 };
         let envelopeModeActive = false;
 
-        window.addEventListener('message', (event) => {
+        function getIndexedSdsSuffix(value: unknown) {
+            if (typeof value !== 'string') {
+                return null;
+            }
+
+            return value.match(/\.\d+\.sds$/i)?.[0].toLowerCase() ?? null;
+        }
+
+        const handleMessage = (event: MessageEvent) => {
             const msg = event.data as Message;
 
             switch (msg.type) {
                 case 'broadcast':
+                    if (getIndexedSdsSuffix(fileName) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
+                        break;
+                    }
+
                     if (!isTimestampInSampleRange((msg as BroadcastMessage).timeStamp)) {
                         break;
                     }
@@ -178,7 +189,9 @@ function ViewerApp() {
                     drawRef.current();
                     break;
             }
-        });
+        };
+
+        window.addEventListener('message', handleMessage);
 
         function resize() {
             dpr = window.devicePixelRatio || 1;
@@ -222,18 +235,22 @@ function ViewerApp() {
             return point.x >= plot.x && point.x <= plot.x + plot.w && point.y >= plot.y && point.y <= plot.y + plot.h;
         }
 
-        function lowerBoundTime(target: number) {
+        function lowerBoundSampleIndex(target: number, getValue: (sample: Sample) => number) {
             let lo = 0;
             let hi = samples.length;
             while (lo < hi) {
                 const mid = (lo + hi) >> 1;
-                if (samples[mid].timeSeconds < target) {
+                if (getValue(samples[mid]) < target) {
                     lo = mid + 1;
                 } else {
                     hi = mid;
                 }
             }
             return lo;
+        }
+
+        function lowerBoundTime(target: number) {
+            return lowerBoundSampleIndex(target, sample => sample.timeSeconds);
         }
 
         function upperBoundTime(target: number) {
@@ -250,38 +267,26 @@ function ViewerApp() {
             return lo;
         }
 
-        function isTimestampInSampleRange(timeStamp: number | undefined) {
-            if (timeStamp === undefined || samples.length === 0) {
+        function isSampleValueInRange(target: number | undefined, getValue: (sample: Sample) => number) {
+            if (target === undefined || samples.length === 0) {
                 return false;
             }
 
-            const firstTimestamp = samples[0].timeSeconds;
-            const lastTimestamp = samples[samples.length - 1].timeSeconds;
-            const minTimestamp = Math.min(firstTimestamp, lastTimestamp);
-            const maxTimestamp = Math.max(firstTimestamp, lastTimestamp);
-            return timeStamp >= minTimestamp && timeStamp <= maxTimestamp;
+            const firstValue = getValue(samples[0]);
+            const lastValue = getValue(samples[samples.length - 1]);
+            return target >= firstValue && target <= lastValue;
         }
 
-        function lowerBoundTimestamp(target: number) {
-            let lo = 0;
-            let hi = samples.length;
-            while (lo < hi) {
-                const mid = (lo + hi) >> 1;
-                if (samples[mid].timeSeconds < target) {
-                    lo = mid + 1;
-                } else {
-                    hi = mid;
-                }
-            }
-            return lo;
+        function isTimestampInSampleRange(timeStamp: number | undefined) {
+            return isSampleValueInRange(timeStamp, sample => sample.timeSeconds);
         }
 
-        function getNearestSampleIndexAtTimestamp(target: number) {
-            if (!isTimestampInSampleRange(target)) {
+        function getNearestSampleIndex(target: number, getValue: (sample: Sample) => number) {
+            if (!isSampleValueInRange(target, getValue)) {
                 return null;
             }
 
-            const right = lowerBoundTimestamp(target);
+            const right = lowerBoundSampleIndex(target, getValue);
             if (right <= 0) {
                 return 0;
             }
@@ -290,9 +295,13 @@ function ViewerApp() {
             }
 
             const left = right - 1;
-            return Math.abs(samples[left].timeSeconds - target) <= Math.abs(samples[right].timeSeconds - target)
+            return Math.abs(getValue(samples[left]) - target) <= Math.abs(getValue(samples[right]) - target)
                 ? left
                 : right;
+        }
+
+        function getNearestSampleIndexAtTimestamp(target: number) {
+            return getNearestSampleIndex(target, sample => sample.timeSeconds);
         }
 
         drawRef.current = function draw() {
@@ -505,19 +514,7 @@ function ViewerApp() {
             }
 
             const targetTime = viewStartRef.current + ((mouseX - plot.x) / plot.w) * (viewEndRef.current - viewStartRef.current);
-            const right = lowerBoundTime(targetTime);
-
-            if (right <= 0) {
-                return 0;
-            }
-            if (right >= samples.length) {
-                return samples.length - 1;
-            }
-
-            const left = right - 1;
-            return Math.abs(samples[left].timeSeconds - targetTime) <= Math.abs(samples[right].timeSeconds - targetTime)
-                ? left
-                : right;
+            return getNearestSampleIndex(targetTime, sample => sample.timeSeconds);
         }
 
         function getCursorScreenX() {
@@ -544,8 +541,8 @@ function ViewerApp() {
             cursor = nextCursor;
             broadcastMessage({
                 type: 'broadcast',
-                currentFrame: cursor,
-                timeStamp: samples[cursor].timeSeconds
+                timeStamp: samples[cursor].timeSeconds,
+                fileName: fileName,
             });
             drawRef.current();
             return true;
@@ -684,9 +681,10 @@ function ViewerApp() {
             canvas.removeEventListener('mousemove', onMouseMove);
             canvas.removeEventListener('mouseup', onMouseUp);
             canvas.removeEventListener('mouseleave', onMouseLeave);
+            window.removeEventListener('message', handleMessage);
             window.removeEventListener('resize', resize);
         };
-    }, [channelNames, clampRange, initial.error, metadata, samples, stats, activeChannels]);
+    }, [channelNames, clampRange, initial.error, samples, activeChannels]);
 
     if (initial.error) {
         return (
