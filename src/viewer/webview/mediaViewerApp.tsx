@@ -73,13 +73,11 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
         }
 
         const right = lowerBoundFrameTimestamp(target);
-        if (right < 0) {
-            // return 0;
-            return null;
+        if (right <= 0) {
+            return 0;
         }
         if (right >= frames.length) {
-            // return frames.length - 1;
-            return null;
+            return frames.length - 1;
         }
 
         const left = right - 1;
@@ -88,26 +86,41 @@ function ImageViewer({ state, filename }: { state: NonNullable<InitialState['ima
             : right;
     }
 
-    window.addEventListener('message', (event) => {
-        const msg = event.data as Message;
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            const msg = event.data as Message;
 
-        switch (msg.type) {
-            case 'broadcast':
-                if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
-                    break;
-                }
-
-                if (isTimestampInFrameRange((msg as BroadcastMessage).timeStamp)) {
-                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number);
-                    if (nextIndex !== null) {
-                        setIndex(nextIndex);
+            switch (msg.type) {
+                case 'broadcast': {
+                    if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
+                        break;
                     }
+
+                    if (!isTimestampInFrameRange((msg as BroadcastMessage).timeStamp)) {
+                        break;
+                    }
+
+                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number);
+
+                    if (nextIndex === null) {
+                        break;
+                    }
+
+                    if (index == nextIndex) {
+                        break;
+                    }
+
+                    setIndex(prevIndex => prevIndex === nextIndex ? prevIndex : nextIndex);
                     break;
                 }
-                // setIndex(Math.max(0, Math.min(frames.length - 1, (msg as BroadcastMessage).currentFrame)));
-                break;
-        }
-    });
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => {
+            window.removeEventListener('message', handleMessage);
+        };
+    }, [filename, frames]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -186,16 +199,6 @@ function AudioViewer({ state, filename }: { state: NonNullable<InitialState['aud
     const { samples, sampleRate, bitDepth, channels, totalSamples, totalRecords } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [view, setView] = useState<{ start: number; end: number }>({ start: 0, end: 1 });
-
-    window.addEventListener('message', (event) => {
-        const msg = event.data as Message;
-
-        switch (msg.type) {
-            case 'broadcast':
-                console.log(msg.payload);
-                break;
-        }
-    });
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -352,16 +355,6 @@ function VideoViewer({ state, filename }: { state: NonNullable<InitialState['vid
     const [zoom, setZoom] = useState(1);
     const [playing, setPlaying] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-    window.addEventListener('message', (event) => {
-        const msg = event.data as Message;
-
-        switch (msg.type) {
-            case 'broadcast':
-                console.log(msg.payload);
-                break;
-        }
-    });
 
     useEffect(() => {
         if (!playing) { return; }

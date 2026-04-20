@@ -4,7 +4,7 @@ import { WebviewMessenger, getInitialState } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
 import { Button, Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
 import { ExpandOutlined, SaveOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
-import { BroadcastMessage, Message, WebviewMessage } from '../../webview/protocol';
+import { BroadcastMessage, getIndexedSdsSuffix, Message, WebviewMessage } from '../../webview/protocol';
 import { broadcastMessage } from '../../webview/vscode-api';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
@@ -159,14 +159,6 @@ function ViewerApp() {
         const MARGIN = { top: 20, right: 40, bottom: 40, left: 60 };
         let envelopeModeActive = false;
 
-        function getIndexedSdsSuffix(value: unknown) {
-            if (typeof value !== 'string') {
-                return null;
-            }
-
-            return value.match(/\.\d+\.sds$/i)?.[0].toLowerCase() ?? null;
-        }
-
         const handleMessage = (event: MessageEvent) => {
             const msg = event.data as Message;
 
@@ -182,6 +174,10 @@ function ViewerApp() {
 
                     const nextCursor = getNearestSampleIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number);
                     if (nextCursor === null) {
+                        break;
+                    }
+
+                    if (nextCursor === cursor) {
                         break;
                     }
 
