@@ -6,14 +6,14 @@ import { ConfigProvider, theme } from 'antd';
 import { AudioViewer } from './components/audioViewer';
 import { ImageViewer } from './components/imageViewer';
 import { VideoViewer } from './components/videoViewer';
+import { ImageFrame, SampleFrame } from '../../webview/protocol';
 
-type Frame = { timestamp: number; rgbaBase64: string };
 
 type InitialState = {
     mediaType?: 'image' | 'audio' | 'video';
-    image?: { frames: Frame[]; width: number; height: number; totalFrames: number };
-    audio?: { samples: number[]; sampleRate: number; bitDepth: number; channels: number; totalSamples: number; totalRecords: number };
-    video?: { frames: Frame[]; width: number; height: number; fps: number; totalFrames: number };
+    image?: { frames: ImageFrame[]; width: number; height: number; totalFrames: number };
+    audio?: { samples: SampleFrame[]; sampleRate: number; bitDepth: number; channels: number; totalSamples: number; totalRecords: number };
+    video?: { frames: ImageFrame[]; width: number; height: number; fps: number; totalFrames: number };
     fileName?: string;
     error?: string;
 };

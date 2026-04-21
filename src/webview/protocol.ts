@@ -33,7 +33,9 @@ export type WebviewMessage = {
     [key: string]: unknown;
 };
 
-export type ImageFrame = { timestamp: number; rgbaBase64: string };
+export type MediaFrame = { timestamp: number; };
+export type ImageFrame = MediaFrame & { rgbaBase64: string };
+export type SampleFrame = MediaFrame & { samples: number[] };
 
 export function getIndexedSdsSuffix(value: unknown) {
     if (typeof value !== 'string') {
@@ -43,7 +45,7 @@ export function getIndexedSdsSuffix(value: unknown) {
     return value.match(/\.\d+\.sds$/i)?.[0].toLowerCase() ?? null;
 }
 
-export function isTimestampInFrameRange(timeStamp: number | undefined, frames: ImageFrame[]) {
+export function isTimestampInFrameRange(timeStamp: number | undefined, frames: MediaFrame[]) {
     if (timeStamp === undefined || frames.length === 0) {
         return false;
     }
@@ -55,7 +57,7 @@ export function isTimestampInFrameRange(timeStamp: number | undefined, frames: I
     return timeStamp >= minTimestamp && timeStamp <= maxTimestamp;
 }
 
-function lowerBoundFrameTimestamp(target: number, frames: ImageFrame[]) {
+function lowerBoundFrameTimestamp(target: number, frames: MediaFrame[]) {
     let lo = 0;
     let hi = frames.length;
     while (lo < hi) {
@@ -70,7 +72,7 @@ function lowerBoundFrameTimestamp(target: number, frames: ImageFrame[]) {
 }
 
 
-export function getNearestFrameIndexAtTimestamp(target: number, frames: ImageFrame[]) {
+export function getNearestFrameIndexAtTimestamp(target: number, frames: MediaFrame[]) {
     if (!isTimestampInFrameRange(target, frames)) {
         return null;
     }

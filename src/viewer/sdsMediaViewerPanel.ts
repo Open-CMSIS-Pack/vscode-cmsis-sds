@@ -27,7 +27,7 @@ import {
 } from '../sds';
 import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
-import { WebviewMessage } from '../webview/protocol';
+import { ImageFrame, SampleFrame, WebviewMessage } from '../webview/protocol';
 
 export class SdsMediaViewerPanel {
     public static readonly viewType = 'arm-sds.mediaViewer';
@@ -139,7 +139,7 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const imgMeta = content.find(c => c.image)?.image;
                 if (!imgMeta) { return { ...base, error: 'No image metadata found in content.' }; }
-                const frames: { timestamp: number; rgbaBase64: string }[] = [];
+                const frames: ImageFrame[] = [];
                 const maxFrames = 100;
                 const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
                 for (let i = 0; i < Math.min(parsed.records.length, maxFrames); i++) {
@@ -164,26 +164,27 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const audioMeta = content.find(c => c.audio)?.audio;
                 if (!audioMeta) { return { ...base, error: 'No audio metadata found in content.' }; }
-                const allSamples: number[] = [];
+                const samples: SampleFrame[] = [];
+                const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
                 for (const record of parsed.records) {
                     try {
                         const block = decodeAudioBlock(record.data, audioMeta.sample_rate, audioMeta.bit_depth, audioMeta.audio_channels);
-                        allSamples.push(...Array.from(block[0]));
+                        samples.push({ timestamp: record.timestamp / tickFreq, samples: Array.from(block[0]) });
                     } catch { /* skip */ }
                 }
                 const maxPoints = 20000;
-                const step = Math.max(1, Math.floor(allSamples.length / maxPoints));
-                const displaySamples: number[] = [];
-                for (let i = 0; i < allSamples.length; i += step) { displaySamples.push(allSamples[i]); }
+                const step = Math.max(1, Math.floor(samples.length / maxPoints));
+                const resampled: SampleFrame[] = [];
+                for (let i = 0; i < samples.length; i += step) { resampled.push(samples[i]); }
                 return {
                     ...base,
                     mediaType: 'audio',
                     audio: {
-                        samples: displaySamples,
+                        samples: resampled,
                         sampleRate: audioMeta.sample_rate,
                         bitDepth: audioMeta.bit_depth,
                         channels: audioMeta.audio_channels,
-                        totalSamples: allSamples.length,
+                        totalSamples: samples.length,
                         totalRecords: parsed.records.length,
                     },
                 };
@@ -192,7 +193,7 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const vidMeta = content.find(c => c.video)?.video;
                 if (!vidMeta) { return { ...base, error: 'No video metadata found in content.' }; }
-                const frames: { timestamp: number; rgbaBase64: string }[] = [];
+                const frames: ImageFrame[] = [];
                 const maxFrames = 50;
                 const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
                 for (let i = 0; i < Math.min(parsed.records.length, maxFrames); i++) {
