@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import type { Message } from './protocol';
 
 const vscode = acquireVsCodeApi();

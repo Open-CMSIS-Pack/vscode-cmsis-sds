@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2025-2026 Matthias Hertel
+ * Copyright (c) 2025-2026 Matthias Hertel\
+ * Copyright (c) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
 /**

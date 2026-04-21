@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { ExpandOutlined, LeftCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider, Space } from 'antd';
 import { useEffect, useRef, useState } from 'react';

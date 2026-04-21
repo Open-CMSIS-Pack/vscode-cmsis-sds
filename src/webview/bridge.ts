@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
  * Shared helper for VS Code webview messaging.
  * Provides a tiny typed wrapper around postMessage / message events
  * so each webview app can register handlers consistently.
@@ -7,21 +11,8 @@
 import { WebviewMessage } from "./protocol";
 import { broadcastMessage } from "./vscode-api";
 
-// Minimal VS Code webview API surface used by the webview bundles.
-// type VsCodeApi = {
-//     postMessage(message: unknown): void;
-//     getState?<T>(): T | undefined;
-//     setState?<T>(state: T): void;
-// };
-
-// // Declared globally by VS Code inside the webview; we provide a local declaration for TS.
-// declare function acquireVsCodeApi(): VsCodeApi;
-
 export class WebviewMessenger<Inbound extends WebviewMessage, Outbound extends WebviewMessage> {
     private handlers = new Map<string, Set<(message: Inbound) => void>>();
-    // private vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : {
-    //     postMessage: (_: unknown) => undefined
-    // };
 
     constructor() {
         this.handleMessage = this.handleMessage.bind(this);

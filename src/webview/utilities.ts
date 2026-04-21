@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { ImageFrame } from "./protocol";
 
 const decodedFrameCache = new WeakMap<ImageFrame, Map<string, ImageData>>();

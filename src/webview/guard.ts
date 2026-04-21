@@ -1,4 +1,7 @@
-// guards.ts
+/*
+ * Copyright (c) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 import { Message } from './protocol';
 

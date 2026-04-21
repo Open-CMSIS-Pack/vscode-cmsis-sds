@@ -1,4 +1,7 @@
-// protocol.ts
+/*
+ * Copyright (c) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 export type Message =
     | BroadcastMessage

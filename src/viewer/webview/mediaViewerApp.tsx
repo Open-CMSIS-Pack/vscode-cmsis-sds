@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import './components/viewer.css';
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
