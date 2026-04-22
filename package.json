@@ -390,16 +390,13 @@
         ]
     },
     "scripts": {
-        "vscode:prepublish": "node esbuild.js --production",
-        "compile": "tsc -p ./ && node esbuild.js",
-        "watch": "run-p watch:tsc watch:esbuild",
-        "watch:tsc": "tsc -w -p ./",
-        "watch:esbuild": "node esbuild.js --watch",
-        "lint": "eslint src --ext ts",
+        "compile": "tsc -p .",
+        "build": "node esbuild.js --production",
+        "postbuild": "node scripts/copy-native-modules.js",
+        "package": "npm run build && npm run postbuild && vsce package",
         "test:unit": "vitest run --config vitest.config.ts",
         "test:integration": "vitest run --config vitest.config.ts",
-        "test:e2e": "npx playwright test --config=playwright.config.ts",
-        "package": "vsce package --allow-missing-repository --baseContentUrl ."
+        "test:e2e": "npx playwright test --config=playwright.config.ts"
     },
     "devDependencies": {
         "@playwright/test": "^1.58.0",
