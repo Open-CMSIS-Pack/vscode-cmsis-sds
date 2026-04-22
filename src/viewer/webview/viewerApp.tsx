@@ -12,6 +12,13 @@ import { Button, Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
 import { ExpandOutlined, SaveOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { BroadcastMessage, getIndexedSdsSuffix, Message, WebviewMessage } from '../../webview/protocol';
 import { broadcastMessage } from '../../webview/vscode-api';
+import {
+    accumulateEnvelopeValue,
+    createEnvelopeBins,
+    getEnvelopeBinIndex,
+    getPlotArea,
+    updateEnvelopeMode,
+} from './components/graphCanvas';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
 
@@ -20,11 +27,38 @@ type InitialState = {
     channelNames?: string[];
     stats?: SdsFileStats;
     metadata?: SdsMetadata;
+    domainStart?: number;
+    domainEnd?: number;
     fileName?: string;
     error?: string;
 };
 
-type OutboundMessage = ({ command: 'exportCsv' } & WebviewMessage) | WebviewMessage;
+type VisibleRangeRequestMessage = {
+    command: 'requestVisibleRangeData';
+    requestId: number;
+    payload: {
+        rangeStart: number;
+        rangeEnd: number;
+        plotWidth: number;
+        quality: 'low' | 'high';
+    };
+};
+
+type VisibleRangeResponseMessage = {
+    command: 'visibleRangeData';
+    requestId: number;
+    payload: {
+        rangeStart: number;
+        rangeEnd: number;
+        quality: 'low' | 'high';
+        samples: Sample[];
+    };
+};
+
+type OutboundMessage = ({ command: 'exportCsv' } & WebviewMessage) | VisibleRangeRequestMessage | WebviewMessage;
+
+const CHART_MARGIN = { top: 20, right: 40, bottom: 40, left: 60 };
+const PREFETCH_FACTOR = 1.5;
 
 const messenger = new WebviewMessenger<WebviewMessage, OutboundMessage>();
 
@@ -34,7 +68,7 @@ function ViewerApp() {
     const tooltipRef = useRef<HTMLDivElement | null>(null);
     const [activeChannels, setActiveChannels] = useState(() => new Set(initial.channelNames));
 
-    const samples = useMemo(() => initial.samples ?? [], [initial.samples]);
+    const [samples, setSamples] = useState<Sample[]>(() => initial.samples ?? []);
     const channelNames = useMemo(() => initial.channelNames ?? [], [initial.channelNames]);
     const stats = initial.stats ?? {} as SdsFileStats;
     const metadata = initial.metadata ?? null;
@@ -44,17 +78,22 @@ function ViewerApp() {
     const viewEndRef = useRef(1);
     const drawRef = useRef<() => void>(() => { });
 
-    const domainStart = samples.length > 0 ? samples[0].timeSeconds : 0;
-    const domainEnd = samples.length > 0 ? samples[samples.length - 1].timeSeconds : 1;
+    const domainStart = initial.domainStart ?? (samples.length > 0 ? samples[0].timeSeconds : 0);
+    const domainEnd = initial.domainEnd ?? (samples.length > 0 ? samples[samples.length - 1].timeSeconds : 1);
     const domainSpan = Math.max(domainEnd - domainStart, 0.001);
     const minViewSpan = Math.max(domainSpan / 1000, 0.001);
     const sliderStep = Math.max(domainSpan / 1000, 0.0001);
     let cursor = -1;
 
     const [viewRange, setViewRange] = useState<[number, number]>(() => [domainStart, domainEnd]);
+    const [isDragMode, setIsDragMode] = useState(false);
+    const requestSeqRef = useRef(0);
+    const latestAppliedSeqRef = useRef(0);
+    const cachedRangeRef = useRef<{ start: number; end: number; quality: 'low' | 'high' } | null>(null);
+    const requestSentAtRef = useRef(new Map<number, number>());
 
     const clampRange = useCallback((start: number, end: number): [number, number] => {
-        if (samples.length === 0) {
+        if (domainEnd <= domainStart) {
             return [0, 1];
         }
 
@@ -96,14 +135,9 @@ function ViewerApp() {
         }
 
         return [start, end];
-    }, [domainEnd, domainSpan, domainStart, minViewSpan, samples.length]);
+    }, [domainEnd, domainSpan, domainStart, minViewSpan]);
 
-    const autoFitKey = useMemo(() => {
-        if (samples.length === 0) {
-            return `${fileName}:empty`;
-        }
-        return `${fileName}:${samples.length}:${samples[0].timeSeconds}:${samples[samples.length - 1].timeSeconds}`;
-    }, [fileName, samples]);
+    const autoFitKey = useMemo(() => `${fileName}:${domainStart}:${domainEnd}`, [fileName, domainStart, domainEnd]);
 
     const onZoomIn = () => {
         const center = (viewStartRef.current + viewEndRef.current) / 2;
@@ -118,7 +152,7 @@ function ViewerApp() {
         setViewRange([start, end]);
     }
     const onFit = () => {
-        if (samples.length > 0) {
+        if (domainEnd > domainStart) {
             setViewRange([domainStart, domainEnd]);
         }
     }
@@ -130,19 +164,24 @@ function ViewerApp() {
     }, [viewRange]);
 
     useEffect(() => {
-        if (samples.length === 0) {
+        if (domainEnd <= domainStart) {
             setViewRange([0, 1]);
             return;
         }
         setViewRange([domainStart, domainEnd]);
-    }, [autoFitKey, domainEnd, domainStart, samples.length]);
+    }, [autoFitKey, domainEnd, domainStart]);
 
     const onSliderChange = (value: number[]) => {
         if (value.length !== 2) {
             return;
         }
+        setIsDragMode(true);
         const [start, end] = clampRange(value[0], value[1]);
         setViewRange([start, end]);
+    };
+
+    const onSliderAfterChange = () => {
+        setIsDragMode(false);
     };
 
     const onExport = () => messenger.send({ command: 'exportCsv' });
@@ -162,7 +201,6 @@ function ViewerApp() {
 
         const ctx = canvas.getContext('2d');
         if (!ctx || !canvas) { return; }
-        const MARGIN = { top: 20, right: 40, bottom: 40, left: 60 };
         let envelopeModeActive = false;
 
         const handleMessage = (event: MessageEvent) => {
@@ -190,6 +228,30 @@ function ViewerApp() {
                     cursor = nextCursor;
                     drawRef.current();
                     break;
+                case 'visibleRangeData': {
+                    const response = msg as unknown as VisibleRangeResponseMessage;
+                    if (typeof response.requestId !== 'number') {
+                        break;
+                    }
+                    if (response.requestId < latestAppliedSeqRef.current) {
+                        break;
+                    }
+                    latestAppliedSeqRef.current = response.requestId;
+                    if (Array.isArray(response.payload?.samples)) {
+                        const sentAt = requestSentAtRef.current.get(response.requestId);
+                        if (sentAt !== undefined) {
+                            requestSentAtRef.current.delete(response.requestId);
+                        }
+                        const latency = sentAt !== undefined ? Math.max(0, performance.now() - sentAt) : 0;
+
+                        setSamples(response.payload.samples);
+                        const rs = typeof response.payload.rangeStart === 'number' ? response.payload.rangeStart : viewStartRef.current;
+                        const re = typeof response.payload.rangeEnd === 'number' ? response.payload.rangeEnd : viewEndRef.current;
+                        const q = response.payload.quality === 'low' ? 'low' : 'high';
+                        cachedRangeRef.current = { start: Math.min(rs, re), end: Math.max(rs, re), quality: q };
+                    }
+                    break;
+                }
             }
         };
 
@@ -208,11 +270,9 @@ function ViewerApp() {
             drawRef.current();
         }
 
-        function getPlotArea() {
+        function getLocalPlotArea() {
             if (!canvas) { return; }
-            const w = canvas.width / dpr;
-            const h = canvas.height / dpr;
-            return { x: MARGIN.left, y: MARGIN.top, w: w - MARGIN.left - MARGIN.right, h: h - MARGIN.top - MARGIN.bottom };
+            return getPlotArea(canvas, dpr, CHART_MARGIN);
         }
 
         function getCanvasPoint(clientX: number, clientY: number) {
@@ -228,7 +288,7 @@ function ViewerApp() {
         }
 
         function isPointInPlot(clientX: number, clientY: number) {
-            const plot = getPlotArea();
+            const plot = getLocalPlotArea();
             const point = getCanvasPoint(clientX, clientY);
             if (!plot || !point) {
                 return false;
@@ -312,7 +372,7 @@ function ViewerApp() {
             const h = canvas.height / dpr;
             ctx.clearRect(0, 0, w, h);
 
-            const plot = getPlotArea();
+            const plot = getLocalPlotArea();
             if (!plot || plot.w <= 0 || plot.h <= 0 || samples.length === 0) return;
 
             const viewStart = viewStartRef.current;
@@ -375,14 +435,7 @@ function ViewerApp() {
             ctx.restore();
 
             const binCount = Math.max(1, Math.floor(plot.w));
-            const samplesPerPixel = visibleCount / binCount;
-            const envelopeEnterSpp = 1.4;
-            const envelopeExitSpp = 0.9;
-            if (envelopeModeActive) {
-                envelopeModeActive = samplesPerPixel >= envelopeExitSpp;
-            } else {
-                envelopeModeActive = samplesPerPixel >= envelopeEnterSpp;
-            }
+            envelopeModeActive = updateEnvelopeMode(envelopeModeActive, visibleCount, binCount);
             const useEnvelope = envelopeModeActive;
 
             channelNames.forEach((ch, i) => {
@@ -391,37 +444,26 @@ function ViewerApp() {
                 ctx.lineWidth = 1.5;
 
                 if (useEnvelope) {
-                    const binMin = new Float32Array(binCount);
-                    const binMax = new Float32Array(binCount);
-                    const binSum = new Float32Array(binCount);
-                    const binCountValues = new Uint16Array(binCount);
-                    for (let b = 0; b < binCount; b++) {
-                        binMin[b] = Infinity;
-                        binMax[b] = -Infinity;
-                    }
+                    const bins = createEnvelopeBins(binCount);
 
                     for (let idx = visibleStartIndex; idx < visibleEndIndex; idx++) {
                         const s = samples[idx];
                         const v = s.values[ch];
                         if (v === undefined) continue;
-                        const normalized = (s.timeSeconds - viewStart) / viewSpan;
-                        const xBin = Math.min(binCount - 1, Math.max(0, Math.floor(normalized * (binCount - 1))));
-                        if (v < binMin[xBin]) binMin[xBin] = v;
-                        if (v > binMax[xBin]) binMax[xBin] = v;
-                        binSum[xBin] += v;
-                        binCountValues[xBin]++;
+                        const xBin = getEnvelopeBinIndex(s.timeSeconds, viewStart, viewEnd, binCount);
+                        accumulateEnvelopeValue(bins, xBin, v);
                     }
 
                     const prevAlpha = ctx.globalAlpha;
                     ctx.globalAlpha = 0.45;
                     ctx.beginPath();
                     for (let b = 0; b < binCount; b++) {
-                        if (!Number.isFinite(binMin[b]) || !Number.isFinite(binMax[b])) {
+                        if (!Number.isFinite(bins.min[b]) || !Number.isFinite(bins.max[b])) {
                             continue;
                         }
                         const px = plot.x + b;
-                        const pyMin = yToPixel(binMin[b]);
-                        const pyMax = yToPixel(binMax[b]);
+                        const pyMin = yToPixel(bins.min[b]);
+                        const pyMax = yToPixel(bins.max[b]);
                         ctx.moveTo(px, pyMin);
                         ctx.lineTo(px, pyMax);
                     }
@@ -432,13 +474,13 @@ function ViewerApp() {
                     ctx.beginPath();
                     let started = false;
                     for (let b = 0; b < binCount; b++) {
-                        const count = binCountValues[b];
+                        const count = bins.counts[b];
                         if (count === 0) {
                             started = false;
                             continue;
                         }
                         const px = plot.x + b;
-                        const pyMid = yToPixel(binSum[b] / count);
+                        const pyMid = yToPixel(bins.sum[b] / count);
                         if (!started) {
                             ctx.moveTo(px, pyMid);
                             started = true;
@@ -517,7 +559,7 @@ function ViewerApp() {
                 return null;
             }
 
-            const plot = getPlotArea();
+            const plot = getLocalPlotArea();
             if (!plot) {
                 return null;
             }
@@ -537,7 +579,7 @@ function ViewerApp() {
                 return null;
             }
 
-            const plot = getPlotArea();
+            const plot = getLocalPlotArea();
             if (!plot) {
                 return null;
             }
@@ -568,7 +610,7 @@ function ViewerApp() {
                 return;
             }
 
-            const plot = getPlotArea();
+            const plot = getLocalPlotArea();
             const point = getCanvasPoint(clientX, clientY);
             if (!plot || !point || point.x < plot.x || point.x > plot.x + plot.w || point.y < plot.y || point.y > plot.y + plot.h) {
                 tooltip.style.display = 'none';
@@ -601,7 +643,7 @@ function ViewerApp() {
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
-            const plot = getPlotArea();
+            const plot = getLocalPlotArea();
             if (!plot) { return; }
             const ratio = (mouseX - plot.x) / plot.w;
             const range = viewEndRef.current - viewStartRef.current;
@@ -621,7 +663,7 @@ function ViewerApp() {
             }
 
             if (pointerMode === 'pan') {
-                const plot = getPlotArea();
+                const plot = getLocalPlotArea();
                 if (!plot) { return; }
                 const dx = e.clientX - pointerDownX;
                 const range = dragViewEnd - dragViewStart;
@@ -653,6 +695,7 @@ function ViewerApp() {
             }
 
             pointerMode = 'pan';
+            setIsDragMode(true);
         }
 
         function onMouseUp(e: MouseEvent) {
@@ -660,6 +703,10 @@ function ViewerApp() {
             const wasClick = Math.abs(e.clientX - pointerDownX) <= clickTolerancePx;
             const activeMode = pointerMode;
             pointerMode = 'idle';
+
+            if (activeMode === 'pan') {
+                setIsDragMode(false);
+            }
 
             if (activeMode === 'cursor') {
                 updateCursorFromClientX(e.clientX);
@@ -676,6 +723,9 @@ function ViewerApp() {
             updateTooltip(e.clientX, e.clientY);
         }
         function onMouseLeave() {
+            if (pointerMode === 'pan') {
+                setIsDragMode(false);
+            }
             pointerMode = 'idle';
             if (tooltip) {
                 tooltip.style.display = 'none';
@@ -700,6 +750,103 @@ function ViewerApp() {
             window.removeEventListener('resize', resize);
         };
     }, [channelNames, clampRange, initial.error, samples, activeChannels]);
+
+    const requestVisibleRangeData = useCallback((start: number, end: number, quality: 'low' | 'high') => {
+        const canvas = canvasRef.current;
+        if (!canvas) {
+            return;
+        }
+
+        const rangeStart = Math.min(start, end);
+        const rangeEnd = Math.max(start, end);
+        const rangeSpan = Math.max(rangeEnd - rangeStart, minViewSpan);
+        const fetchSpan = Math.min(domainEnd - domainStart, rangeSpan * PREFETCH_FACTOR);
+        const center = (rangeStart + rangeEnd) / 2;
+
+        let fetchStart = center - fetchSpan / 2;
+        let fetchEnd = center + fetchSpan / 2;
+        if (fetchStart < domainStart) {
+            fetchEnd += domainStart - fetchStart;
+            fetchStart = domainStart;
+        }
+        if (fetchEnd > domainEnd) {
+            fetchStart -= fetchEnd - domainEnd;
+            fetchEnd = domainEnd;
+        }
+        fetchStart = Math.max(domainStart, fetchStart);
+        fetchEnd = Math.min(domainEnd, fetchEnd);
+
+        const rect = canvas.getBoundingClientRect();
+        const plotWidth = Math.max(1, Math.floor(rect.width - CHART_MARGIN.left - CHART_MARGIN.right));
+        const nextRequestId = ++requestSeqRef.current;
+        requestSentAtRef.current.set(nextRequestId, performance.now());
+
+        messenger.send({
+            command: 'requestVisibleRangeData',
+            requestId: nextRequestId,
+            payload: {
+                rangeStart: fetchStart,
+                rangeEnd: fetchEnd,
+                plotWidth,
+                quality,
+            },
+        });
+    }, [domainEnd, domainStart, minViewSpan]);
+
+    const shouldRequestForRange = useCallback((start: number, end: number, quality: 'low' | 'high') => {
+        const cached = cachedRangeRef.current;
+        if (!cached) {
+            return true;
+        }
+
+        const rangeStart = Math.min(start, end);
+        const rangeEnd = Math.max(start, end);
+        if (rangeStart < cached.start || rangeEnd > cached.end) {
+            return true;
+        }
+
+        if (quality === 'high' && cached.quality === 'low') {
+            return true;
+        }
+
+        return false;
+    }, []);
+
+    useEffect(() => {
+        if (initial.error) {
+            return;
+        }
+
+        const quality: 'low' | 'high' = isDragMode ? 'low' : 'high';
+        if (!shouldRequestForRange(viewRange[0], viewRange[1], quality)) {
+            return;
+        }
+
+        const handle = window.setTimeout(() => {
+            requestVisibleRangeData(viewRange[0], viewRange[1], quality);
+        }, isDragMode ? 40 : 100);
+
+        return () => {
+            window.clearTimeout(handle);
+        };
+    }, [initial.error, isDragMode, requestVisibleRangeData, shouldRequestForRange, viewRange]);
+
+    useEffect(() => {
+        if (initial.error) {
+            return;
+        }
+
+        const onResize = () => {
+            cachedRangeRef.current = null;
+            const quality: 'low' | 'high' = isDragMode ? 'low' : 'high';
+            requestVisibleRangeData(viewStartRef.current, viewEndRef.current, quality);
+        };
+
+        window.addEventListener('resize', onResize);
+        return () => {
+            window.removeEventListener('resize', onResize);
+        };
+    }, [initial.error, isDragMode, requestVisibleRangeData]);
 
     if (initial.error) {
         return (
@@ -831,9 +978,10 @@ function ViewerApp() {
                         step={sliderStep}
                         value={viewRange}
                         onChange={onSliderChange}
+                        onChangeComplete={onSliderAfterChange}
                         style={sliderStyle}
                         tooltip={{ formatter: (v) => `${(v ?? 0).toFixed(3)}s` }}
-                        disabled={samples.length === 0 || domainEnd <= domainStart}
+                        disabled={domainEnd <= domainStart}
                     />
                 </Col>
                 <Col flex="none" style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>

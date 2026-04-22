@@ -12,6 +12,7 @@ import { decodeFrame } from '../../../webview/utilities';
 
 type ImageState = {
     frames: ImageFrame[];
+    rangeStart?: number;
     width: number;
     height: number;
     totalFrames: number;
@@ -33,10 +34,47 @@ const statsValueStyle: React.CSSProperties = {
 };
 
 export function ImageViewer({ state, filename }: ImageViewerProps) {
-    const { frames, width, height, totalFrames } = state;
+    const { frames, rangeStart = 0, width, height, totalFrames } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [index, setIndex] = useState(0);
+    const [index, setIndex] = useState(rangeStart);
+    const [windowFrames, setWindowFrames] = useState<ImageFrame[]>(frames);
+    const [windowStart, setWindowStart] = useState(rangeStart);
+    const [isDragMode, setIsDragMode] = useState(false);
     const [zoom, setZoom] = useState(1);
+    const requestSeqRef = useRef(0);
+    const latestAppliedSeqRef = useRef(0);
+
+    const getLoadedFrame = (absoluteIndex: number) => {
+        const localIndex = absoluteIndex - windowStart;
+        if (localIndex < 0 || localIndex >= windowFrames.length) {
+            return null;
+        }
+        return windowFrames[localIndex];
+    };
+
+    const requestFrameWindow = (centerIndex: number, quality: 'low' | 'high') => {
+        const requestId = ++requestSeqRef.current;
+        const windowSize = quality === 'low' ? 120 : 280;
+        broadcastMessage({
+            command: 'requestMediaFrameWindow',
+            requestId,
+            payload: {
+                mediaType: 'image',
+                centerIndex,
+                windowSize,
+                quality,
+            },
+        });
+    };
+
+    useEffect(() => {
+        setWindowFrames(frames);
+        setWindowStart(rangeStart);
+        setIndex((prev) => {
+            const next = Math.max(0, Math.min(totalFrames - 1, prev));
+            return Number.isFinite(next) ? next : rangeStart;
+        });
+    }, [frames, rangeStart, totalFrames]);
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
@@ -60,6 +98,32 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                     setIndex(prevIndex => prevIndex === nextIndex ? prevIndex : nextIndex);
                     break;
                 }
+                case 'mediaFrameWindowData': {
+                    const mediaMessage = msg as Message & {
+                        requestId?: number;
+                        payload?: {
+                            mediaType?: 'image' | 'video';
+                            rangeStart?: number;
+                            frames?: ImageFrame[];
+                        };
+                    };
+                    if (mediaMessage.payload?.mediaType !== 'image') {
+                        break;
+                    }
+                    if (typeof mediaMessage.requestId === 'number') {
+                        if (mediaMessage.requestId < latestAppliedSeqRef.current) {
+                            break;
+                        }
+                        latestAppliedSeqRef.current = mediaMessage.requestId;
+                    }
+                    if (!Array.isArray(mediaMessage.payload?.frames)) {
+                        break;
+                    }
+
+                    setWindowFrames(mediaMessage.payload.frames);
+                    setWindowStart(typeof mediaMessage.payload.rangeStart === 'number' ? mediaMessage.payload.rangeStart : 0);
+                    break;
+                }
             }
         };
 
@@ -67,27 +131,44 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, frames]);
+    }, [filename, frames, totalFrames]);
+
+    useEffect(() => {
+        const loadedStart = windowStart;
+        const loadedEnd = windowStart + windowFrames.length - 1;
+        if (windowFrames.length === 0 || index < loadedStart || index > loadedEnd) {
+            requestFrameWindow(index, isDragMode ? 'low' : 'high');
+            return;
+        }
+
+        const nearEdgeMargin = Math.max(8, Math.floor(windowFrames.length * 0.2));
+        if (index <= loadedStart + nearEdgeMargin || index >= loadedEnd - nearEdgeMargin) {
+            requestFrameWindow(index, isDragMode ? 'low' : 'high');
+        }
+    }, [index, isDragMode, windowFrames.length, windowStart]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas || frames.length === 0) { return; }
+        if (!canvas || windowFrames.length === 0) { return; }
         const ctx = canvas.getContext('2d');
         if (!ctx) { return; }
-        const frame = frames[Math.min(index, frames.length - 1)];
+        const frame = getLoadedFrame(index) ?? windowFrames[Math.max(0, Math.min(windowFrames.length - 1, index - windowStart))];
+        if (!frame) { return; }
         const img = decodeFrame(frame, width, height);
         canvas.width = width;
         canvas.height = height;
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
-    }, [frames, height, index, width, zoom]);
+    }, [height, index, width, zoom, windowFrames, windowStart]);
 
     function onChangeIndex(nextIndex: number) {
-        setIndex(nextIndex);
+        const clamped = Math.max(0, Math.min(totalFrames - 1, nextIndex));
+        setIndex(clamped);
+        const frame = getLoadedFrame(clamped);
         broadcastMessage({
             type: 'broadcast',
-            timeStamp: frames[nextIndex]?.timestamp,
+            timeStamp: frame?.timestamp,
             fileName: filename,
         });
     }
@@ -113,9 +194,9 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 <Col style={statsTitleStyle}>Frame</Col>
                 <Col style={statsValueStyle}>{Math.min(index + 1, frames.length)} of {totalFrames}</Col>
                 <Col style={statsTitleStyle}>Showing</Col>
-                <Col style={statsValueStyle}>{frames.length} of {totalFrames}</Col>
+                <Col style={statsValueStyle}>{windowFrames.length} of {totalFrames}</Col>
                 <Col style={statsTitleStyle}>Timestamp</Col>
-                <Col style={statsValueStyle}>{frames[index]?.timestamp}</Col>
+                <Col style={statsValueStyle}>{(getLoadedFrame(index)?.timestamp ?? 0).toFixed(4)}s</Col>
             </Row>
             <Row className="canvas-area">
                 <Col>
@@ -129,14 +210,18 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 <Col flex="auto">
                     <Slider
                         min={0}
-                        max={Math.max(0, frames.length - 1)}
+                        max={Math.max(0, totalFrames - 1)}
                         value={index}
-                        onChange={value => onChangeIndex(value)}
+                        onChange={value => {
+                            setIsDragMode(true);
+                            onChangeIndex(value);
+                        }}
+                        onChangeComplete={() => setIsDragMode(false)}
                         style={{ flex: 1, margin: 0 }}
                     />
                 </Col>
                 <Col flex="none" style={{ textAlign: 'center' }}>
-                    <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => onChangeIndex(Math.min(frames.length - 1, index + 1))} />
+                    <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => onChangeIndex(Math.min(totalFrames - 1, index + 1))} />
                 </Col>
             </Row>
         </div>

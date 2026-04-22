@@ -27,6 +27,17 @@ import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { WebviewMessage } from '../webview/protocol';
 
+type VisibleRangeRequest = {
+    command: 'requestVisibleRangeData';
+    requestId: number;
+    payload: {
+        rangeStart: number;
+        rangeEnd: number;
+        plotWidth: number;
+        quality: 'low' | 'high';
+    };
+};
+
 export class SdsViewerPanel {
     public static readonly viewType = 'arm-sds.viewer';
     private static panels = new Map<string, SdsViewerPanel>();
@@ -37,6 +48,10 @@ export class SdsViewerPanel {
 
     private sdsFilePath: string;
     private metadataPath: string | undefined;
+    private decodedSamples: SdsDecodedSample[] = [];
+    private channelNames: string[] = [];
+    private stats: ReturnType<typeof getSdsFileStats> | undefined;
+    private metadata: SdsMetadata | undefined;
 
     public static createOrShow(
         extensionUri: vscode.Uri,
@@ -104,6 +119,27 @@ export class SdsViewerPanel {
                 case 'refresh':
                     this.update();
                     break;
+                case 'requestVisibleRangeData': {
+                    const req = message as unknown as VisibleRangeRequest;
+                    const requestId = typeof req.requestId === 'number' ? req.requestId : 0;
+                    const payload = req.payload;
+                    const rangeStart = typeof payload?.rangeStart === 'number' ? payload.rangeStart : 0;
+                    const rangeEnd = typeof payload?.rangeEnd === 'number' ? payload.rangeEnd : 0;
+                    const plotWidth = typeof payload?.plotWidth === 'number' ? payload.plotWidth : 800;
+                    const quality = payload?.quality === 'low' ? 'low' : 'high';
+                    const samples = this.getVisibleRangeSamples(rangeStart, rangeEnd, plotWidth, quality);
+                    void this.panel.webview.postMessage({
+                        command: 'visibleRangeData',
+                        requestId,
+                        payload: {
+                            rangeStart,
+                            rangeEnd,
+                            quality,
+                            samples,
+                        },
+                    });
+                    break;
+                }
             }
         } catch (err) {
             vscode.window.showErrorMessage(`Viewer error: ${err instanceof Error ? err.message : String(err)}`);
@@ -124,26 +160,20 @@ export class SdsViewerPanel {
                 metadata = parseMetadataFile(this.metadataPath);
             }
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
-            const stats = getSdsFileStats(parsed, tickFreq);
+            this.stats = getSdsFileStats(parsed, tickFreq);
 
-            const samples: SdsDecodedSample[] = [];
-            let channelNames: string[] = [];
+            this.decodedSamples = [];
+            this.channelNames = [];
+            this.metadata = metadata;
 
             if (metadata) {
-                const decoded = decodeAllRecords(parsed, metadata);
-                channelNames = metadata.sds.content.map(c => c.value);
-
-                // Downsample for performance if too many points
-                const maxPoints = 10000;
-                const step = Math.max(1, Math.floor(decoded.length / maxPoints));
-                for (let i = 0; i < decoded.length; i += step) {
-                    samples.push(decoded[i]);
-                }
+                this.decodedSamples = decodeAllRecords(parsed, metadata);
+                this.channelNames = metadata.sds.content.map(c => c.value);
             } else {
                 // Without metadata, show raw record sizes over time
-                channelNames = ['data_size'];
+                this.channelNames = ['data_size'];
                 for (const record of parsed.records) {
-                    samples.push({
+                    this.decodedSamples.push({
                         timestamp: record.timestamp,
                         timeSeconds: record.timestamp / tickFreq,
                         values: { data_size: record.dataSize },
@@ -151,16 +181,149 @@ export class SdsViewerPanel {
                 }
             }
 
+            const domainStart = this.decodedSamples.length > 0 ? this.decodedSamples[0].timeSeconds : 0;
+            const domainEnd = this.decodedSamples.length > 0 ? this.decodedSamples[this.decodedSamples.length - 1].timeSeconds : 1;
+            const initialSamples = this.getVisibleRangeSamples(domainStart, domainEnd, 1200, 'high');
+
             this.panel.webview.html = this.getHtml({
-                samples,
-                channelNames,
-                stats,
-                metadata,
+                samples: initialSamples,
+                channelNames: this.channelNames,
+                stats: this.stats,
+                metadata: this.metadata,
+                domainStart,
+                domainEnd,
                 fileName: path.basename(this.sdsFilePath),
             });
         } catch (err) {
             this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
         }
+    }
+
+    private getVisibleRangeSamples(viewStart: number, viewEnd: number, plotWidth: number, quality: 'low' | 'high'): SdsDecodedSample[] {
+        if (this.decodedSamples.length === 0) {
+            return [];
+        }
+
+        const domainStart = this.decodedSamples[0].timeSeconds;
+        const domainEnd = this.decodedSamples[this.decodedSamples.length - 1].timeSeconds;
+        const start = Math.max(domainStart, Math.min(viewStart, viewEnd));
+        const end = Math.min(domainEnd, Math.max(viewStart, viewEnd));
+
+        const startIdx = this.lowerBoundTime(start);
+        const endIdxExclusive = this.upperBoundTime(end);
+        if (endIdxExclusive <= startIdx) {
+            return [];
+        }
+
+        const visibleCount = endIdxExclusive - startIdx;
+        const width = Math.max(64, Math.floor(plotWidth));
+        const bucketCount = quality === 'low'
+            ? Math.max(64, Math.min(1200, Math.floor(width * 0.75)))
+            : Math.max(128, Math.min(2400, Math.floor(width * 1.5)));
+
+        if (visibleCount <= bucketCount * 2) {
+            return this.decodedSamples.slice(startIdx, endIdxExclusive);
+        }
+
+        const reduced: SdsDecodedSample[] = [];
+        const channels = this.channelNames;
+        const bucketSpan = visibleCount / bucketCount;
+
+        for (let bucket = 0; bucket < bucketCount; bucket++) {
+            const bucketStart = startIdx + Math.floor(bucket * bucketSpan);
+            const bucketEnd = Math.min(endIdxExclusive, startIdx + Math.floor((bucket + 1) * bucketSpan));
+            if (bucketEnd <= bucketStart) {
+                continue;
+            }
+
+            const first = this.decodedSamples[bucketStart];
+            const last = this.decodedSamples[bucketEnd - 1];
+
+            const minValues: Record<string, number> = {};
+            const maxValues: Record<string, number> = {};
+            for (const ch of channels) {
+                minValues[ch] = Infinity;
+                maxValues[ch] = -Infinity;
+            }
+
+            for (let i = bucketStart; i < bucketEnd; i++) {
+                const sample = this.decodedSamples[i];
+                for (const ch of channels) {
+                    const value = sample.values[ch];
+                    if (value === undefined) {
+                        continue;
+                    }
+                    if (value < minValues[ch]) {
+                        minValues[ch] = value;
+                    }
+                    if (value > maxValues[ch]) {
+                        maxValues[ch] = value;
+                    }
+                }
+            }
+
+            const minSampleValues: Record<string, number> = {};
+            const maxSampleValues: Record<string, number> = {};
+            for (const ch of channels) {
+                if (Number.isFinite(minValues[ch])) {
+                    minSampleValues[ch] = minValues[ch];
+                }
+                if (Number.isFinite(maxValues[ch])) {
+                    maxSampleValues[ch] = maxValues[ch];
+                }
+            }
+
+            if (Object.keys(minSampleValues).length === 0 || Object.keys(maxSampleValues).length === 0) {
+                continue;
+            }
+
+            reduced.push({
+                timestamp: first.timestamp,
+                timeSeconds: first.timeSeconds,
+                values: minSampleValues,
+            } as SdsDecodedSample);
+
+            reduced.push({
+                timestamp: last.timestamp,
+                timeSeconds: last.timeSeconds,
+                values: maxSampleValues,
+            } as SdsDecodedSample);
+        }
+
+        const last = this.decodedSamples[endIdxExclusive - 1];
+        if (reduced.length === 0 || reduced[reduced.length - 1].timestamp !== last.timestamp) {
+            reduced.push(last);
+        }
+
+        return reduced;
+    }
+
+    private lowerBoundTime(target: number): number {
+        let lo = 0;
+        let hi = this.decodedSamples.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (this.decodedSamples[mid].timeSeconds < target) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
+
+    private upperBoundTime(target: number): number {
+        let lo = 0;
+        let hi = this.decodedSamples.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (this.decodedSamples[mid].timeSeconds <= target) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
     }
 
     private findMetadataFile(sdsPath: string): string | undefined {

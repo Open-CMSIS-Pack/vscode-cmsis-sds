@@ -16,9 +16,20 @@ import { ImageFrame, SampleFrame } from '../../webview/protocol';
 
 type InitialState = {
     mediaType?: 'image' | 'audio' | 'video';
-    image?: { frames: ImageFrame[]; width: number; height: number; totalFrames: number };
-    audio?: { samples: SampleFrame[]; sampleRate: number; bitDepth: number; channels: number; totalSamples: number; totalRecords: number };
-    video?: { frames: ImageFrame[]; width: number; height: number; fps: number; totalFrames: number };
+    image?: { frames: ImageFrame[]; rangeStart?: number; width: number; height: number; totalFrames: number };
+    audio?: {
+        samples: SampleFrame[];
+        rangeStart?: number;
+        rangeEnd?: number;
+        domainStart?: number;
+        domainEnd?: number;
+        sampleRate: number;
+        bitDepth: number;
+        channels: number;
+        totalSamples: number;
+        totalRecords: number;
+    };
+    video?: { frames: ImageFrame[]; rangeStart?: number; width: number; height: number; fps: number; totalFrames: number };
     fileName?: string;
     error?: string;
 };

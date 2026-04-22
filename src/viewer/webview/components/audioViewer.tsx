@@ -5,12 +5,24 @@
 
 import { ZoomInOutlined, ZoomOutOutlined, ExpandOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider } from 'antd';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BroadcastMessage, getIndexedSdsSuffix, Message, SampleFrame } from '../../../webview/protocol';
 import { broadcastMessage } from '../../../webview/vscode-api';
+import {
+    accumulateEnvelopeValue,
+    createEnvelopeBins,
+    createTimeToPixelMapper,
+    getEnvelopeBinIndex,
+    getPlotArea,
+    updateEnvelopeMode,
+} from './graphCanvas';
 
 type AudioState = {
     samples: SampleFrame[];
+    rangeStart?: number;
+    rangeEnd?: number;
+    domainStart?: number;
+    domainEnd?: number;
     sampleRate: number;
     bitDepth: number;
     channels: number;
@@ -23,66 +35,134 @@ type AudioViewerProps = {
     filename?: string;
 };
 
+type AudioWindowResponse = {
+    command: 'mediaAudioWindowData';
+    requestId: number;
+    payload?: {
+        rangeStart?: number;
+        rangeEnd?: number;
+        quality?: 'low' | 'high';
+        samples?: SampleFrame[];
+    };
+};
+
+const CHART_MARGIN = { top: 20, right: 20, bottom: 30, left: 50 };
+const PREFETCH_FACTOR = 1.5;
+
 export function AudioViewer({ state, filename }: AudioViewerProps) {
-    const { samples, sampleRate, bitDepth, channels, totalRecords } = state;
+    const {
+        samples,
+        rangeStart,
+        rangeEnd,
+        domainStart: stateDomainStart,
+        domainEnd: stateDomainEnd,
+        sampleRate,
+        bitDepth,
+        channels,
+        totalSamples,
+        totalRecords,
+    } = state;
+
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [view, setView] = useState<{ start: number; end: number }>({ start: 0, end: 1 });
+    const [loadedFrames, setLoadedFrames] = useState<SampleFrame[]>(samples);
+    const [loadedRange, setLoadedRange] = useState<{ start: number; end: number }>({
+        start: rangeStart ?? stateDomainStart ?? 0,
+        end: rangeEnd ?? stateDomainEnd ?? 1,
+    });
+    const [isDragMode, setIsDragMode] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
+
+    const domainStart = stateDomainStart ?? loadedRange.start;
+    const domainEnd = stateDomainEnd ?? loadedRange.end;
+
+    const [view, setView] = useState<{ start: number; end: number }>({ start: domainStart, end: domainEnd });
+    const viewStartRef = useRef(view.start);
+    const viewEndRef = useRef(view.end);
+
+    const drawRef = useRef<() => void>(() => { });
+    const cursorTimeRef = useRef<number | null>(null);
+    const playbackCursorTimeRef = useRef<number | null>(null);
+
     const audioCtxRef = useRef<AudioContext | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
-    const playbackCursorSampleRef = useRef(-1);
-    const playbackStartSampleRef = useRef(0);
-    const playbackLengthRef = useRef(0);
+    const playbackStartTimeRef = useRef(0);
+    const playbackDurationRef = useRef(0);
     const playbackStartedAtRef = useRef(0);
     const playbackRafRef = useRef<number | null>(null);
 
-    const frameStartOffsets = useMemo(() => {
-        const offsets: number[] = [];
-        let total = 0;
+    const requestSeqRef = useRef(0);
+    const latestAppliedSeqRef = useRef(0);
+    const cachedRangeRef = useRef<{ start: number; end: number; quality: 'low' | 'high' } | null>(null);
 
-        for (const frame of samples) {
-            offsets.push(total);
-            total += frame.samples.length;
+    const domainSpan = Math.max(domainEnd - domainStart, 0.001);
+    const minViewSpan = Math.max(domainSpan / 1000, 0.001);
+    const sliderStep = Math.max(domainSpan / 1000, 0.0001);
+
+    const totalDurationSeconds = Math.max(0, domainEnd - domainStart);
+    const loadedSampleCount = useMemo(
+        () => loadedFrames.reduce((sum, frame) => sum + frame.samples.length, 0),
+        [loadedFrames]
+    );
+
+    const clampRange = useCallback((start: number, end: number): [number, number] => {
+        if (domainEnd <= domainStart) {
+            return [0, 1];
         }
 
-        return offsets;
-    }, [samples]);
-
-    const totalSampleCount = useMemo(() => samples.reduce((sum, frame) => sum + frame.samples.length, 0), [samples]);
-    const totalDurationSeconds = useMemo(() => {
-        if (samples.length === 0) {
-            return 0;
+        if (start > end) {
+            [start, end] = [end, start];
         }
 
-        const firstFrame = samples[0];
-        const lastFrame = samples[samples.length - 1];
-        return Math.max(0, lastFrame.timestamp + (lastFrame.samples.length / sampleRate) - firstFrame.timestamp);
-    }, [sampleRate, samples]);
-
-    const viewStartRef = useRef(0);
-    const viewEndRef = useRef(1);
-    const cursorRef = useRef(-1);
-    const drawRef = useRef<() => void>(() => { });
-
-    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-
-    const findFrameIndexForSampleIndex = (sampleIndex: number) => {
-        let lo = 0;
-        let hi = samples.length;
-
-        while (lo < hi) {
-            const mid = (lo + hi) >> 1;
-            const frameStart = frameStartOffsets[mid];
-            const frameEnd = frameStart + samples[mid].samples.length;
-            if (frameEnd <= sampleIndex) {
-                lo = mid + 1;
-            } else {
-                hi = mid;
-            }
+        let span = end - start;
+        if (span < minViewSpan) {
+            const center = (start + end) / 2;
+            start = center - minViewSpan / 2;
+            end = center + minViewSpan / 2;
+            span = end - start;
         }
 
-        return Math.min(lo, samples.length - 1);
-    };
+        if (start < domainStart) {
+            end += domainStart - start;
+            start = domainStart;
+        }
+        if (end > domainEnd) {
+            start -= end - domainEnd;
+            end = domainEnd;
+        }
+
+        start = Math.max(domainStart, start);
+        end = Math.min(domainEnd, end);
+
+        if (span <= 0) {
+            return [domainStart, domainEnd];
+        }
+
+        return [start, end];
+    }, [domainEnd, domainStart, minViewSpan]);
+
+    useEffect(() => {
+        setLoadedFrames(samples);
+        setLoadedRange({
+            start: rangeStart ?? stateDomainStart ?? domainStart,
+            end: rangeEnd ?? stateDomainEnd ?? domainEnd,
+        });
+        cachedRangeRef.current = {
+            start: rangeStart ?? stateDomainStart ?? domainStart,
+            end: rangeEnd ?? stateDomainEnd ?? domainEnd,
+            quality: 'high',
+        };
+    }, [samples, rangeStart, rangeEnd, stateDomainStart, stateDomainEnd, domainStart, domainEnd]);
+
+    useEffect(() => {
+        const [start, end] = clampRange(view.start, view.end);
+        setView({ start, end });
+    }, [domainStart, domainEnd, clampRange]);
+
+    useEffect(() => {
+        viewStartRef.current = view.start;
+        viewEndRef.current = view.end;
+        drawRef.current();
+    }, [view]);
 
     const stopPlayback = (updateState = true) => {
         if (playbackRafRef.current !== null) {
@@ -95,17 +175,16 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             try {
                 source.stop();
             } catch {
-                // no-op: source may already be stopped.
+                // Source can already be stopped.
             }
             source.disconnect();
             sourceRef.current = null;
         }
 
+        playbackCursorTimeRef.current = null;
         if (updateState) {
             setIsPlaying(false);
         }
-
-        playbackCursorSampleRef.current = -1;
         drawRef.current();
     };
 
@@ -117,10 +196,9 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 return;
             }
 
-            const elapsedSeconds = Math.max(0, audioCtx.currentTime - playbackStartedAtRef.current);
-            const playedSamples = Math.floor(elapsedSeconds * sampleRate);
-            const boundedPlayedSamples = Math.min(Math.max(playedSamples, 0), Math.max(playbackLengthRef.current - 1, 0));
-            playbackCursorSampleRef.current = playbackStartSampleRef.current + boundedPlayedSamples;
+            const elapsed = Math.max(0, audioCtx.currentTime - playbackStartedAtRef.current);
+            const clamped = Math.min(elapsed, playbackDurationRef.current);
+            playbackCursorTimeRef.current = playbackStartTimeRef.current + clamped;
             drawRef.current();
 
             playbackRafRef.current = requestAnimationFrame(tick);
@@ -133,14 +211,35 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     };
 
     const playVisibleRange = async () => {
-        if (totalSampleCount === 0 || samples.length === 0) {
+        if (loadedFrames.length === 0 || sampleRate <= 0) {
             return;
         }
 
-        const startSample = clamp(Math.floor(viewStartRef.current * totalSampleCount), 0, Math.max(totalSampleCount - 1, 0));
-        const endSample = clamp(Math.ceil(viewEndRef.current * totalSampleCount), Math.min(startSample + 1, totalSampleCount), totalSampleCount);
-        const targetLength = Math.max(0, endSample - startSample);
-        if (targetLength === 0) {
+        const startTime = Math.max(viewStartRef.current, loadedRange.start);
+        const endTime = Math.min(viewEndRef.current, loadedRange.end);
+        if (endTime <= startTime) {
+            return;
+        }
+
+        const pcm: number[] = [];
+        for (const frame of loadedFrames) {
+            const frameStart = frame.timestamp;
+            const frameEnd = frameStart + (frame.samples.length / sampleRate);
+            if (frameEnd <= startTime) {
+                continue;
+            }
+            if (frameStart >= endTime) {
+                break;
+            }
+
+            const fromOffset = Math.max(0, Math.floor((startTime - frameStart) * sampleRate));
+            const toOffset = Math.min(frame.samples.length, Math.ceil((endTime - frameStart) * sampleRate));
+            for (let i = fromOffset; i < toOffset; i++) {
+                pcm.push(frame.samples[i]);
+            }
+        }
+
+        if (pcm.length === 0) {
             return;
         }
 
@@ -155,33 +254,10 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             await audioCtx.resume();
         }
 
-        const pcm = new Float32Array(targetLength);
-        let write = 0;
-        let frameIndex = findFrameIndexForSampleIndex(startSample);
-        let currentSample = startSample;
-
-        while (frameIndex < samples.length && currentSample < endSample) {
-            const frame = samples[frameIndex];
-            const frameStart = frameStartOffsets[frameIndex];
-            const fromOffset = Math.max(0, currentSample - frameStart);
-            const toOffset = Math.min(frame.samples.length, endSample - frameStart);
-
-            for (let offset = fromOffset; offset < toOffset; offset++) {
-                pcm[write++] = frame.samples[offset];
-            }
-
-            currentSample = frameStart + toOffset;
-            frameIndex += 1;
-        }
-
-        if (write === 0) {
-            return;
-        }
-
         stopPlayback(false);
 
-        const audioBuffer = audioCtx.createBuffer(1, write, sampleRate);
-        audioBuffer.copyToChannel(pcm.subarray(0, write), 0);
+        const audioBuffer = audioCtx.createBuffer(1, pcm.length, sampleRate);
+        audioBuffer.copyToChannel(Float32Array.from(pcm), 0);
 
         const source = audioCtx.createBufferSource();
         source.buffer = audioBuffer;
@@ -190,7 +266,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             if (sourceRef.current === source) {
                 sourceRef.current = null;
                 setIsPlaying(false);
-                playbackCursorSampleRef.current = -1;
+                playbackCursorTimeRef.current = null;
                 if (playbackRafRef.current !== null) {
                     cancelAnimationFrame(playbackRafRef.current);
                     playbackRafRef.current = null;
@@ -199,21 +275,15 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             }
         };
 
-        playbackStartSampleRef.current = startSample;
-        playbackLengthRef.current = write;
+        playbackStartTimeRef.current = startTime;
+        playbackDurationRef.current = pcm.length / sampleRate;
         playbackStartedAtRef.current = audioCtx.currentTime;
-        playbackCursorSampleRef.current = startSample;
+        playbackCursorTimeRef.current = startTime;
         sourceRef.current = source;
         setIsPlaying(true);
         source.start();
         startPlaybackTicker();
     };
-
-    useEffect(() => {
-        viewStartRef.current = view.start;
-        viewEndRef.current = view.end;
-        drawRef.current();
-    }, [view]);
 
     useEffect(() => {
         return () => {
@@ -226,216 +296,110 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         };
     }, []);
 
-    useEffect(() => {
+    const requestAudioWindow = useCallback((start: number, end: number, quality: 'low' | 'high') => {
         const canvas = canvasRef.current;
-        if (!canvas) { return; }
-        const activeCanvas = canvas;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { return; }
-
-        let dpr = window.devicePixelRatio || 1;
-        const M = { top: 20, right: 20, bottom: 30, left: 50 };
-
-        function clampSampleIndex(sampleIndex: number) {
-            return Math.max(0, Math.min(totalSampleCount - 1, sampleIndex));
+        if (!canvas) {
+            return;
         }
 
-        function findFrameIndexForSampleIndex(sampleIndex: number) {
-            let lo = 0;
-            let hi = samples.length;
+        const rangeStart = Math.min(start, end);
+        const rangeEnd = Math.max(start, end);
+        const rangeSpan = Math.max(rangeEnd - rangeStart, minViewSpan);
+        const fetchSpan = Math.min(domainEnd - domainStart, rangeSpan * PREFETCH_FACTOR);
+        const center = (rangeStart + rangeEnd) / 2;
 
-            while (lo < hi) {
-                const mid = (lo + hi) >> 1;
-                const frameStart = frameStartOffsets[mid];
-                const frameEnd = frameStart + samples[mid].samples.length;
-                if (frameEnd <= sampleIndex) {
-                    lo = mid + 1;
-                } else {
-                    hi = mid;
-                }
-            }
-
-            return Math.min(lo, samples.length - 1);
+        let fetchStart = center - fetchSpan / 2;
+        let fetchEnd = center + fetchSpan / 2;
+        if (fetchStart < domainStart) {
+            fetchEnd += domainStart - fetchStart;
+            fetchStart = domainStart;
         }
-
-        function getVisibleSampleRange() {
-            if (totalSampleCount === 0) {
-                return { start: 0, end: 0, count: 0 };
-            }
-
-            const start = Math.max(0, Math.min(totalSampleCount - 1, Math.floor(viewStartRef.current * totalSampleCount)));
-            const end = Math.max(start + 1, Math.min(totalSampleCount, Math.ceil(viewEndRef.current * totalSampleCount)));
-            return { start, end, count: end - start };
+        if (fetchEnd > domainEnd) {
+            fetchStart -= fetchEnd - domainEnd;
+            fetchEnd = domainEnd;
         }
+        fetchStart = Math.max(domainStart, fetchStart);
+        fetchEnd = Math.min(domainEnd, fetchEnd);
 
-        function getTimeAtSampleIndex(sampleIndex: number) {
-            if (totalSampleCount === 0) {
-                return 0;
-            }
+        const rect = canvas.getBoundingClientRect();
+        const plotWidth = Math.max(1, Math.floor(rect.width - CHART_MARGIN.left - CHART_MARGIN.right));
+        const requestId = ++requestSeqRef.current;
 
-            const clampedIndex = clampSampleIndex(sampleIndex);
-            const frameIndex = findFrameIndexForSampleIndex(clampedIndex);
-            const frame = samples[frameIndex];
-            const frameStart = frameStartOffsets[frameIndex];
-            const sampleOffset = clampedIndex - frameStart;
-            return frame.timestamp + (sampleOffset / sampleRate);
-        }
+        broadcastMessage({
+            command: 'requestMediaAudioWindow',
+            requestId,
+            payload: {
+                rangeStart: fetchStart,
+                rangeEnd: fetchEnd,
+                plotWidth,
+                quality,
+            },
+        });
+    }, [domainEnd, domainStart, minViewSpan]);
 
-        function getTimeAtSampleBoundary(sampleIndex: number) {
-            if (totalSampleCount === 0) {
-                return 0;
-            }
-
-            if (sampleIndex <= 0) {
-                return samples[0].timestamp;
-            }
-
-            if (sampleIndex >= totalSampleCount) {
-                const lastFrame = samples[samples.length - 1];
-                return lastFrame.timestamp + (lastFrame.samples.length / sampleRate);
-            }
-
-            const frameIndex = findFrameIndexForSampleIndex(sampleIndex);
-            const frame = samples[frameIndex];
-            const frameStart = frameStartOffsets[frameIndex];
-            const sampleOffset = sampleIndex - frameStart;
-            return frame.timestamp + (sampleOffset / sampleRate);
-        }
-
-        function forEachVisibleSample(startSampleIndex: number, endSampleIndex: number, callback: (value: number, sampleIndex: number) => void) {
-            if (totalSampleCount === 0 || endSampleIndex <= startSampleIndex) {
-                return;
-            }
-
-            let frameIndex = findFrameIndexForSampleIndex(startSampleIndex);
-            let currentSampleIndex = startSampleIndex;
-
-            while (frameIndex < samples.length && currentSampleIndex < endSampleIndex) {
-                const frame = samples[frameIndex];
-                const frameStart = frameStartOffsets[frameIndex];
-                const fromOffset = Math.max(0, currentSampleIndex - frameStart);
-                const toOffset = Math.min(frame.samples.length, endSampleIndex - frameStart);
-
-                for (let sampleOffset = fromOffset; sampleOffset < toOffset; sampleOffset++) {
-                    callback(frame.samples[sampleOffset], frameStart + sampleOffset);
-                }
-
-                currentSampleIndex = frameStart + toOffset;
-                frameIndex += 1;
-            }
-        }
-
-        function getNearestSampleIndexAtTimestamp(target: number) {
-            if (samples.length === 0 || totalSampleCount === 0) {
-                return null;
-            }
-
-            let lo = 0;
-            let hi = samples.length;
-            while (lo < hi) {
-                const mid = (lo + hi) >> 1;
-                if (samples[mid].timestamp < target) {
-                    lo = mid + 1;
-                } else {
-                    hi = mid;
-                }
-            }
-
-            const candidateFrameIndexes = new Set<number>();
-            if (lo < samples.length) {
-                candidateFrameIndexes.add(lo);
-            }
-            if (lo > 0) {
-                candidateFrameIndexes.add(lo - 1);
-            }
-
-            let bestSampleIndex: number | null = null;
-            let bestDelta = Number.POSITIVE_INFINITY;
-
-            for (const frameIndex of candidateFrameIndexes) {
-                const frame = samples[frameIndex];
-                if (frame.samples.length === 0) {
-                    continue;
-                }
-
-                const sampleOffset = Math.max(0, Math.min(frame.samples.length - 1, Math.round((target - frame.timestamp) * sampleRate)));
-                const sampleTime = frame.timestamp + (sampleOffset / sampleRate);
-                const delta = Math.abs(sampleTime - target);
-                if (delta < bestDelta) {
-                    bestDelta = delta;
-                    bestSampleIndex = frameStartOffsets[frameIndex] + sampleOffset;
-                }
-            }
-
-            if (bestSampleIndex !== null) {
-                return bestSampleIndex;
-            }
-
-            return target <= samples[0].timestamp ? 0 : totalSampleCount - 1;
-        }
-
-        function getPlotArea() {
-            const w = activeCanvas.width / dpr;
-            const h = activeCanvas.height / dpr;
-            return { x: M.left, y: M.top, w: w - M.left - M.right, h: h - M.top - M.bottom };
-        }
-
-        function getCanvasPoint(clientX: number, clientY: number) {
-            const rect = activeCanvas.getBoundingClientRect();
-            return { x: clientX - rect.left, y: clientY - rect.top };
-        }
-
-        function isPointInPlot(clientX: number, clientY: number) {
-            const plot = getPlotArea();
-            const point = getCanvasPoint(clientX, clientY);
-            return point.x >= plot.x && point.x <= plot.x + plot.w &&
-                point.y >= plot.y && point.y <= plot.y + plot.h;
-        }
-
-        function getNearestSampleIndexAtClientX(clientX: number): number | null {
-            if (totalSampleCount === 0) { return null; }
-
-            const plot = getPlotArea();
-            const visibleRange = getVisibleSampleRange();
-            if (visibleRange.count === 0) {
-                return null;
-            }
-
-            const rect = activeCanvas.getBoundingClientRect();
-            const mouseX = clientX - rect.left;
-            if (mouseX < plot.x || mouseX > plot.x + plot.w) { return null; }
-
-            const normalizedInView = (mouseX - plot.x) / plot.w;
-            return clampSampleIndex(Math.round(visibleRange.start + normalizedInView * Math.max(visibleRange.count - 1, 0)));
-        }
-
-        function getCursorScreenX(): number | null {
-            const cursorSampleIndex = cursorRef.current;
-            if (cursorSampleIndex < 0 || cursorSampleIndex >= totalSampleCount) { return null; }
-
-            const plot = getPlotArea();
-            const visibleRange = getVisibleSampleRange();
-            if (visibleRange.count === 0 || cursorSampleIndex < visibleRange.start || cursorSampleIndex >= visibleRange.end) {
-                return null;
-            }
-
-            return plot.x + ((cursorSampleIndex - visibleRange.start) / Math.max(visibleRange.count - 1, 1)) * plot.w;
-        }
-
-        function updateCursorFromClientX(clientX: number) {
-            const nextCursor = getNearestSampleIndexAtClientX(clientX);
-            if (nextCursor === null || nextCursor === cursorRef.current) { return false; }
-
-            cursorRef.current = nextCursor;
-            broadcastMessage({
-                type: 'broadcast',
-                timeStamp: getTimeAtSampleIndex(nextCursor),
-                fileName: filename,
-            });
-            drawRef.current();
+    const shouldRequestForRange = useCallback((start: number, end: number, quality: 'low' | 'high') => {
+        const cached = cachedRangeRef.current;
+        if (!cached) {
             return true;
         }
+
+        const rangeStart = Math.min(start, end);
+        const rangeEnd = Math.max(start, end);
+        if (rangeStart < cached.start || rangeEnd > cached.end) {
+            return true;
+        }
+
+        if (quality === 'high' && cached.quality === 'low') {
+            return true;
+        }
+
+        return false;
+    }, []);
+
+    useEffect(() => {
+        if (domainEnd <= domainStart) {
+            return;
+        }
+
+        const quality: 'low' | 'high' = isDragMode ? 'low' : 'high';
+        if (!shouldRequestForRange(view.start, view.end, quality)) {
+            return;
+        }
+
+        const handle = window.setTimeout(() => {
+            requestAudioWindow(view.start, view.end, quality);
+        }, isDragMode ? 40 : 100);
+
+        return () => {
+            window.clearTimeout(handle);
+        };
+    }, [domainEnd, domainStart, isDragMode, requestAudioWindow, shouldRequestForRange, view]);
+
+    useEffect(() => {
+        const onResize = () => {
+            cachedRangeRef.current = null;
+            requestAudioWindow(viewStartRef.current, viewEndRef.current, isDragMode ? 'low' : 'high');
+        };
+
+        window.addEventListener('resize', onResize);
+        return () => {
+            window.removeEventListener('resize', onResize);
+        };
+    }, [isDragMode, requestAudioWindow]);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) {
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return;
+        }
+
+        let dpr = window.devicePixelRatio || 1;
+        let envelopeModeActive = false;
 
         const handleMessage = (event: MessageEvent) => {
             const msg = event.data as Message;
@@ -446,34 +410,47 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                         break;
                     }
 
-                    const timeStamp = (msg as BroadcastMessage).timeStamp;
-                    if (timeStamp === undefined || totalSampleCount === 0) {
+                    const ts = (msg as BroadcastMessage).timeStamp;
+                    if (typeof ts !== 'number') {
                         break;
                     }
 
-                    const nextCursor = getNearestSampleIndexAtTimestamp(timeStamp);
-                    if (nextCursor === null || nextCursor === cursorRef.current) {
-                        break;
-                    }
-
-                    cursorRef.current = nextCursor;
+                    cursorTimeRef.current = ts;
                     drawRef.current();
                     break;
                 }
             }
+
+            const response = msg as unknown as AudioWindowResponse;
+            if (response.command === 'mediaAudioWindowData' && typeof response.requestId === 'number') {
+                if (response.requestId < latestAppliedSeqRef.current) {
+                    return;
+                }
+                latestAppliedSeqRef.current = response.requestId;
+
+                const payload = response.payload;
+                if (!payload || !Array.isArray(payload.samples)) {
+                    return;
+                }
+
+                setLoadedFrames(payload.samples);
+                const nextStart = typeof payload.rangeStart === 'number' ? payload.rangeStart : loadedRange.start;
+                const nextEnd = typeof payload.rangeEnd === 'number' ? payload.rangeEnd : loadedRange.end;
+                setLoadedRange({ start: nextStart, end: nextEnd });
+                cachedRangeRef.current = {
+                    start: Math.min(nextStart, nextEnd),
+                    end: Math.max(nextStart, nextEnd),
+                    quality: payload.quality === 'low' ? 'low' : 'high',
+                };
+            }
         };
-
-        window.addEventListener('message', handleMessage);
-
-        let pointerMode: 'idle' | 'cursor' | 'pan' = 'idle';
-        let pointerDownX = 0;
-        let dragViewStart = 0;
-        let dragViewEnd = 0;
 
         const resize = () => {
             dpr = window.devicePixelRatio || 1;
             const rect = canvas.parentElement?.getBoundingClientRect();
-            if (!rect) { return; }
+            if (!rect) {
+                return;
+            }
             canvas.width = rect.width * dpr;
             canvas.height = rect.height * dpr;
             canvas.style.width = `${rect.width}px`;
@@ -482,74 +459,131 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             drawRef.current();
         };
 
-        drawRef.current = function draw() {
+        const forEachVisibleSample = (cb: (time: number, value: number) => void) => {
+            const start = viewStartRef.current;
+            const end = viewEndRef.current;
+            if (end <= start || loadedFrames.length === 0) {
+                return;
+            }
+
+            for (const frame of loadedFrames) {
+                const frameStart = frame.timestamp;
+                const frameEnd = frameStart + (frame.samples.length / sampleRate);
+                if (frameEnd < start) {
+                    continue;
+                }
+                if (frameStart > end) {
+                    break;
+                }
+
+                const from = Math.max(0, Math.floor((start - frameStart) * sampleRate));
+                const to = Math.min(frame.samples.length, Math.ceil((end - frameStart) * sampleRate));
+                for (let i = from; i < to; i++) {
+                    cb(frameStart + (i / sampleRate), frame.samples[i]);
+                }
+            }
+        };
+
+        drawRef.current = () => {
             const w = canvas.width / dpr;
             const h = canvas.height / dpr;
             ctx.clearRect(0, 0, w, h);
 
-            if (samples.length === 0 || totalSampleCount === 0) {
+            const plot = getPlotArea(canvas, dpr, CHART_MARGIN);
+            if (plot.w <= 0 || plot.h <= 0) {
                 return;
             }
 
-            const pW = w - M.left - M.right;
-            const pH = h - M.top - M.bottom;
-            const visibleRange = getVisibleSampleRange();
-            if (visibleRange.count === 0) {
+            const viewStart = viewStartRef.current;
+            const viewEnd = viewEndRef.current;
+            const xFromTime = createTimeToPixelMapper(viewStart, viewEnd, plot);
+
+            if (loadedFrames.length === 0) {
+                ctx.strokeStyle = 'rgba(128,128,128,0.3)';
+                ctx.strokeRect(plot.x, plot.y, plot.w, plot.h);
                 return;
             }
 
-            let yMin = -1;
-            let yMax = 1;
-            forEachVisibleSample(visibleRange.start, visibleRange.end, (value) => {
+            let yMin = Infinity;
+            let yMax = -Infinity;
+            let visibleCount = 0;
+            forEachVisibleSample((_time, value) => {
+                visibleCount++;
                 if (value < yMin) yMin = value;
                 if (value > yMax) yMax = value;
             });
 
+            if (visibleCount === 0 || !Number.isFinite(yMin) || !Number.isFinite(yMax)) {
+                return;
+            }
+
+            if (yMin === yMax) {
+                yMin -= 1;
+                yMax += 1;
+            }
             const yPad = (yMax - yMin) * 0.1 || 0.1;
             yMin -= yPad;
             yMax += yPad;
 
-            const xFromSampleIndex = (sampleIndex: number) => M.left + ((sampleIndex - visibleRange.start) / Math.max(visibleRange.count - 1, 1)) * pW;
-            const zeroY = M.top + pH - (-yMin) / (yMax - yMin) * pH;
+            const yFromValue = (value: number) => plot.y + plot.h - ((value - yMin) / (yMax - yMin)) * plot.h;
 
+            const zeroY = yFromValue(0);
             ctx.strokeStyle = 'rgba(128,128,128,0.3)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(M.left, zeroY);
-            ctx.lineTo(M.left + pW, zeroY);
+            ctx.moveTo(plot.x, zeroY);
+            ctx.lineTo(plot.x + plot.w, zeroY);
             ctx.stroke();
 
-            ctx.strokeStyle = '#4fc3f7';
-            ctx.lineWidth = 1;
+            const binCount = Math.max(1, Math.floor(plot.w));
+            envelopeModeActive = updateEnvelopeMode(envelopeModeActive, visibleCount, binCount);
 
-            if (visibleRange.count > pW * 2) {
+            if (envelopeModeActive) {
+                const bins = createEnvelopeBins(binCount);
+                forEachVisibleSample((time, value) => {
+                    const xBin = getEnvelopeBinIndex(time, viewStart, viewEnd, binCount);
+                    accumulateEnvelopeValue(bins, xBin, value);
+                });
+
                 ctx.fillStyle = '#4fc3f733';
-                const binSize = visibleRange.count / pW;
-                for (let px = 0; px < pW; px++) {
-                    const from = visibleRange.start + Math.floor(px * binSize);
-                    const to = Math.min(visibleRange.start + Math.floor((px + 1) * binSize), visibleRange.end);
-                    let min = Infinity;
-                    let max = -Infinity;
-
-                    forEachVisibleSample(from, to, (value) => {
-                        if (value < min) min = value;
-                        if (value > max) max = value;
-                    });
-
-                    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+                for (let px = 0; px < binCount; px++) {
+                    if (!Number.isFinite(bins.min[px]) || !Number.isFinite(bins.max[px])) {
                         continue;
                     }
-
-                    const y1 = M.top + pH - (max - yMin) / (yMax - yMin) * pH;
-                    const y2 = M.top + pH - (min - yMin) / (yMax - yMin) * pH;
-                    ctx.fillRect(M.left + px, y1, 1, y2 - y1);
+                    const y1 = yFromValue(bins.max[px]);
+                    const y2 = yFromValue(bins.min[px]);
+                    ctx.fillRect(plot.x + px, y1, 1, y2 - y1);
                 }
-            } else {
+
+                // Keep a centerline for readability in dense envelope mode.
+                ctx.strokeStyle = '#4fc3f7';
+                ctx.lineWidth = 1;
                 ctx.beginPath();
                 let started = false;
-                forEachVisibleSample(visibleRange.start, visibleRange.end, (value, sampleIndex) => {
-                    const x = xFromSampleIndex(sampleIndex);
-                    const y = M.top + pH - (value - yMin) / (yMax - yMin) * pH;
+                for (let px = 0; px < binCount; px++) {
+                    const count = bins.counts[px];
+                    if (count === 0) {
+                        started = false;
+                        continue;
+                    }
+                    const x = plot.x + px;
+                    const y = yFromValue(bins.sum[px] / count);
+                    if (!started) {
+                        ctx.moveTo(x, y);
+                        started = true;
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+            } else {
+                ctx.strokeStyle = '#4fc3f7';
+                ctx.lineWidth = 1.25;
+                ctx.beginPath();
+                let started = false;
+                forEachVisibleSample((time, value) => {
+                    const x = xFromTime(time);
+                    const y = yFromValue(value);
                     if (!started) {
                         ctx.moveTo(x, y);
                         started = true;
@@ -560,54 +594,88 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 ctx.stroke();
             }
 
-            const tStart = getTimeAtSampleBoundary(visibleRange.start);
-            const tEnd = getTimeAtSampleBoundary(visibleRange.end);
+            const tStart = viewStartRef.current;
+            const tEnd = viewEndRef.current;
             ctx.fillStyle = getComputedStyle(document.body).color || '#ccc';
             ctx.font = '10px sans-serif';
             ctx.textAlign = 'center';
             for (let i = 0; i <= 5; i++) {
-                const timeStamp = tStart + (tEnd - tStart) * i / 5;
-                const px = M.left + (i / 5) * pW;
-                ctx.fillText(`${timeStamp.toFixed(3)}s`, px, M.top + pH + 16);
+                const ts = tStart + ((tEnd - tStart) * i) / 5;
+                const px = plot.x + (i / 5) * plot.w;
+                ctx.fillText(`${ts.toFixed(3)}s`, px, plot.y + plot.h + 16);
             }
 
             ctx.strokeStyle = 'rgba(128,128,128,0.3)';
-            ctx.strokeRect(M.left, M.top, pW, pH);
+            ctx.strokeRect(plot.x, plot.y, plot.w, plot.h);
 
-            const cursorX = getCursorScreenX();
-            if (cursorX !== null) {
+            const cursorTime = cursorTimeRef.current;
+            if (cursorTime !== null && cursorTime >= tStart && cursorTime <= tEnd) {
+                const x = xFromTime(cursorTime);
                 ctx.strokeStyle = 'rgba(200,0,0,0.8)';
-                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(cursorX, M.top);
-                ctx.lineTo(cursorX, M.top + pH);
+                ctx.moveTo(x, plot.y);
+                ctx.lineTo(x, plot.y + plot.h);
                 ctx.stroke();
             }
 
-            const playbackSampleIndex = playbackCursorSampleRef.current;
-            if (isPlaying && playbackSampleIndex >= visibleRange.start && playbackSampleIndex < visibleRange.end) {
-                const playbackX = xFromSampleIndex(playbackSampleIndex);
+            const playbackTime = playbackCursorTimeRef.current;
+            if (isPlaying && playbackTime !== null && playbackTime >= tStart && playbackTime <= tEnd) {
+                const x = xFromTime(playbackTime);
                 ctx.strokeStyle = 'rgba(64, 156, 255, 0.95)';
-                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(playbackX, M.top);
-                ctx.lineTo(playbackX, M.top + pH);
+                ctx.moveTo(x, plot.y);
+                ctx.lineTo(x, plot.y + plot.h);
                 ctx.stroke();
             }
         };
+
+        const getCanvasPoint = (clientX: number, clientY: number) => {
+            const rect = canvas.getBoundingClientRect();
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        };
+
+        const isPointInPlot = (clientX: number, clientY: number) => {
+            const plot = getPlotArea(canvas, dpr, CHART_MARGIN);
+            const point = getCanvasPoint(clientX, clientY);
+            return point.x >= plot.x && point.x <= plot.x + plot.w && point.y >= plot.y && point.y <= plot.y + plot.h;
+        };
+
+        const updateCursorFromClientX = (clientX: number) => {
+            const plot = getPlotArea(canvas, dpr, CHART_MARGIN);
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = clientX - rect.left;
+            if (mouseX < plot.x || mouseX > plot.x + plot.w) {
+                return;
+            }
+
+            const ratio = (mouseX - plot.x) / plot.w;
+            const next = viewStartRef.current + ratio * (viewEndRef.current - viewStartRef.current);
+            cursorTimeRef.current = next;
+            broadcastMessage({
+                type: 'broadcast',
+                timeStamp: next,
+                fileName: filename,
+            });
+            drawRef.current();
+        };
+
+        let pointerMode: 'idle' | 'cursor' | 'pan' = 'idle';
+        let pointerDownX = 0;
+        let dragViewStart = 0;
+        let dragViewEnd = 0;
 
         const onWheel = (e: WheelEvent) => {
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
-            const plot = getPlotArea();
+            const plot = getPlotArea(canvas, dpr, CHART_MARGIN);
             const ratio = Math.max(0, Math.min(1, (mouseX - plot.x) / plot.w));
             const range = viewEndRef.current - viewStartRef.current;
             const factor = e.deltaY > 0 ? 1.2 : 0.8;
-            const newRange = Math.max(0.001, Math.min(1, range * factor));
+            const newRange = Math.max(minViewSpan, Math.min(domainSpan, range * factor));
             const center = viewStartRef.current + ratio * range;
-            const start = Math.max(0, Math.min(1 - newRange, center - ratio * newRange));
-            setView({ start, end: start + newRange });
+            const [start, end] = clampRange(center - ratio * newRange, center + (1 - ratio) * newRange);
+            setView({ start, end });
         };
 
         const onMouseDown = (e: MouseEvent) => {
@@ -621,14 +689,19 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             dragViewStart = viewStartRef.current;
             dragViewEnd = viewEndRef.current;
 
-            const point = getCanvasPoint(e.clientX, e.clientY);
-            const cursorX = getCursorScreenX();
-            if (cursorX !== null && Math.abs(point.x - cursorX) <= cursorHitTolerancePx) {
-                pointerMode = 'cursor';
-                return;
+            const cursorTime = cursorTimeRef.current;
+            if (cursorTime !== null) {
+                const plot = getPlotArea(canvas, dpr, CHART_MARGIN);
+                const cursorX = plot.x + ((cursorTime - dragViewStart) / Math.max(dragViewEnd - dragViewStart, 0.000001)) * plot.w;
+                const point = getCanvasPoint(e.clientX, e.clientY);
+                if (Math.abs(point.x - cursorX) <= cursorHitTolerancePx) {
+                    pointerMode = 'cursor';
+                    return;
+                }
             }
 
             pointerMode = 'pan';
+            setIsDragMode(true);
         };
 
         const onMouseMove = (e: MouseEvent) => {
@@ -638,34 +711,30 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             }
 
             if (pointerMode === 'pan') {
-                const plot = getPlotArea();
+                const plot = getPlotArea(canvas, dpr, CHART_MARGIN);
                 const dx = e.clientX - pointerDownX;
                 const range = dragViewEnd - dragViewStart;
                 const shift = -(dx / plot.w) * range;
-                const start = Math.max(0, Math.min(1 - range, dragViewStart + shift));
-                setView({ start, end: start + range });
+                const [start, end] = clampRange(dragViewStart + shift, dragViewEnd + shift);
+                setView({ start, end });
             }
         };
 
         const onMouseUp = (e: MouseEvent) => {
-            const clickTolerancePx = 3;
-            const wasClick = Math.abs(e.clientX - pointerDownX) <= clickTolerancePx;
             const activeMode = pointerMode;
             pointerMode = 'idle';
-
+            if (activeMode === 'pan') {
+                setIsDragMode(false);
+            }
             if (activeMode === 'cursor') {
                 updateCursorFromClientX(e.clientX);
-                return;
             }
-
-            if (!wasClick || !isPointInPlot(e.clientX, e.clientY)) {
-                return;
-            }
-
-            updateCursorFromClientX(e.clientX);
         };
 
         const onMouseLeave = () => {
+            if (pointerMode === 'pan') {
+                setIsDragMode(false);
+            }
             pointerMode = 'idle';
         };
 
@@ -675,6 +744,8 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         canvas.addEventListener('mouseup', onMouseUp);
         canvas.addEventListener('mouseleave', onMouseLeave);
         window.addEventListener('resize', resize);
+        window.addEventListener('message', handleMessage);
+
         resize();
 
         return () => {
@@ -686,76 +757,52 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             window.removeEventListener('resize', resize);
             window.removeEventListener('message', handleMessage);
         };
-    }, [samples, sampleRate, filename, frameStartOffsets, totalSampleCount, isPlaying]);
-
-    const windowLength = Math.max(0, view.end - view.start);
-    const windowLengthSeconds = windowLength * totalDurationSeconds;
-    const sliderStep = Math.max(1 / Math.max(totalSampleCount, 1), 0.0001);
-    const viewRange: [number, number] = [view.start, view.end];
-    const sliderStyle: React.CSSProperties = { flex: 1, margin: 0 };
+    }, [
+        clampRange,
+        domainSpan,
+        filename,
+        isPlaying,
+        loadedFrames,
+        loadedRange.end,
+        loadedRange.start,
+        minViewSpan,
+        sampleRate,
+    ]);
 
     const onSliderChange = (value: number[]) => {
         if (value.length !== 2) {
             return;
         }
-        let [start, end] = value;
-        if (start > end) {
-            [start, end] = [end, start];
-        }
-        const minSpan = Math.min(1, sliderStep);
-        if (end - start < minSpan) {
-            const center = (start + end) / 2;
-            start = center - minSpan / 2;
-            end = center + minSpan / 2;
-        }
-        if (start < 0) {
-            end += -start;
-            start = 0;
-        }
-        if (end > 1) {
-            start -= (end - 1);
-            end = 1;
-        }
-        start = Math.max(0, Math.min(1, start));
-        end = Math.max(0, Math.min(1, end));
+
+        setIsDragMode(true);
+        const [start, end] = clampRange(value[0], value[1]);
         setView({ start, end });
+    };
+
+    const onSliderAfterChange = () => {
+        setIsDragMode(false);
     };
 
     const onZoomIn = () => {
         const center = (viewStartRef.current + viewEndRef.current) / 2;
         const range = (viewEndRef.current - viewStartRef.current) * 0.5;
-        let start = center - range / 2;
-        let end = center + range / 2;
-        start = Math.max(0, start);
-        end = Math.min(1, end);
-        if (end - start < sliderStep) {
-            end = Math.min(1, start + sliderStep);
-            start = Math.max(0, end - sliderStep);
-        }
+        const [start, end] = clampRange(center - range / 2, center + range / 2);
         setView({ start, end });
     };
 
     const onZoomOut = () => {
         const center = (viewStartRef.current + viewEndRef.current) / 2;
         const range = (viewEndRef.current - viewStartRef.current) * 2;
-        let start = center - range / 2;
-        let end = center + range / 2;
-        if (start < 0) {
-            end += -start;
-            start = 0;
-        }
-        if (end > 1) {
-            start -= (end - 1);
-            end = 1;
-        }
-        start = Math.max(0, start);
-        end = Math.min(1, end);
+        const [start, end] = clampRange(center - range / 2, center + range / 2);
         setView({ start, end });
     };
 
     const onFit = () => {
-        setView({ start: 0, end: 1 });
+        setView({ start: domainStart, end: domainEnd });
     };
+
+    const viewRange: [number, number] = [view.start, view.end];
+    const windowLengthSeconds = Math.max(0, view.end - view.start);
 
     return (
         <div className="media-page">
@@ -764,16 +811,17 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     <h2>{filename ? filename : 'Audio Viewer'}</h2>
                 </Col>
                 <Col flex="auto" style={{ textAlign: 'right' }}>
-                    <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={() => setView(v => ({ start: v.start + (v.end - v.start) * 0.25, end: v.end - (v.end - v.start) * 0.25 }))}></Button>
-                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={() => setView(v => ({ start: Math.max(0, v.start - (v.end - v.start)), end: Math.min(1, v.end + (v.end - v.start) * 0.25) }))}></Button>
-                    <Button icon={<ExpandOutlined />} type="text" title="Fit" onClick={() => setView({ start: 0, end: 1 })}></Button>
+                    <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={onZoomIn}></Button>
+                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onZoomOut}></Button>
+                    <Button icon={<ExpandOutlined />} type="text" title="Fit" onClick={onFit}></Button>
                 </Col>
             </Row>
             <div className="info-bar">
                 <span>{sampleRate} Hz</span>
                 <span>{bitDepth}-bit</span>
                 <span>{channels}ch</span>
-                <span>{totalSampleCount.toLocaleString()} samples</span>
+                <span>{totalSamples.toLocaleString()} total samples</span>
+                <span>{loadedSampleCount.toLocaleString()} loaded samples</span>
                 <span>{totalDurationSeconds.toFixed(2)}s</span>
                 <span>{totalRecords} records</span>
             </div>
@@ -793,20 +841,21 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                                 void playVisibleRange();
                             }
                         }}
-                        disabled={totalSampleCount === 0}
+                        disabled={loadedFrames.length === 0}
                     ></Button>
                 </Col>
                 <Col flex="auto">
                     <Slider
                         range={{ draggableTrack: true }}
-                        min={0}
-                        max={1}
+                        min={domainStart}
+                        max={domainEnd}
                         step={sliderStep}
                         value={viewRange}
                         onChange={onSliderChange}
-                        style={sliderStyle}
-                        tooltip={{ formatter: (v) => `${((v ?? 0) * totalDurationSeconds).toFixed(3)}s` }}
-                        disabled={totalSampleCount === 0}
+                        onChangeComplete={onSliderAfterChange}
+                        style={{ flex: 1, margin: 0 }}
+                        tooltip={{ formatter: (v) => `${(v ?? 0).toFixed(3)}s` }}
+                        disabled={domainEnd <= domainStart}
                     />
                 </Col>
                 <Col flex="none" style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
@@ -814,7 +863,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 </Col>
                 <Col flex="none">
                     <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={onZoomIn}></Button>
-                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onZoomOut} disabled={windowLength >= 0.999999}></Button>
+                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onZoomOut} disabled={windowLengthSeconds >= domainSpan}></Button>
                     <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={onFit}></Button>
                 </Col>
             </Row>

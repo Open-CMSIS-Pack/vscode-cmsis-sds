@@ -30,6 +30,28 @@ import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { ImageFrame, SampleFrame, WebviewMessage } from '../webview/protocol';
 
+type MediaFrameWindowRequest = {
+    command: 'requestMediaFrameWindow';
+    requestId: number;
+    payload: {
+        mediaType: 'image' | 'video';
+        centerIndex: number;
+        windowSize: number;
+        quality: 'low' | 'high';
+    };
+};
+
+type MediaAudioWindowRequest = {
+    command: 'requestMediaAudioWindow';
+    requestId: number;
+    payload: {
+        rangeStart: number;
+        rangeEnd: number;
+        plotWidth: number;
+        quality: 'low' | 'high';
+    };
+};
+
 export class SdsMediaViewerPanel {
     public static readonly viewType = 'arm-sds.mediaViewer';
     private static panels = new Map<string, SdsMediaViewerPanel>();
@@ -41,6 +63,12 @@ export class SdsMediaViewerPanel {
     private sdsFilePath: string;
     private metadataPath: string | undefined;
     private mediaType: SdsMediaType;
+    private parsedFile: SdsParsedFile | undefined;
+    private metadata: SdsMetadata | undefined;
+    private audioFrames: SampleFrame[] = [];
+    private audioSampleRate = 0;
+    private audioBitDepth = 0;
+    private audioChannels = 0;
 
     public static createOrShow(
         extensionUri: vscode.Uri,
@@ -104,6 +132,60 @@ export class SdsMediaViewerPanel {
                 case 'refresh':
                     this.update();
                     break;
+                case 'requestMediaFrameWindow': {
+                    const req = message as unknown as MediaFrameWindowRequest;
+                    const requestId = typeof req.requestId === 'number' ? req.requestId : 0;
+                    const mediaType = req.payload?.mediaType;
+                    if (mediaType !== 'image' && mediaType !== 'video') {
+                        break;
+                    }
+                    const centerIndex = Math.max(0, Math.floor(req.payload?.centerIndex ?? 0));
+                    const windowSize = Math.max(1, Math.floor(req.payload?.windowSize ?? 100));
+                    const quality = req.payload?.quality === 'low' ? 'low' : 'high';
+
+                    const frameWindow = this.getFrameWindow(mediaType, centerIndex, windowSize);
+                    if (!frameWindow) {
+                        break;
+                    }
+
+                    void this.panel.webview.postMessage({
+                        command: 'mediaFrameWindowData',
+                        requestId,
+                        payload: {
+                            mediaType,
+                            rangeStart: frameWindow.rangeStart,
+                            rangeEnd: frameWindow.rangeEnd,
+                            quality,
+                            frames: frameWindow.frames,
+                        },
+                    });
+                    break;
+                }
+                case 'requestMediaAudioWindow': {
+                    const req = message as unknown as MediaAudioWindowRequest;
+                    const requestId = typeof req.requestId === 'number' ? req.requestId : 0;
+                    const rangeStart = typeof req.payload?.rangeStart === 'number' ? req.payload.rangeStart : 0;
+                    const rangeEnd = typeof req.payload?.rangeEnd === 'number' ? req.payload.rangeEnd : 0;
+                    const plotWidth = typeof req.payload?.plotWidth === 'number' ? req.payload.plotWidth : 800;
+                    const quality = req.payload?.quality === 'low' ? 'low' : 'high';
+
+                    const audioWindow = this.getAudioWindow(rangeStart, rangeEnd, plotWidth, quality);
+                    if (!audioWindow) {
+                        break;
+                    }
+
+                    void this.panel.webview.postMessage({
+                        command: 'mediaAudioWindowData',
+                        requestId,
+                        payload: {
+                            rangeStart: audioWindow.rangeStart,
+                            rangeEnd: audioWindow.rangeEnd,
+                            quality,
+                            samples: audioWindow.samples,
+                        },
+                    });
+                    break;
+                }
             }
         } catch (err) {
             vscode.window.showErrorMessage(`Media viewer error: ${err instanceof Error ? err.message : String(err)}`);
@@ -113,11 +195,13 @@ export class SdsMediaViewerPanel {
     private update(): void {
         try {
             const parsed = parseSdsFile(this.sdsFilePath);
+            this.parsedFile = parsed;
 
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
                 metadata = parseMetadataFile(this.metadataPath);
             }
+            this.metadata = metadata;
 
             if (!metadata) {
                 this.panel.webview.html = this.getErrorHtml('No metadata (.sds.yml) found. Media viewer requires metadata to decode frames.');
@@ -125,36 +209,39 @@ export class SdsMediaViewerPanel {
             }
 
             this.mediaType = detectMediaType(metadata);
+            this.audioFrames = [];
+            this.audioSampleRate = 0;
+            this.audioBitDepth = 0;
+            this.audioChannels = 0;
             this.panel.title = `${this.mediaType === 'image' ? '📷 SDS Media Viewer' : this.mediaType === 'audio' ? '🔊 SDS Media Viewer' : '🎬 SDS Media Viewer'}: ${path.basename(this.sdsFilePath)}`;
 
-            const initialState = this.buildInitialState(parsed, metadata);
+            const initialState = this.buildInitialState();
             this.panel.webview.html = this.getHtml(initialState);
         } catch (err) {
             this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
         }
     }
-    private buildInitialState(parsed: SdsParsedFile, metadata: SdsMetadata) {
+    private buildInitialState() {
+        const parsed = this.parsedFile;
+        const metadata = this.metadata;
+        if (!parsed || !metadata) {
+            return { fileName: path.basename(this.sdsFilePath), error: 'Media data not available.' };
+        }
+
         const base = { fileName: path.basename(this.sdsFilePath) };
         switch (this.mediaType) {
             case 'image': {
                 const content = metadata.sds.content;
                 const imgMeta = content.find(c => c.image)?.image;
                 if (!imgMeta) { return { ...base, error: 'No image metadata found in content.' }; }
-                const frames: ImageFrame[] = [];
-                const maxFrames = 100;
-                const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
-                for (let i = 0; i < Math.min(parsed.records.length, maxFrames); i++) {
-                    const record = parsed.records[i];
-                    try {
-                        const rgba = decodeImageFrameToRGBA(record.data, imgMeta.width, imgMeta.height, imgMeta.pixel_format);
-                        frames.push({ timestamp: record.timestamp / tickFreq, rgbaBase64: Buffer.from(rgba).toString('base64') });
-                    } catch { /* skip */ }
-                }
+                const frameWindow = this.getFrameWindow('image', 0, 160);
+                const frames = frameWindow?.frames ?? [];
                 return {
                     ...base,
                     mediaType: 'image',
                     image: {
                         frames,
+                        rangeStart: frameWindow?.rangeStart ?? 0,
                         width: imgMeta.width,
                         height: imgMeta.height,
                         totalFrames: parsed.records.length,
@@ -165,27 +252,39 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const audioMeta = content.find(c => c.audio)?.audio;
                 if (!audioMeta) { return { ...base, error: 'No audio metadata found in content.' }; }
-                const samples: SampleFrame[] = [];
+                const frames: SampleFrame[] = [];
                 const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
                 for (const record of parsed.records) {
                     try {
                         const block = decodeAudioBlock(record.data, audioMeta.sample_rate, audioMeta.bit_depth, audioMeta.audio_channels);
-                        samples.push({ timestamp: record.timestamp / tickFreq, samples: Array.from(block[0]) });
+                        frames.push({ timestamp: record.timestamp / tickFreq, samples: Array.from(block[0]) });
                     } catch { /* skip */ }
                 }
-                const maxPoints = 20000;
-                const step = Math.max(1, Math.floor(samples.length / maxPoints));
-                const resampled: SampleFrame[] = [];
-                for (let i = 0; i < samples.length; i += step) { resampled.push(samples[i]); }
+
+                this.audioFrames = frames;
+                this.audioSampleRate = audioMeta.sample_rate;
+                this.audioBitDepth = audioMeta.bit_depth;
+                this.audioChannels = audioMeta.audio_channels;
+
+                const totalSamples = frames.reduce((sum, frame) => sum + frame.samples.length, 0);
+                const domainStart = frames.length > 0 ? frames[0].timestamp : 0;
+                const domainEnd = frames.length > 0
+                    ? frames[frames.length - 1].timestamp + (frames[frames.length - 1].samples.length / audioMeta.sample_rate)
+                    : 1;
+                const audioWindow = this.getAudioWindow(domainStart, domainEnd, 1200, 'high');
                 return {
                     ...base,
                     mediaType: 'audio',
                     audio: {
-                        samples: resampled,
+                        samples: audioWindow?.samples ?? [],
+                        rangeStart: audioWindow?.rangeStart ?? domainStart,
+                        rangeEnd: audioWindow?.rangeEnd ?? domainEnd,
+                        domainStart,
+                        domainEnd,
                         sampleRate: audioMeta.sample_rate,
                         bitDepth: audioMeta.bit_depth,
                         channels: audioMeta.audio_channels,
-                        totalSamples: samples.length,
+                        totalSamples,
                         totalRecords: parsed.records.length,
                     },
                 };
@@ -194,21 +293,14 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const vidMeta = content.find(c => c.video)?.video;
                 if (!vidMeta) { return { ...base, error: 'No video metadata found in content.' }; }
-                const frames: ImageFrame[] = [];
-                const maxFrames = 50;
-                const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
-                for (let i = 0; i < Math.min(parsed.records.length, maxFrames); i++) {
-                    const record = parsed.records[i];
-                    try {
-                        const rgba = decodeImageFrameToRGBA(record.data, vidMeta.width, vidMeta.height, vidMeta.pixel_format);
-                        frames.push({ timestamp: record.timestamp / tickFreq, rgbaBase64: Buffer.from(rgba).toString('base64') });
-                    } catch { /* skip */ }
-                }
+                const frameWindow = this.getFrameWindow('video', 0, 100);
+                const frames = frameWindow?.frames ?? [];
                 return {
                     ...base,
                     mediaType: 'video',
                     video: {
                         frames,
+                        rangeStart: frameWindow?.rangeStart ?? 0,
                         width: vidMeta.width,
                         height: vidMeta.height,
                         fps: vidMeta.fps,
@@ -219,6 +311,104 @@ export class SdsMediaViewerPanel {
             default:
                 return { ...base, error: 'This file contains sensor data. Use the standard SDS Viewer instead.' };
         }
+    }
+
+    private getAudioWindow(rangeStart: number, rangeEnd: number, plotWidth: number, quality: 'low' | 'high'): { rangeStart: number; rangeEnd: number; samples: SampleFrame[] } | undefined {
+        if (this.audioFrames.length === 0 || this.audioSampleRate <= 0) {
+            return undefined;
+        }
+
+        const domainStart = this.audioFrames[0].timestamp;
+        const lastFrame = this.audioFrames[this.audioFrames.length - 1];
+        const domainEnd = lastFrame.timestamp + (lastFrame.samples.length / this.audioSampleRate);
+
+        const start = Math.max(domainStart, Math.min(rangeStart, rangeEnd));
+        const end = Math.min(domainEnd, Math.max(rangeStart, rangeEnd));
+        if (end <= start) {
+            return { rangeStart: start, rangeEnd: end, samples: [] };
+        }
+
+        const selected: SampleFrame[] = [];
+        for (const frame of this.audioFrames) {
+            const frameEnd = frame.timestamp + (frame.samples.length / this.audioSampleRate);
+            if (frameEnd < start) {
+                continue;
+            }
+            if (frame.timestamp > end) {
+                break;
+            }
+            selected.push(frame);
+        }
+
+        if (quality === 'high' || selected.length === 0) {
+            return { rangeStart: start, rangeEnd: end, samples: selected };
+        }
+
+        const targetFrames = Math.max(80, Math.min(1500, Math.floor(plotWidth * 0.8)));
+        if (selected.length <= targetFrames) {
+            return { rangeStart: start, rangeEnd: end, samples: selected };
+        }
+
+        const step = selected.length / targetFrames;
+        const reduced: SampleFrame[] = [];
+        for (let i = 0; i < targetFrames; i++) {
+            const idx = Math.min(selected.length - 1, Math.floor(i * step));
+            reduced.push(selected[idx]);
+        }
+
+        const last = selected[selected.length - 1];
+        if (reduced[reduced.length - 1] !== last) {
+            reduced.push(last);
+        }
+
+        return { rangeStart: start, rangeEnd: end, samples: reduced };
+    }
+
+    private getFrameWindow(mediaType: 'image' | 'video', centerIndex: number, windowSize: number): { rangeStart: number; rangeEnd: number; frames: ImageFrame[] } | undefined {
+        const parsed = this.parsedFile;
+        const metadata = this.metadata;
+        if (!parsed || !metadata) {
+            return undefined;
+        }
+
+        const content = metadata.sds.content;
+        const mediaMeta = mediaType === 'image'
+            ? content.find(c => c.image)?.image
+            : content.find(c => c.video)?.video;
+        if (!mediaMeta) {
+            return undefined;
+        }
+
+        const total = parsed.records.length;
+        if (total === 0) {
+            return { rangeStart: 0, rangeEnd: 0, frames: [] };
+        }
+
+        const clampedCenter = Math.max(0, Math.min(total - 1, centerIndex));
+        const half = Math.floor(windowSize / 2);
+        let start = Math.max(0, clampedCenter - half);
+        let endExclusive = Math.min(total, start + windowSize);
+        if (endExclusive - start < windowSize) {
+            start = Math.max(0, endExclusive - windowSize);
+        }
+
+        const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
+        const frames: ImageFrame[] = [];
+        for (let i = start; i < endExclusive; i++) {
+            const record = parsed.records[i];
+            try {
+                const rgba = decodeImageFrameToRGBA(record.data, mediaMeta.width, mediaMeta.height, mediaMeta.pixel_format);
+                frames.push({ timestamp: record.timestamp / tickFreq, rgbaBase64: Buffer.from(rgba).toString('base64') });
+            } catch {
+                // Skip decode failures.
+            }
+        }
+
+        return {
+            rangeStart: start,
+            rangeEnd: endExclusive,
+            frames,
+        };
     }
 
     private getHtml(initialState: Record<string, unknown>): string {
