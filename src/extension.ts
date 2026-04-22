@@ -14,6 +14,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 import { SdsExplorerProvider, SdsTreeItem } from './providers/sdsExplorerProvider';
+import { SdsIOInterfaceProvider, SdsFlagTreeItem } from './providers/sdsFlagsProvider';
 import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsRecorderPanel } from './recorder/sdsRecorderPanel';
@@ -31,12 +32,102 @@ export function activate(context: vscode.ExtensionContext) {
     const explorerProvider = new SdsExplorerProvider();
     vscode.window.registerTreeDataProvider('sdsExplorer', explorerProvider);
 
+    const flagsProvider = new SdsIOInterfaceProvider();
+    const flagsTreeView = vscode.window.createTreeView('sdsIOInterface', {
+        treeDataProvider: flagsProvider,
+        dragAndDropController: flagsProvider,
+        canSelectMany: false,
+    });
+    context.subscriptions.push(flagsTreeView);
+
+    const updateSdsIoMessage = () => {
+        flagsTreeView.message = flagsProvider.getBitmaskSummary();
+    };
+    const updateSdsIoCommandContext = () => {
+        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canPlay', flagsProvider.canPlay());
+        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canRecord', flagsProvider.canRecord());
+        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canStop', flagsProvider.canStop());
+    };
+    updateSdsIoMessage();
+    updateSdsIoCommandContext();
+
+    context.subscriptions.push(
+        flagsProvider.onDidChangeTreeData(() => {
+            updateSdsIoMessage();
+        })
+    );
+
+    context.subscriptions.push(
+        flagsTreeView.onDidChangeCheckboxState((changes) => {
+            flagsProvider.setEnabledByTreeItems(changes.items);
+        })
+    );
+
     // ── Commands ────────────────────────────────────────────────
 
     // Refresh Explorer
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.refreshExplorer', () => {
             explorerProvider.refresh();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.play', () => {
+            flagsProvider.playDummy();
+            updateSdsIoCommandContext();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.record', () => {
+            flagsProvider.recordDummy();
+            updateSdsIoCommandContext();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.stop', () => {
+            flagsProvider.stopDummy();
+            updateSdsIoCommandContext();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.add', async () => {
+            await flagsProvider.addFlagAndRename();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.rename', async (item: SdsFlagTreeItem) => {
+            await flagsProvider.renameFlag(item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.remove', (item: SdsFlagTreeItem) => {
+            flagsProvider.removeFlag(item);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.moveUp', (item?: SdsFlagTreeItem) => {
+            const target = item ?? flagsTreeView.selection[0];
+            if (!target) {
+                return;
+            }
+            flagsProvider.moveUp(target);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.moveDown', (item?: SdsFlagTreeItem) => {
+            const target = item ?? flagsTreeView.selection[0];
+            if (!target) {
+                return;
+            }
+            flagsProvider.moveDown(target);
         })
     );
 
