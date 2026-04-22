@@ -104,6 +104,22 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         [loadedFrames]
     );
 
+    const canvasContainerStyle: React.CSSProperties = {
+        position: 'relative',
+        width: '100%',
+        height: '100vh',
+        flex: 1,
+        minHeight: 0,
+    };
+
+    const canvasStyle: React.CSSProperties = {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%'
+    };
+
     const clampRange = useCallback((start: number, end: number): [number, number] => {
         if (domainEnd <= domainStart) {
             return [0, 1];
@@ -825,8 +841,8 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 <span>{totalDurationSeconds.toFixed(2)}s</span>
                 <span>{totalRecords} records</span>
             </div>
-            <div className="canvas-area">
-                <canvas ref={canvasRef}></canvas>
+            <div style={canvasContainerStyle}>
+                <canvas ref={canvasRef} style={canvasStyle}></canvas>
             </div>
             <Row className="controls" gutter={12}>
                 <Col flex="none">
