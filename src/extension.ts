@@ -15,6 +15,7 @@ import * as fs from 'fs';
 
 import { SdsExplorerProvider, SdsTreeItem } from './providers/sdsExplorerProvider';
 import { SdsIOInterfaceProvider, SdsFlagTreeItem } from './providers/sdsFlagsProvider';
+import { SdsioMonitorClient } from './recorder/sdsio/sdsIoMonitorClient';
 import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsRecorderPanel } from './recorder/sdsRecorderPanel';
@@ -28,11 +29,23 @@ export function activate(context: vscode.ExtensionContext) {
     diagnostics.info(DiagnosticSource.Extension, 'CMSIS SDS extension activating...');
     context.subscriptions.push(diagnostics.outputChannel);
 
+    // ── SDSIO Monitor Client ────────────────────────────────────
+    const monitor = new SdsioMonitorClient({ port: 12345 });
+    context.subscriptions.push({
+        dispose: () => {
+            monitor.stop();
+        },
+    });
+    // Start monitor in background
+    monitor.start().catch((err) => {
+        diagnostics.error(DiagnosticSource.Extension, `Failed to start monitor: ${err instanceof Error ? err.message : String(err)}`);
+    });
+
     // ── Tree Views ──────────────────────────────────────────────
     const explorerProvider = new SdsExplorerProvider();
     vscode.window.registerTreeDataProvider('sdsExplorer', explorerProvider);
 
-    const flagsProvider = new SdsIOInterfaceProvider();
+    const flagsProvider = new SdsIOInterfaceProvider(monitor);
     const flagsTreeView = vscode.window.createTreeView('sdsIOInterface', {
         treeDataProvider: flagsProvider,
         dragAndDropController: flagsProvider,

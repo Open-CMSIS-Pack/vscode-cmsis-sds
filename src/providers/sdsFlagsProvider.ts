@@ -4,6 +4,7 @@
  */
 
 import * as vscode from 'vscode';
+import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
 
 const FLAG_NAME_PATTERN = /^[a-zA-Z0-9\-_.+,/()]+$/;
 const MAX_FLAGS = 8;
@@ -42,6 +43,38 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     private readonly flags: SdsFlag[] = [];
     private nextId = 1;
     private mode: SdsIoMode = 'idle';
+    private monitor?: SdsioMonitorClient;
+    private monitorConnected = false;
+    private remoteFlags = 0;
+
+    constructor(monitor?: SdsioMonitorClient) {
+        this.monitor = monitor;
+        if (monitor) {
+            monitor.on('connected', () => this._onMonitorConnected());
+            monitor.on('disconnected', () => this._onMonitorDisconnected());
+            monitor.on('info', (info: SdsioMonitorInfo) => this._onMonitorInfo(info));
+        }
+    }
+
+    private _onMonitorConnected(): void {
+        this.monitorConnected = true;
+        this._onDidChangeTreeData.fire();
+    }
+
+    private _onMonitorDisconnected(): void {
+        this.monitorConnected = false;
+        this._onDidChangeTreeData.fire();
+    }
+
+    private _onMonitorInfo(info: SdsioMonitorInfo): void {
+        this.remoteFlags = info.sdsFlags;
+        // Synchronize local flag state from remote
+        for (let i = 0; i < this.flags.length && i < 8; i++) {
+            const bit = (info.sdsFlags >> i) & 1;
+            this.flags[i].enabled = bit !== 0;
+        }
+        this._onDidChangeTreeData.fire();
+    }
 
     getTreeItem(element: SdsFlagTreeItem): vscode.TreeItem {
         return element;
@@ -128,30 +161,38 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             }
             flag.enabled = checkboxState === vscode.TreeItemCheckboxState.Checked;
         }
+        // Send updated flags to monitor
+        this._sendFlagsToMonitor();
         this.refresh();
     }
 
     playDummy(): void {
         const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'play';
+        const modeSent = this.monitorConnected ? this.monitor?.startPlayback() === true : false;
+        this._sendFlagsToMonitor();
         void vscode.window.showInformationMessage(
-            `Play dummy invoked. Command masks -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, unset: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
+            `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
     }
 
     recordDummy(): void {
         const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'record';
+        const modeSent = this.monitorConnected ? this.monitor?.startRecording() === true : false;
+        this._sendFlagsToMonitor();
         void vscode.window.showInformationMessage(
-            `Record dummy invoked. Command masks -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, unset: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
+            `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
     }
 
     stopDummy(): void {
         const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'idle';
+        const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
+        this._sendFlagsToMonitor();
         void vscode.window.showInformationMessage(
-            `Stop dummy invoked. Command masks -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, unset: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
+            `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
     }
 
@@ -169,14 +210,24 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
 
     getBitmaskSummary(): string {
         const { setMask, unsetMask } = this.getFlagMasks();
-        return `set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, unset: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`;
+        const connection = this.monitorConnected ? '🟢 connected' : '⭕ disconnected';
+        return `${connection} | set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`;
     }
 
     getFlagMasks(): SdsFlagMasks {
-        const allFlagsMask = (1 << MAX_FLAGS) - 1;
-        const setMask = this.computeSetMask() & allFlagsMask;
-        const unsetMask = (~setMask) & allFlagsMask;
+        // Only manage the bits for flags that exist in this provider
+        const managedMask = this.flags.length > 0 ? (1 << this.flags.length) - 1 : 0;
+        const setMask = this.computeSetMask() & managedMask;
+        const unsetMask = managedMask & ~setMask;
         return { setMask, unsetMask };
+    }
+
+    private _sendFlagsToMonitor(): void {
+        if (!this.monitor || !this.monitorConnected) {
+            return;
+        }
+        const { setMask, unsetMask } = this.getFlagMasks();
+        this.monitor.sendFlags(setMask, unsetMask);
     }
 
     async handleDrag(

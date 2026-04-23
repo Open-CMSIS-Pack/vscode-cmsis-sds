@@ -38,6 +38,8 @@ export { SerialTransport } from './serialTransport';
 export type { SerialTransportOptions } from './serialTransport';
 export { SocketTransport } from './socketTransport';
 export type { SocketTransportOptions } from './socketTransport';
+export { SdsioMonitorClient } from './sdsIoMonitorClient';
+export type { SdsioMonitorInfo, SdsioMonitorOpenMessage } from './sdsIoMonitorClient';
 
 import { EventEmitter } from 'events';
 import { fork, ChildProcess } from 'child_process';
