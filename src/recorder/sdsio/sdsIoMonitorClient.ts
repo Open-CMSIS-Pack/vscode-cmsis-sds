@@ -143,7 +143,7 @@ export class SdsioMonitorClient extends EventEmitter {
     constructor(opts?: { host?: string; port?: number; reconnectDelayMs?: number }) {
         super();
         this.host = opts?.host ?? '127.0.0.1';
-        this.port = opts?.port ?? 12345;
+        this.port = opts?.port ?? 8181;
         this.reconnectDelayMs = opts?.reconnectDelayMs ?? 2000;
     }
 
