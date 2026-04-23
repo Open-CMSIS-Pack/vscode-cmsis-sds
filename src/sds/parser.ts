@@ -29,6 +29,13 @@ import {
 /** Record header size: timestamp (4 bytes) + data_size (4 bytes) */
 const RECORD_HEADER_SIZE = 8;
 
+export interface SdsRecordIndexEntry {
+    recordIndex: number;
+    timestamp: number;
+    dataSize: number;
+    dataOffset: number;
+}
+
 /**
  * Parse an SDS binary file into memory.
  */
@@ -429,6 +436,51 @@ export function* parseSdsRecordIterator(filePath: string): Generator<SdsRecord &
     } finally {
         fs.closeSync(fd);
     }
+}
+
+/**
+ * Build a lightweight index of SDS records using only headers.
+ * This avoids loading all record payloads into memory.
+ */
+export function indexSdsRecords(filePath: string): SdsRecordIndexEntry[] {
+    const fd = fs.openSync(filePath, 'r');
+    const headerBuf = Buffer.alloc(RECORD_HEADER_SIZE);
+    let position = 0;
+    let index = 0;
+    const out: SdsRecordIndexEntry[] = [];
+
+    try {
+        const fileSize = fs.fstatSync(fd).size;
+
+        while (position + RECORD_HEADER_SIZE <= fileSize) {
+            const headerRead = fs.readSync(fd, headerBuf, 0, RECORD_HEADER_SIZE, position);
+            if (headerRead < RECORD_HEADER_SIZE) {
+                break;
+            }
+
+            const timestamp = headerBuf.readUInt32LE(0);
+            const dataSize = headerBuf.readUInt32LE(4);
+            const dataOffset = position + RECORD_HEADER_SIZE;
+
+            if (dataOffset + dataSize > fileSize) {
+                break;
+            }
+
+            out.push({
+                recordIndex: index,
+                timestamp,
+                dataSize,
+                dataOffset,
+            });
+
+            position = dataOffset + dataSize;
+            index++;
+        }
+    } finally {
+        fs.closeSync(fd);
+    }
+
+    return out;
 }
 
 function clamp(value: number): number {

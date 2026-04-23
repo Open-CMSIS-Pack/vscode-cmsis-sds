@@ -17,6 +17,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import {
     parseSdsFile,
+    indexSdsRecords,
     parseMetadataFile,
     decodeImageFrameToRGBA,
     decodeAudioBlock,
@@ -24,7 +25,7 @@ import {
     SdsMediaType,
     SDS_METADATA_EXTENSION,
     detectMediaType,
-    SdsParsedFile
+    SdsParsedFile,
 } from '../sds';
 import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
@@ -64,6 +65,7 @@ export class SdsMediaViewerPanel {
     private metadataPath: string | undefined;
     private mediaType: SdsMediaType;
     private parsedFile: SdsParsedFile | undefined;
+    private recordIndex: Array<{ timestamp: number; dataSize: number; dataOffset: number }> = [];
     private metadata: SdsMetadata | undefined;
     private audioFrames: SampleFrame[] = [];
     private audioSampleRate = 0;
@@ -194,9 +196,6 @@ export class SdsMediaViewerPanel {
 
     private update(): void {
         try {
-            const parsed = parseSdsFile(this.sdsFilePath);
-            this.parsedFile = parsed;
-
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
                 metadata = parseMetadataFile(this.metadataPath);
@@ -209,6 +208,15 @@ export class SdsMediaViewerPanel {
             }
 
             this.mediaType = detectMediaType(metadata);
+            this.recordIndex = [];
+            this.parsedFile = undefined;
+
+            if (this.mediaType === 'image' || this.mediaType === 'video') {
+                this.recordIndex = indexSdsRecords(this.sdsFilePath);
+            } else {
+                this.parsedFile = parseSdsFile(this.sdsFilePath);
+            }
+
             this.audioFrames = [];
             this.audioSampleRate = 0;
             this.audioBitDepth = 0;
@@ -222,9 +230,8 @@ export class SdsMediaViewerPanel {
         }
     }
     private buildInitialState() {
-        const parsed = this.parsedFile;
         const metadata = this.metadata;
-        if (!parsed || !metadata) {
+        if (!metadata) {
             return { fileName: path.basename(this.sdsFilePath), error: 'Media data not available.' };
         }
 
@@ -234,21 +241,23 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const imgMeta = content.find(c => c.image)?.image;
                 if (!imgMeta) { return { ...base, error: 'No image metadata found in content.' }; }
-                const frameWindow = this.getFrameWindow('image', 0, 160);
-                const frames = frameWindow?.frames ?? [];
                 return {
                     ...base,
                     mediaType: 'image',
                     image: {
-                        frames,
-                        rangeStart: frameWindow?.rangeStart ?? 0,
+                        frames: [],
+                        rangeStart: 0,
                         width: imgMeta.width,
                         height: imgMeta.height,
-                        totalFrames: parsed.records.length,
+                        totalFrames: this.recordIndex.length,
                     },
                 };
             }
             case 'audio': {
+                const parsed = this.parsedFile;
+                if (!parsed) {
+                    return { ...base, error: 'Audio data not available.' };
+                }
                 const content = metadata.sds.content;
                 const audioMeta = content.find(c => c.audio)?.audio;
                 if (!audioMeta) { return { ...base, error: 'No audio metadata found in content.' }; }
@@ -293,18 +302,16 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const vidMeta = content.find(c => c.video)?.video;
                 if (!vidMeta) { return { ...base, error: 'No video metadata found in content.' }; }
-                const frameWindow = this.getFrameWindow('video', 0, 100);
-                const frames = frameWindow?.frames ?? [];
                 return {
                     ...base,
                     mediaType: 'video',
                     video: {
-                        frames,
-                        rangeStart: frameWindow?.rangeStart ?? 0,
+                        frames: [],
+                        rangeStart: 0,
                         width: vidMeta.width,
                         height: vidMeta.height,
                         fps: vidMeta.fps,
-                        totalFrames: parsed.records.length,
+                        totalFrames: this.recordIndex.length,
                     },
                 };
             }
@@ -365,9 +372,8 @@ export class SdsMediaViewerPanel {
     }
 
     private getFrameWindow(mediaType: 'image' | 'video', centerIndex: number, windowSize: number): { rangeStart: number; rangeEnd: number; frames: ImageFrame[] } | undefined {
-        const parsed = this.parsedFile;
         const metadata = this.metadata;
-        if (!parsed || !metadata) {
+        if (!metadata) {
             return undefined;
         }
 
@@ -379,7 +385,7 @@ export class SdsMediaViewerPanel {
             return undefined;
         }
 
-        const total = parsed.records.length;
+        const total = this.recordIndex.length;
         if (total === 0) {
             return { rangeStart: 0, rangeEnd: 0, frames: [] };
         }
@@ -394,13 +400,31 @@ export class SdsMediaViewerPanel {
 
         const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
         const frames: ImageFrame[] = [];
-        for (let i = start; i < endExclusive; i++) {
-            const record = parsed.records[i];
-            try {
-                const rgba = decodeImageFrameToRGBA(record.data, mediaMeta.width, mediaMeta.height, mediaMeta.pixel_format);
-                frames.push({ timestamp: record.timestamp / tickFreq, rgbaBase64: Buffer.from(rgba).toString('base64') });
-            } catch {
-                // Skip decode failures.
+        let fd: number | undefined;
+        try {
+            fd = fs.openSync(this.sdsFilePath, 'r');
+            for (let i = start; i < endExclusive; i++) {
+                const entry = this.recordIndex[i];
+                if (!entry || entry.dataSize <= 0) {
+                    continue;
+                }
+
+                const data = Buffer.alloc(entry.dataSize);
+                const read = fs.readSync(fd, data, 0, entry.dataSize, entry.dataOffset);
+                if (read < entry.dataSize) {
+                    continue;
+                }
+
+                try {
+                    const rgba = decodeImageFrameToRGBA(data, mediaMeta.width, mediaMeta.height, mediaMeta.pixel_format);
+                    frames.push({ timestamp: entry.timestamp / tickFreq, rgbaBase64: Buffer.from(rgba).toString('base64') });
+                } catch {
+                    // Skip decode failures.
+                }
+            }
+        } finally {
+            if (fd !== undefined) {
+                fs.closeSync(fd);
             }
         }
 

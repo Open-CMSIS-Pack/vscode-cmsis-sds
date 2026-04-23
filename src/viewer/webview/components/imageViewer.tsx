@@ -54,7 +54,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
 
     const requestFrameWindow = (centerIndex: number, quality: 'low' | 'high') => {
         const requestId = ++requestSeqRef.current;
-        const windowSize = quality === 'low' ? 120 : 280;
+        const windowSize = quality === 'low' ? 32 : 160;
         broadcastMessage({
             command: 'requestMediaFrameWindow',
             requestId,
@@ -79,18 +79,19 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
             const msg = event.data as Message;
+            const messageType = (msg.type ?? msg.command) as string | undefined;
 
-            switch (msg.type) {
+            switch (messageType) {
                 case 'broadcast': {
                     if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
                         break;
                     }
 
-                    if (!isTimestampInFrameRange((msg as BroadcastMessage).timeStamp, frames)) {
+                    if (!isTimestampInFrameRange((msg as BroadcastMessage).timeStamp, windowFrames)) {
                         break;
                     }
 
-                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number, frames);
+                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number, windowFrames);
                     if (nextIndex === null) {
                         break;
                     }
@@ -131,13 +132,13 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, frames, totalFrames]);
+    }, [filename, totalFrames, windowFrames]);
 
     useEffect(() => {
         const loadedStart = windowStart;
         const loadedEnd = windowStart + windowFrames.length - 1;
         if (windowFrames.length === 0 || index < loadedStart || index > loadedEnd) {
-            requestFrameWindow(index, isDragMode ? 'low' : 'high');
+            requestFrameWindow(index, 'low');
             return;
         }
 
@@ -192,7 +193,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 <Col style={statsTitleStyle}>Dimensions</Col>
                 <Col style={statsValueStyle}>{width}×{height}</Col>
                 <Col style={statsTitleStyle}>Frame</Col>
-                <Col style={statsValueStyle}>{Math.min(index + 1, frames.length)} of {totalFrames}</Col>
+                <Col style={statsValueStyle}>{Math.min(index + 1, totalFrames)} of {totalFrames}</Col>
                 <Col style={statsTitleStyle}>Showing</Col>
                 <Col style={statsValueStyle}>{windowFrames.length} of {totalFrames}</Col>
                 <Col style={statsTitleStyle}>Timestamp</Col>
