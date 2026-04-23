@@ -390,7 +390,12 @@
         ]
     },
     "scripts": {
-        "compile": "tsc -p .",
+        "compile": "npm-run-all compile:extension compile:webviews",
+        "compile:extension": "tsc -p .",
+        "compile:webviews": "node esbuild.js",
+        "watch": "run-p watch:extension watch:webviews",
+        "watch:extension": "tsc -watch -p .",
+        "watch:webviews": "node esbuild.js --watch",
         "build": "node esbuild.js --production",
         "postbuild": "node scripts/copy-native-modules.js",
         "package": "npm run build && npm run postbuild && vsce package",

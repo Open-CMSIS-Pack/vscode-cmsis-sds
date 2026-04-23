@@ -218,8 +218,8 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
                 <Col style={statsValueStyle}>{windowFrames.length}</Col>
             </Row>
             <Row className="canvas-area">
-                <Col>
-                    <canvas ref={canvasRef} width={width} height={height}></canvas>
+                <Col style={{ width: `${width * zoom}px`, height: `${height * zoom}px` }}>
+                    <canvas ref={canvasRef} width={width * zoom} height={height * zoom}></canvas>
                 </Col>
             </Row>
             <div className="controls">

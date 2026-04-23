@@ -199,8 +199,8 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 <Col style={statsValueStyle}>{(getLoadedFrame(index)?.timestamp ?? 0).toFixed(4)}s</Col>
             </Row>
             <Row className="canvas-area">
-                <Col>
-                    <canvas ref={canvasRef} width={width} height={height}></canvas>
+                <Col style={{ width: `${width * zoom}px`, height: `${height * zoom}px` }}>
+                    <canvas ref={canvasRef} width={width * zoom} height={height * zoom}></canvas>
                 </Col>
             </Row>
             <Row className="controls">
