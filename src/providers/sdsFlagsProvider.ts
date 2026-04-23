@@ -33,14 +33,14 @@ export class SdsFlagTreeItem extends vscode.TreeItem {
     }
 }
 
-export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTreeItem>, vscode.TreeDragAndDropController<SdsFlagTreeItem> {
+export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTreeItem> {
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<SdsFlagTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     readonly dragMimeTypes = ['application/vnd.code.tree.sdsIOInterface'];
     readonly dropMimeTypes = ['application/vnd.code.tree.sdsIOInterface'];
 
-    private readonly flags: SdsFlag[] = [];
+    private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
     private nextId = 1;
     private mode: SdsIoMode = 'idle';
     private monitor?: SdsioMonitorClient;
@@ -88,34 +88,6 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         this._onDidChangeTreeData.fire();
     }
 
-    async addFlagAndRename(): Promise<void> {
-        if (this.flags.length >= MAX_FLAGS) {
-            vscode.window.showWarningMessage(`Only ${MAX_FLAGS} flags are supported.`);
-            return;
-        }
-
-        const fallbackName = this.getFallbackName();
-        const newFlag: SdsFlag = {
-            id: `flag-${this.nextId++}`,
-            name: fallbackName,
-            enabled: false,
-        };
-
-        this.flags.push(newFlag);
-        this.refresh();
-
-        const input = await vscode.window.showInputBox({
-            prompt: 'Enter flag name',
-            placeHolder: 'Flag_A',
-            value: fallbackName,
-            validateInput: (value) => this.validateFlagName(value, newFlag.id),
-            ignoreFocusOut: true,
-        });
-
-        const normalized = this.normalizeFlagName(input, fallbackName);
-        newFlag.name = normalized;
-        this.refresh();
-    }
 
     async renameFlag(item: SdsFlagTreeItem): Promise<void> {
         const flag = this.findFlag(item.flag.id);
@@ -135,24 +107,6 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         this.refresh();
     }
 
-    removeFlag(item: SdsFlagTreeItem): void {
-        const index = this.flags.findIndex((f) => f.id === item.flag.id);
-        if (index < 0) {
-            return;
-        }
-
-        this.flags.splice(index, 1);
-        this.refresh();
-    }
-
-    moveUp(item: SdsFlagTreeItem): void {
-        this.moveBy(item.flag.id, -1);
-    }
-
-    moveDown(item: SdsFlagTreeItem): void {
-        this.moveBy(item.flag.id, 1);
-    }
-
     setEnabledByTreeItems(items: ReadonlyArray<[SdsFlagTreeItem, vscode.TreeItemCheckboxState]>): void {
         for (const [item, checkboxState] of items) {
             const flag = this.findFlag(item.flag.id);
@@ -162,35 +116,35 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             flag.enabled = checkboxState === vscode.TreeItemCheckboxState.Checked;
         }
         // Send updated flags to monitor
-        this._sendFlagsToMonitor();
+        this.sendFlagsToMonitor();
         this.refresh();
     }
 
-    playDummy(): void {
+    play(): void {
         const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'play';
         const modeSent = this.monitorConnected ? this.monitor?.startPlayback() === true : false;
-        this._sendFlagsToMonitor();
+        this.sendFlagsToMonitor();
         void vscode.window.showInformationMessage(
             `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
     }
 
-    recordDummy(): void {
+    record(): void {
         const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'record';
         const modeSent = this.monitorConnected ? this.monitor?.startRecording() === true : false;
-        this._sendFlagsToMonitor();
+        this.sendFlagsToMonitor();
         void vscode.window.showInformationMessage(
             `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
     }
 
-    stopDummy(): void {
+    stop(): void {
         const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'idle';
         const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
-        this._sendFlagsToMonitor();
+        this.sendFlagsToMonitor();
         void vscode.window.showInformationMessage(
             `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
@@ -222,7 +176,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         return { setMask, unsetMask };
     }
 
-    private _sendFlagsToMonitor(): void {
+    private sendFlagsToMonitor(): void {
         if (!this.monitor || !this.monitorConnected) {
             return;
         }
@@ -230,84 +184,8 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         this.monitor.sendFlags(setMask, unsetMask);
     }
 
-    async handleDrag(
-        source: readonly SdsFlagTreeItem[],
-        dataTransfer: vscode.DataTransfer,
-        _token: vscode.CancellationToken
-    ): Promise<void> {
-        const sourceIds = source.map((s) => s.flag.id);
-        dataTransfer.set(this.dragMimeTypes[0], new vscode.DataTransferItem(JSON.stringify(sourceIds)));
-    }
-
-    async handleDrop(
-        target: SdsFlagTreeItem | undefined,
-        dataTransfer: vscode.DataTransfer,
-        _token: vscode.CancellationToken
-    ): Promise<void> {
-        const item = dataTransfer.get(this.dragMimeTypes[0]);
-        if (!item) {
-            return;
-        }
-
-        const raw = await item.asString();
-        let sourceIds: string[] = [];
-
-        try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-                sourceIds = parsed.filter((v): v is string => typeof v === 'string');
-            }
-        } catch {
-            return;
-        }
-
-        if (sourceIds.length === 0) {
-            return;
-        }
-
-        const moved = this.flags.filter((f) => sourceIds.includes(f.id));
-        if (moved.length === 0) {
-            return;
-        }
-
-        const remaining = this.flags.filter((f) => !sourceIds.includes(f.id));
-
-        if (!target) {
-            this.flags.splice(0, this.flags.length, ...remaining, ...moved);
-            this.refresh();
-            return;
-        }
-
-        const targetIndex = remaining.findIndex((f) => f.id === target.flag.id);
-        if (targetIndex < 0) {
-            this.flags.splice(0, this.flags.length, ...remaining, ...moved);
-            this.refresh();
-            return;
-        }
-
-        remaining.splice(targetIndex, 0, ...moved);
-        this.flags.splice(0, this.flags.length, ...remaining);
-        this.refresh();
-    }
-
     private findFlag(id: string): SdsFlag | undefined {
         return this.flags.find((f) => f.id === id);
-    }
-
-    private moveBy(flagId: string, delta: -1 | 1): void {
-        const index = this.flags.findIndex((f) => f.id === flagId);
-        if (index < 0) {
-            return;
-        }
-
-        const nextIndex = index + delta;
-        if (nextIndex < 0 || nextIndex >= this.flags.length) {
-            return;
-        }
-
-        const [flag] = this.flags.splice(index, 1);
-        this.flags.splice(nextIndex, 0, flag);
-        this.refresh();
     }
 
     private validateFlagName(input: string, currentId?: string): string | undefined {
@@ -341,14 +219,13 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
 
     private getFallbackName(currentId?: string): string {
         for (let i = 0; i < MAX_FLAGS; i++) {
-            const letter = String.fromCharCode(65 + i);
-            const candidate = `Flag_${letter}`;
+            const candidate = `${i}`;
             const isUsed = this.flags.some((f) => f.id !== currentId && f.name === candidate);
             if (!isUsed) {
                 return candidate;
             }
         }
-        return 'Flag_A';
+        return '0';
     }
 
     private computeSetMask(): number {

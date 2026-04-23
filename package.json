@@ -110,54 +110,30 @@
             },
             {
                 "command": "arm-sds.sdsinterface.play",
-                "title": "Play Flags (Dummy)",
+                "title": "Play Flags",
                 "category": "SDS Tools",
                 "icon": "$(play)",
                 "enablement": "arm-sds.sdsio.canPlay"
             },
             {
                 "command": "arm-sds.sdsinterface.record",
-                "title": "Record Flags (Dummy)",
+                "title": "Record Flags",
                 "category": "SDS Tools",
                 "icon": "$(record)",
                 "enablement": "arm-sds.sdsio.canRecord"
             },
             {
                 "command": "arm-sds.sdsinterface.stop",
-                "title": "Stop Flags (Dummy)",
+                "title": "Stop Flags",
                 "category": "SDS Tools",
                 "icon": "$(debug-stop)",
                 "enablement": "arm-sds.sdsio.canStop"
-            },
-            {
-                "command": "arm-sds.sdsinterface.add",
-                "title": "Add Flag",
-                "category": "SDS Tools",
-                "icon": "$(add)"
             },
             {
                 "command": "arm-sds.sdsinterface.rename",
                 "title": "Rename Flag",
                 "category": "SDS Tools",
                 "icon": "$(edit)"
-            },
-            {
-                "command": "arm-sds.sdsinterface.remove",
-                "title": "Remove Flag",
-                "category": "SDS Tools",
-                "icon": "$(trash)"
-            },
-            {
-                "command": "arm-sds.sdsinterface.moveUp",
-                "title": "Move Flag Up",
-                "category": "SDS Tools",
-                "icon": "$(arrow-up)"
-            },
-            {
-                "command": "arm-sds.sdsinterface.moveDown",
-                "title": "Move Flag Down",
-                "category": "SDS Tools",
-                "icon": "$(arrow-down)"
             }
         ],
         "viewsContainers": {
@@ -179,9 +155,9 @@
                 },
                 {
                     "id": "sdsIOInterface",
-                    "name": "SDSIO Interface",
+                    "name": "SDSIO Flags",
                     "icon": "$(symbol-boolean)",
-                    "contextualTitle": "SDSIO Control Interface"
+                    "contextualTitle": "SDSIO Flags Interface"
                 }
             ]
         },
@@ -189,43 +165,34 @@
             {
                 "view": "sdsExplorer",
                 "contents": "No SDS files found in the workspace.\n[Initialize SDS Workspace](command:arm-sds.initWorkspace)\n[Open SDS Recorder](command:arm-sds.openRecorder)"
-            },
-            {
-                "view": "sdsIOInterface",
-                "contents": "No flags yet.\n[Add Flag](command:arm-sds.sdsinterface.add)"
             }
         ],
         "menus": {
             "view/title": [
                 {
-                    "command": "arm-sds.refreshExplorer",
-                    "when": "view == sdsExplorer",
-                    "group": "navigation"
-                },
-                {
-                    "command": "arm-sds.newRecording",
-                    "when": "view == sdsExplorer",
-                    "group": "navigation"
-                },
-                {
                     "command": "arm-sds.sdsinterface.play",
-                    "when": "view == sdsIOInterface",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@1"
                 },
                 {
                     "command": "arm-sds.sdsinterface.record",
-                    "when": "view == sdsIOInterface",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@2"
                 },
                 {
                     "command": "arm-sds.sdsinterface.stop",
-                    "when": "view == sdsIOInterface",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@3"
                 },
                 {
-                    "command": "arm-sds.sdsinterface.add",
-                    "when": "view == sdsIOInterface",
+                    "command": "arm-sds.refreshExplorer",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@4"
+                },
+                {
+                    "command": "arm-sds.newRecording",
+                    "when": "view == sdsExplorer",
+                    "group": "navigation@5"
                 }
             ],
             "view/item/context": [
@@ -258,21 +225,6 @@
                     "command": "arm-sds.sdsinterface.rename",
                     "when": "view == sdsIOInterface && viewItem == sdsFlag",
                     "group": "inline"
-                },
-                {
-                    "command": "arm-sds.sdsinterface.remove",
-                    "when": "view == sdsIOInterface && viewItem == sdsFlag",
-                    "group": "inline"
-                },
-                {
-                    "command": "arm-sds.sdsinterface.moveUp",
-                    "when": "view == sdsIOInterface && viewItem == sdsFlag",
-                    "group": "2_reorder"
-                },
-                {
-                    "command": "arm-sds.sdsinterface.moveDown",
-                    "when": "view == sdsIOInterface && viewItem == sdsFlag",
-                    "group": "2_reorder"
                 }
             ],
             "explorer/context": [
@@ -364,18 +316,6 @@
                 "key": "ctrl+shift+s",
                 "mac": "cmd+shift+s",
                 "when": "workbenchState != empty"
-            },
-            {
-                "command": "arm-sds.sdsinterface.moveUp",
-                "key": "alt+up",
-                "mac": "alt+up",
-                "when": "view == sdsIOInterface && listFocus"
-            },
-            {
-                "command": "arm-sds.sdsinterface.moveDown",
-                "key": "alt+down",
-                "mac": "alt+down",
-                "when": "view == sdsIOInterface && listFocus"
             }
         ],
         "snippets": [

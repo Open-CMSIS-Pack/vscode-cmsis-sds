@@ -87,60 +87,28 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.play', () => {
-            flagsProvider.playDummy();
+            flagsProvider.play();
             updateSdsIoCommandContext();
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.record', () => {
-            flagsProvider.recordDummy();
+            flagsProvider.record();
             updateSdsIoCommandContext();
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.stop', () => {
-            flagsProvider.stopDummy();
+            flagsProvider.stop();
             updateSdsIoCommandContext();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.add', async () => {
-            await flagsProvider.addFlagAndRename();
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.rename', async (item: SdsFlagTreeItem) => {
             await flagsProvider.renameFlag(item);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.remove', (item: SdsFlagTreeItem) => {
-            flagsProvider.removeFlag(item);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.moveUp', (item?: SdsFlagTreeItem) => {
-            const target = item ?? flagsTreeView.selection[0];
-            if (!target) {
-                return;
-            }
-            flagsProvider.moveUp(target);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.moveDown', (item?: SdsFlagTreeItem) => {
-            const target = item ?? flagsTreeView.selection[0];
-            if (!target) {
-                return;
-            }
-            flagsProvider.moveDown(target);
         })
     );
 
