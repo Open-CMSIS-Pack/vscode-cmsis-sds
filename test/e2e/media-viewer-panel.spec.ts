@@ -29,10 +29,6 @@ test.afterAll(async () => {
     server.close();
 });
 
-async function getMessages(page: Page): Promise<any[]> {
-    return page.evaluate(() => (window as any).__messages);
-}
-
 async function clickSliderAt(page: Page, sliderLocator: string, ratio: number) {
     const slider = page.locator(sliderLocator).first();
     await expect(slider).toBeVisible();

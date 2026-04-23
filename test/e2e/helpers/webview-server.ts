@@ -68,14 +68,26 @@ function extractHtml(sourceFile: string): string {
  * Get the recorder panel HTML with template vars replaced by test defaults.
  */
 export function getRecorderHtml(): string {
-    let html = extractHtml('recorder/sdsRecorderPanel.ts');
+    const initialState = {
+        defaultPort: '',
+        defaultBaud: 115200,
+        defaultDir: './sds_recordings',
+    };
 
-    // Replace template expressions with test defaults
-    html = html.replace(/\$\{defaultPort\}/g, '');
-    html = html.replace(/\$\{defaultBaud === 115200 \? 'selected' : ''\}/g, 'selected');
-    html = html.replace(/\$\{defaultDir\}/g, './sds_recordings');
-
-    return injectMockApi(html);
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recorder Test</title>
+</head>
+<body>
+    <div id="root"></div>
+    ${MOCK_VSCODE_API}
+    <script>window.__INITIAL_STATE__ = ${JSON.stringify(initialState).replace(/</g, '\\u003c')};</script>
+    <script src="/out/recorderWebview.js"></script>
+</body>
+</html>`;
 }
 
 /**
@@ -83,18 +95,18 @@ export function getRecorderHtml(): string {
  * Uses the first `getHtml` in the viewer (the main data view, not the error view).
  */
 export function getViewerHtml(): string {
-    // The viewer HTML has complex data embedding (JSON samples, channel names, etc.)
-    // Create a fixture HTML that replicates the structure with test data.
     const sampleData = [
-        { timeSeconds: 0.0, values: { x: 1.0, y: 2.0, z: 3.0 } },
-        { timeSeconds: 0.01, values: { x: 1.5, y: 2.5, z: 3.5 } },
-        { timeSeconds: 0.02, values: { x: 2.0, y: 3.0, z: 4.0 } },
+        { timestamp: 0, timeSeconds: 0.0, values: { x: 1.0, y: 2.0, z: 3.0 } },
+        { timestamp: 10, timeSeconds: 0.01, values: { x: 1.5, y: 2.5, z: 3.5 } },
+        { timestamp: 20, timeSeconds: 0.02, values: { x: 2.0, y: 3.0, z: 4.0 } },
     ];
     const channelNames = ['x', 'y', 'z'];
     const stats = {
         fileSize: 1024,
         totalRecords: 3,
         recordingTimeSeconds: 0.02,
+        recordingIntervalMs: 10,
+        dataRate: 600,
         avgBlockSize: 12,
     };
     const metadata = {
@@ -107,19 +119,31 @@ export function getViewerHtml(): string {
         },
     };
 
-    let html = extractHtml('viewer/sdsViewerPanel.ts');
+    const initialState = {
+        samples: sampleData,
+        channelNames,
+        stats,
+        metadata,
+        domainStart: 0,
+        domainEnd: 0.02,
+        fileName: 'TestAccel.0.sds',
+    };
 
-    // Replace template expressions
-    html = html.replace(/\$\{escapeHtml\(fileName\)\}/g, 'TestAccel.0.sds');
-    html = html.replace(/\$\{experimental \? '[^']*' : ''\}/g, '');
-    html = html.replace(/\$\{experimental \? `[^`]*` : ''\}/g, '');
-    html = html.replace(/\$\{dataJson\}/g, JSON.stringify(sampleData));
-    html = html.replace(/\$\{channelsJson\}/g, JSON.stringify(channelNames));
-    html = html.replace(/\$\{statsJson\}/g, JSON.stringify(stats));
-    html = html.replace(/\$\{metaJson\}/g, JSON.stringify(metadata));
-    html = html.replace(/\$\{experimental \? 'true' : 'false'\}/g, 'false');
-
-    return injectMockApi(html);
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viewer Test</title>
+    <link rel="stylesheet" href="/out/viewerWebview.css">
+</head>
+<body>
+    <div id="root"></div>
+    ${MOCK_VSCODE_API}
+    <script>window.__INITIAL_STATE__ = ${JSON.stringify(initialState).replace(/</g, '\\u003c')};</script>
+    <script src="/out/viewerWebview.js"></script>
+</body>
+</html>`;
 }
 
 /**

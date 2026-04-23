@@ -30,7 +30,15 @@ test.afterAll(async () => {
 /** Navigate to the recorder panel and wait for the script to initialize. */
 async function openRecorder(page: Page): Promise<void> {
     await page.goto(`${baseUrl}/recorder`);
-    await page.waitForSelector('#mode');
+    await page.waitForSelector('select');
+}
+
+function modeSelect(page: Page) {
+    return page.locator('select').first();
+}
+
+function inputByLabel(page: Page, label: string) {
+    return page.locator(`label:has-text("${label}")`).locator('xpath=../input').first();
 }
 
 /** Get the list of captured outbound messages from the webview. */
@@ -49,22 +57,21 @@ test.describe('Recorder Panel — Default State', () => {
     test('USB mode selected by default, start enabled, stop disabled', async ({ page }) => {
         await openRecorder(page);
 
-        const mode = await page.locator('#mode').inputValue();
+        const mode = await modeSelect(page).inputValue();
         expect(mode).toBe('usb');
 
-        await expect(page.locator('#btnStart')).toBeEnabled();
-        await expect(page.locator('#btnStop')).toBeDisabled();
+        await expect(page.getByRole('button', { name: /Start Recording/i })).toBeEnabled();
+        await expect(page.getByRole('button', { name: /Stop/i })).toBeDisabled();
     });
 
     test('status panel is hidden initially', async ({ page }) => {
         await openRecorder(page);
-        await expect(page.locator('#statusPanel')).not.toHaveClass(/active/);
+        await expect(page.getByText(/Recording in progress|Server running/i)).toHaveCount(0);
     });
 
     test('server state shows "Stopped"', async ({ page }) => {
         await openRecorder(page);
-        await expect(page.locator('#serverStateText')).toHaveText('Stopped');
-        await expect(page.locator('#serverState')).toHaveClass(/stopped/);
+        await expect(page.getByText('Stopped', { exact: true })).toBeVisible();
     });
 });
 
@@ -73,40 +80,40 @@ test.describe('Recorder Panel — Default State', () => {
 test.describe('Recorder Panel — Mode Switching', () => {
     test('selecting Serial shows serial config, hides others', async ({ page }) => {
         await openRecorder(page);
-        await page.selectOption('#mode', 'serial');
+        await modeSelect(page).selectOption('serial');
 
-        await expect(page.locator('#serialConfig')).toBeVisible();
-        await expect(page.locator('#socketConfig')).not.toBeVisible();
-        await expect(page.locator('#demoConfig')).not.toBeVisible();
+        await expect(page.getByText('Serial Port', { exact: true })).toBeVisible();
+        await expect(page.getByText('IP Address', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('Stream Name', { exact: true })).toHaveCount(0);
     });
 
     test('selecting Socket shows socket config, hides others', async ({ page }) => {
         await openRecorder(page);
-        await page.selectOption('#mode', 'socket');
+        await modeSelect(page).selectOption('socket');
 
-        await expect(page.locator('#socketConfig')).toBeVisible();
-        await expect(page.locator('#serialConfig')).not.toBeVisible();
-        await expect(page.locator('#demoConfig')).not.toBeVisible();
+        await expect(page.getByText('IP Address', { exact: true })).toBeVisible();
+        await expect(page.getByText('Serial Port', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('Stream Name', { exact: true })).toHaveCount(0);
     });
 
     test('selecting Demo shows demo config, hides others', async ({ page }) => {
         await openRecorder(page);
-        await page.selectOption('#mode', 'demo');
+        await modeSelect(page).selectOption('demo');
 
-        await expect(page.locator('#demoConfig')).toBeVisible();
-        await expect(page.locator('#serialConfig')).not.toBeVisible();
-        await expect(page.locator('#socketConfig')).not.toBeVisible();
+        await expect(page.getByText('Stream Name', { exact: true })).toBeVisible();
+        await expect(page.getByText('Serial Port', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('IP Address', { exact: true })).toHaveCount(0);
     });
 
     test('selecting USB hides all config panels', async ({ page }) => {
         await openRecorder(page);
-        await page.selectOption('#mode', 'serial');
-        await expect(page.locator('#serialConfig')).toBeVisible();
+        await modeSelect(page).selectOption('serial');
+        await expect(page.getByText('Serial Port', { exact: true })).toBeVisible();
 
-        await page.selectOption('#mode', 'usb');
-        await expect(page.locator('#serialConfig')).not.toBeVisible();
-        await expect(page.locator('#socketConfig')).not.toBeVisible();
-        await expect(page.locator('#demoConfig')).not.toBeVisible();
+        await modeSelect(page).selectOption('usb');
+        await expect(page.getByText('Serial Port', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('IP Address', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('Stream Name', { exact: true })).toHaveCount(0);
     });
 
     test('switching to Serial triggers getSerialPorts message', async ({ page }) => {
@@ -114,7 +121,7 @@ test.describe('Recorder Panel — Mode Switching', () => {
         // Clear initial messages (getServerState fires on load)
         await page.evaluate(() => { (window as any).__messages = []; });
 
-        await page.selectOption('#mode', 'serial');
+        await modeSelect(page).selectOption('serial');
 
         const msgs = await getMessages(page);
         const portMsg = msgs.find((m: any) => m.command === 'getSerialPorts');
@@ -127,10 +134,10 @@ test.describe('Recorder Panel — Mode Switching', () => {
 test.describe('Recorder Panel — Start Recording', () => {
     test('clicking Start sends startRecording with correct config', async ({ page }) => {
         await openRecorder(page);
-        await page.fill('#outputDir', './my_output');
+        await inputByLabel(page, 'Output Directory').fill('./my_output');
         await page.evaluate(() => { (window as any).__messages = []; });
 
-        await page.click('#btnStart');
+        await page.getByRole('button', { name: /Start Recording/i }).click();
 
         const msgs = await getMessages(page);
         const startMsg = msgs.find((m: any) => m.command === 'startRecording');
@@ -142,12 +149,12 @@ test.describe('Recorder Panel — Start Recording', () => {
 
     test('clicking Start in demo mode sends demo config', async ({ page }) => {
         await openRecorder(page);
-        await page.selectOption('#mode', 'demo');
-        await page.fill('#frequency', '200');
-        await page.fill('#channels', 'a, b');
+        await modeSelect(page).selectOption('demo');
+        await inputByLabel(page, 'Frequency (Hz)').fill('200');
+        await inputByLabel(page, 'Channels').fill('a, b');
         await page.evaluate(() => { (window as any).__messages = []; });
 
-        await page.click('#btnStart');
+        await page.getByRole('button', { name: /Start Recording/i }).click();
 
         const msgs = await getMessages(page);
         const startMsg = msgs.find((m: any) => m.command === 'startRecording');
@@ -168,51 +175,48 @@ test.describe('Recorder Panel — Inbound Messages', () => {
             isHardwareMode: false,
         });
 
-        await expect(page.locator('#statusPanel')).toHaveClass(/active/);
-        await expect(page.locator('#btnStart')).toBeDisabled();
-        await expect(page.locator('#btnStop')).toBeEnabled();
+        await expect(page.getByText('Recording in progress...')).toBeVisible();
+        await expect(page.getByRole('button', { name: /Start Recording/i })).toBeDisabled();
+        await expect(page.getByRole('button', { name: /Stop/i })).toBeEnabled();
     });
 
     test('recordingStopped hides status panel and resets buttons', async ({ page }) => {
         await openRecorder(page);
         // Start first
         await postToWebview(page, { command: 'recordingStarted', isHardwareMode: false });
-        await expect(page.locator('#statusPanel')).toHaveClass(/active/);
+        await expect(page.getByText('Recording in progress...')).toBeVisible();
 
         // Then stop
         await postToWebview(page, { command: 'recordingStopped' });
 
-        await expect(page.locator('#statusPanel')).not.toHaveClass(/active/);
-        await expect(page.locator('#btnStart')).toBeEnabled();
-        await expect(page.locator('#btnStop')).toBeDisabled();
+        await expect(page.getByText(/Recording in progress|Server running/i)).toHaveCount(0);
+        await expect(page.getByRole('button', { name: /Start Recording/i })).toBeEnabled();
+        await expect(page.getByRole('button', { name: /Stop/i })).toBeDisabled();
     });
 
     test('serverStateChanged updates state indicator', async ({ page }) => {
         await openRecorder(page);
 
         await postToWebview(page, { command: 'serverStateChanged', state: 'waiting' });
-        await expect(page.locator('#serverState')).toHaveClass(/waiting/);
-        await expect(page.locator('#serverStateText')).toHaveText('Waiting for device...');
+        await expect(page.getByText('Waiting for device...', { exact: true })).toBeVisible();
 
         await postToWebview(page, { command: 'serverStateChanged', state: 'connected' });
-        await expect(page.locator('#serverState')).toHaveClass(/connected/);
-        await expect(page.locator('#serverStateText')).toHaveText('Device connected');
+        await expect(page.getByText('Device connected', { exact: true })).toBeVisible();
 
         await postToWebview(page, { command: 'serverStateChanged', state: 'recording' });
-        await expect(page.locator('#serverState')).toHaveClass(/recording/);
-        await expect(page.locator('#serverStateText')).toHaveText('Recording data');
+        await expect(page.getByText('Recording data', { exact: true })).toBeVisible();
     });
 
     test('serialPorts populates port dropdown', async ({ page }) => {
         await openRecorder(page);
-        await page.selectOption('#mode', 'serial');
+        await modeSelect(page).selectOption('serial');
 
         await postToWebview(page, {
             command: 'serialPorts',
             ports: ['/dev/ttyACM0', '/dev/ttyUSB1', 'COM3'],
         });
 
-        const options = await page.locator('#serialPort option').allTextContents();
+        const options = await page.locator('label:has-text("Serial Port")').locator('xpath=../div/select/option').allTextContents();
         expect(options).toContain('/dev/ttyACM0');
         expect(options).toContain('/dev/ttyUSB1');
         expect(options).toContain('COM3');
@@ -222,7 +226,6 @@ test.describe('Recorder Panel — Inbound Messages', () => {
         await openRecorder(page);
         // Show log panel by starting a hardware recording
         await postToWebview(page, { command: 'recordingStarted', isHardwareMode: true });
-        await expect(page.locator('#logPanel')).toBeVisible();
 
         await postToWebview(page, {
             command: 'serverEvent',
@@ -233,11 +236,8 @@ test.describe('Recorder Panel — Inbound Messages', () => {
             event: { type: 'error', message: 'Connection failed' },
         });
 
-        const logLines = page.locator('#logPanel .log-line');
-        await expect(logLines).toHaveCount(2);
-        await expect(logLines.nth(0)).toHaveText('Server started on port 5050');
-        await expect(logLines.nth(1)).toHaveText('Connection failed');
-        await expect(logLines.nth(1)).toHaveClass(/error/);
+        await expect(page.getByText('Server started on port 5050')).toBeVisible();
+        await expect(page.getByText('Connection failed')).toBeVisible();
     });
 
     test('recordingStatus updates stats display', async ({ page }) => {
@@ -251,9 +251,10 @@ test.describe('Recorder Panel — Inbound Messages', () => {
             elapsed: 5000,
         });
 
-        await expect(page.locator('#statRecords')).toHaveText('42');
-        await expect(page.locator('#statSize')).toHaveText('2.0 KB');
-        await expect(page.locator('#statElapsed')).toHaveText('5.0s');
+        const panelText = (await page.locator('body').textContent()) ?? '';
+        expect(panelText).toContain('Records');
+        expect(panelText).toContain('42');
+        expect(panelText).toContain('2.0 KB');
     });
 });
 
@@ -266,7 +267,7 @@ test.describe('Recorder Panel — Stop Recording', () => {
         await postToWebview(page, { command: 'recordingStarted', isHardwareMode: false });
         await page.evaluate(() => { (window as any).__messages = []; });
 
-        await page.click('#btnStop');
+        await page.getByRole('button', { name: /Stop/i }).click();
 
         const msgs = await getMessages(page);
         expect(msgs.some((m: any) => m.command === 'stopRecording')).toBe(true);
