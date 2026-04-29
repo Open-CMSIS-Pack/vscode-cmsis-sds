@@ -139,7 +139,7 @@ test.describe('Media Viewer — Audio', () => {
 
         await expect(page.locator('button[title="Zoom In"]').first()).toBeVisible();
         await expect(page.locator('button[title="Zoom Out"]').first()).toBeVisible();
-        await expect(page.locator('button[title="Fit"]').first()).toBeVisible();
+        await expect(page.locator('button[title="Fit to Window"]').first()).toBeVisible();
     });
 
     test('zoom buttons work without errors', async ({ page }) => {
@@ -151,7 +151,7 @@ test.describe('Media Viewer — Audio', () => {
 
         await page.locator('button[title="Zoom In"]').first().click();
         await page.locator('button[title="Zoom Out"]').first().click();
-        await page.locator('button[title="Fit"]').first().click();
+        await page.locator('button[title="Fit to Window"]').first().click();
 
         expect(errors).toEqual([]);
     });
