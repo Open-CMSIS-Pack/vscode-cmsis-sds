@@ -83,15 +83,24 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
     useEffect(() => {
         if (!playing) { return; }
         timerRef.current = setInterval(() => {
-            setIndex(i => (i + 1) % Math.max(1, totalFrames));
+            const nextIndex = (index + 1) % Math.max(1, totalFrames);
+            const frame = getLoadedFrame(nextIndex);
+
+            setIndex(nextIndex);
+            broadcastMessage({
+                type: 'broadcast',
+                timeStamp: frame?.timestamp,
+                fileName: filename,
+            });
         }, 1000 / fps);
+
         return () => {
             if (timerRef.current) {
                 clearInterval(timerRef.current);
                 timerRef.current = null;
             }
         };
-    }, [fps, playing, totalFrames]);
+    }, [fps, playing, totalFrames, index, filename, windowFrames]);
 
     useEffect(() => {
         const loadedStart = windowStart;
@@ -127,18 +136,19 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
             const msg = event.data as Message;
+            const messageType = (msg.type ?? msg.command) as string | undefined;
 
-            switch (msg.type) {
+            switch (messageType) {
                 case 'broadcast': {
                     if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
                         break;
                     }
 
-                    if (!isTimestampInFrameRange((msg as BroadcastMessage).timeStamp, frames)) {
+                    if (!isTimestampInFrameRange((msg as BroadcastMessage).timeStamp, windowFrames)) {
                         break;
                     }
 
-                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number, frames);
+                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number, windowFrames);
                     if (nextIndex === null) {
                         break;
                     }
@@ -179,7 +189,7 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, frames, totalFrames]);
+    }, [filename, totalFrames, windowFrames]);
 
     function onChangeIndex(nextIndex: number) {
         setPlaying(false);
