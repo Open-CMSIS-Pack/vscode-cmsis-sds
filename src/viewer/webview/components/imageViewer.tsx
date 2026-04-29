@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, SaveOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider, Space } from 'antd';
 import { BroadcastMessage, ImageFrame, getIndexedSdsSuffix, getNearestFrameIndexAtTimestamp, isTimestampInFrameRange, Message } from '../../../webview/protocol';
 import { broadcastMessage } from '../../../webview/vscode-api';
@@ -185,7 +185,6 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                         <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
                         <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
                         <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={() => setZoom(1)}></Button>
-                        <Button icon={<SaveOutlined />} type="text" title="Export CSV" onClick={() => { /* TODO: Implement CSV export */ }}></Button>
                     </Space>
                 </Col>
             </Row>
