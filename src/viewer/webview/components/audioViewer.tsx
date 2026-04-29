@@ -826,11 +826,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 <Col flex="none">
                     <h2>{filename ? filename : 'Audio Viewer'}</h2>
                 </Col>
-                <Col flex="auto" style={{ textAlign: 'right' }}>
-                    <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={onZoomIn}></Button>
-                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onZoomOut}></Button>
-                    <Button icon={<ExpandOutlined />} type="text" title="Fit" onClick={onFit}></Button>
-                </Col>
             </Row>
             <div className="info-bar">
                 <span>{sampleRate} Hz</span>

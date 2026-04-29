@@ -18,13 +18,14 @@ import { detectMediaType } from '../sds/types';
 
 export type SdsTreeItemType = 'group' | 'sdsFile' | 'metadataFile' | 'info';
 
+
 export class SdsTreeItem extends vscode.TreeItem {
     constructor(
         public readonly label: string,
         public readonly itemType: SdsTreeItemType,
         public readonly filePath: string,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        public readonly children?: SdsTreeItem[]
+        public children?: SdsTreeItem[]
     ) {
         super(label, collapsibleState);
         this.contextValue = itemType === 'sdsFile' ? 'sdsFile' : itemType;
@@ -32,7 +33,8 @@ export class SdsTreeItem extends vscode.TreeItem {
 
         switch (itemType) {
             case 'group':
-                this.iconPath = new vscode.ThemeIcon('folder');
+                //this.iconPath = new vscode.ThemeIcon('folder');
+                this.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
                 break;
             case 'sdsFile':
                 this.iconPath = new vscode.ThemeIcon('graph-line');
@@ -64,7 +66,6 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     private fileWatcher: vscode.FileSystemWatcher | undefined;
 
     constructor() {
-        // Watch for SDS file changes in workspace
         this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.sds');
         this.fileWatcher.onDidCreate(() => { try { this.refresh(); } catch { /* ignore */ } });
         this.fileWatcher.onDidDelete(() => { try { this.refresh(); } catch { /* ignore */ } });
@@ -122,7 +123,9 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
             }
         }
 
-        return result.sort((a, b) => a.label.localeCompare(b.label as string));
+        return result
+            .sort((a, b) => a.label.localeCompare(b.label as string))
+            .sort((a, b) => a.itemType === 'group' && b.itemType !== 'group' ? -1 : 1);
     }
 
     private async scanDirectory(dirPath: string, groups: Map<string, SdsTreeItem[]>): Promise<void> {

@@ -43,7 +43,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Tree Views ──────────────────────────────────────────────
     const explorerProvider = new SdsExplorerProvider();
-    vscode.window.registerTreeDataProvider('sdsExplorer', explorerProvider);
+    const explorerTreeView = vscode.window.createTreeView('sdsExplorer', {
+        treeDataProvider: explorerProvider,
+        showCollapseAll: true,
+    });
+    context.subscriptions.push(explorerTreeView);
 
     const flagsProvider = new SdsIOInterfaceProvider(monitor);
     const flagsTreeView = vscode.window.createTreeView('sdsIOInterface', {
@@ -78,7 +82,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Commands ────────────────────────────────────────────────
 
-    // Refresh Explorer
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.refreshExplorer', () => {
             explorerProvider.refresh();
