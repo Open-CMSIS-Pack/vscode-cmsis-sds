@@ -221,7 +221,7 @@ export class SdsMediaViewerPanel {
             this.audioSampleRate = 0;
             this.audioBitDepth = 0;
             this.audioChannels = 0;
-            this.panel.title = `${this.mediaType === 'image' ? '📷 SDS Media Viewer' : this.mediaType === 'audio' ? '🔊 SDS Media Viewer' : '🎬 SDS Media Viewer'}: ${path.basename(this.sdsFilePath)}`;
+            this.panel.title = `${this.mediaType === 'image' ? 'SDS Image Viewer' : this.mediaType === 'audio' ? 'SDS Audio Viewer' : 'SDS Video Viewer'}: ${path.basename(this.sdsFilePath)}`;
 
             const initialState = this.buildInitialState();
             this.panel.webview.html = this.getHtml(initialState);
@@ -238,6 +238,7 @@ export class SdsMediaViewerPanel {
         const base = { fileName: path.basename(this.sdsFilePath) };
         switch (this.mediaType) {
             case 'image': {
+                this.panel.iconPath = new vscode.ThemeIcon('device-camera');
                 const content = metadata.sds.content;
                 const imgMeta = content.find(c => c.image)?.image;
                 if (!imgMeta) { return { ...base, error: 'No image metadata found in content.' }; }
@@ -254,6 +255,7 @@ export class SdsMediaViewerPanel {
                 };
             }
             case 'audio': {
+                this.panel.iconPath = new vscode.ThemeIcon('unmute');
                 const parsed = this.parsedFile;
                 if (!parsed) {
                     return { ...base, error: 'Audio data not available.' };
@@ -299,6 +301,7 @@ export class SdsMediaViewerPanel {
                 };
             }
             case 'video': {
+                this.panel.iconPath = new vscode.ThemeIcon('device-camera-video');
                 const content = metadata.sds.content;
                 const vidMeta = content.find(c => c.video)?.video;
                 if (!vidMeta) { return { ...base, error: 'No video metadata found in content.' }; }
