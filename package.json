@@ -191,7 +191,7 @@
                 },
                 {
                     "command": "arm-sds.newRecording",
-                    "when": "view == sdsExplorer",
+                    "when": "view == sdsExplorer_hidden_deprecated",
                     "group": "navigation@5"
                 }
             ],
