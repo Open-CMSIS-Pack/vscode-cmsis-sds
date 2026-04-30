@@ -60,6 +60,7 @@ export class SdsMediaViewerPanel {
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
     private disposables: vscode.Disposable[] = [];
+    private webview: vscode.Webview | undefined;
 
     private sdsFilePath: string;
     private metadataPath: string | undefined;
@@ -495,7 +496,10 @@ export class SdsMediaViewerPanel {
 
     private dispose(): void {
         SdsMediaViewerPanel.panels.delete(this.sdsFilePath);
-        webviewBus.unregister(this.panel.webview);
+        if (this.webview) {
+            webviewBus.unregister(this.webview);
+            this.webview = undefined;
+        }
         this.panel.dispose();
         while (this.disposables.length) {
             this.disposables.pop()?.dispose();
@@ -503,6 +507,7 @@ export class SdsMediaViewerPanel {
     }
 
     private setupWebview(webview: vscode.Webview) {
+        this.webview = webview;
         webviewBus.register(webview);
 
         webview.onDidReceiveMessage((raw) => {
