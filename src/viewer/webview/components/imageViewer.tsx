@@ -33,6 +33,8 @@ const statsValueStyle: React.CSSProperties = {
     fontSize: '80%'
 };
 
+const DRAG_REQUEST_THROTTLE_MS = 80;
+
 export function ImageViewer({ state, filename }: ImageViewerProps) {
     const { frames, rangeStart = 0, width, height, totalFrames } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -43,6 +45,12 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const [zoom, setZoom] = useState(1);
     const requestSeqRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
+    const dragRequestTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const pendingDragRequestRef = useRef<{ centerIndex: number; quality: 'low' | 'high' } | null>(null);
+    const lastRequestAtRef = useRef(0);
+    const lastRequestKeyRef = useRef<string>('');
+    const lastAppliedWindowRef = useRef<{ rangeStart: number; rangeEnd: number; quality: 'low' | 'high' } | null>(null);
+    const needsPostDragHighRef = useRef(false);
 
     const getLoadedFrame = (absoluteIndex: number) => {
         const localIndex = absoluteIndex - windowStart;
@@ -55,6 +63,10 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const requestFrameWindow = (centerIndex: number, quality: 'low' | 'high') => {
         const requestId = ++requestSeqRef.current;
         const windowSize = quality === 'low' ? 32 : 160;
+        console.log(`Requesting ${quality} frame window around index ${centerIndex} (requestId: ${requestId}) isDragging: ${isDragMode})`);
+        if (!isDragMode && quality === 'low') {
+            return;
+        }
         broadcastMessage({
             command: 'requestMediaFrameWindow',
             requestId,
@@ -65,6 +77,74 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 quality,
             },
         });
+    };
+
+    const buildRequestKey = (centerIndex: number, quality: 'low' | 'high') => {
+        const windowSize = quality === 'low' ? 32 : 160;
+        const maxIndex = Math.max(0, totalFrames - 1);
+        const clampedCenter = Math.max(0, Math.min(maxIndex, Math.floor(centerIndex)));
+        const rangeStart = Math.max(0, Math.min(clampedCenter - Math.floor(windowSize / 2), Math.max(0, totalFrames - windowSize)));
+        const rangeEnd = Math.min(totalFrames, rangeStart + windowSize);
+        return `image|${quality}|${windowSize}|${rangeStart}|${rangeEnd}`;
+    };
+
+    const requestFrameWindowIfNeeded = (centerIndex: number, quality: 'low' | 'high', force = false) => {
+        if (totalFrames <= 0) {
+            return false;
+        }
+
+        if (!force && windowFrames.length > 0) {
+            const frame = getLoadedFrame(centerIndex);
+            if (frame) {
+                const loadedStart = windowStart;
+                const loadedEnd = windowStart + windowFrames.length - 1;
+                const nearEdgeMargin = Math.max(8, Math.floor(windowFrames.length * 0.2));
+                const isNearEdge = centerIndex <= loadedStart + nearEdgeMargin || centerIndex >= loadedEnd - nearEdgeMargin;
+                if (!isNearEdge) {
+                    return false;
+                }
+            }
+        }
+
+        const requestKey = buildRequestKey(centerIndex, quality);
+        if (requestKey === lastRequestKeyRef.current) {
+            return false;
+        }
+
+        lastRequestKeyRef.current = requestKey;
+        lastRequestAtRef.current = Date.now();
+        requestFrameWindow(centerIndex, quality);
+        return true;
+    };
+
+    const scheduleDragFrameWindowRequest = (centerIndex: number, quality: 'low' | 'high') => {
+        pendingDragRequestRef.current = { centerIndex, quality };
+
+        const elapsed = Date.now() - lastRequestAtRef.current;
+        if (!dragRequestTimerRef.current && elapsed >= DRAG_REQUEST_THROTTLE_MS) {
+            lastRequestAtRef.current = Date.now();  // Record time regardless of whether request is skipped
+            const pending = pendingDragRequestRef.current;
+            pendingDragRequestRef.current = null;
+            if (pending) {
+                requestFrameWindowIfNeeded(pending.centerIndex, pending.quality);
+            }
+            return;
+        }
+
+        if (dragRequestTimerRef.current) {
+            return;
+        }
+
+        const delay = Math.max(0, DRAG_REQUEST_THROTTLE_MS - elapsed);
+        dragRequestTimerRef.current = setTimeout(() => {
+            dragRequestTimerRef.current = null;
+            lastRequestAtRef.current = Date.now();  // Record time regardless of whether request is skipped
+            const pending = pendingDragRequestRef.current;
+            pendingDragRequestRef.current = null;
+            if (pending) {
+                requestFrameWindowIfNeeded(pending.centerIndex, pending.quality);
+            }
+        }, delay);
     };
 
     useEffect(() => {
@@ -105,6 +185,8 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                         payload?: {
                             mediaType?: 'image' | 'video';
                             rangeStart?: number;
+                            rangeEnd?: number;
+                            quality?: 'low' | 'high';
                             frames?: ImageFrame[];
                         };
                     };
@@ -123,6 +205,16 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
 
                     setWindowFrames(mediaMessage.payload.frames);
                     setWindowStart(typeof mediaMessage.payload.rangeStart === 'number' ? mediaMessage.payload.rangeStart : 0);
+                    if (
+                        typeof mediaMessage.payload.rangeStart === 'number' &&
+                        typeof mediaMessage.payload.rangeEnd === 'number'
+                    ) {
+                        lastAppliedWindowRef.current = {
+                            rangeStart: mediaMessage.payload.rangeStart,
+                            rangeEnd: mediaMessage.payload.rangeEnd,
+                            quality: mediaMessage.payload.quality === 'low' ? 'low' : 'high',
+                        };
+                    }
                     break;
                 }
             }
@@ -138,15 +230,58 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         const loadedStart = windowStart;
         const loadedEnd = windowStart + windowFrames.length - 1;
         if (windowFrames.length === 0 || index < loadedStart || index > loadedEnd) {
-            requestFrameWindow(index, 'low');
+            if (isDragMode) {
+                scheduleDragFrameWindowRequest(index, 'low');
+            } else {
+                requestFrameWindowIfNeeded(index, 'high');
+            }
             return;
         }
 
         const nearEdgeMargin = Math.max(8, Math.floor(windowFrames.length * 0.2));
         if (index <= loadedStart + nearEdgeMargin || index >= loadedEnd - nearEdgeMargin) {
-            requestFrameWindow(index, isDragMode ? 'low' : 'high');
+            if (isDragMode) {
+                scheduleDragFrameWindowRequest(index, 'low');
+            } else {
+                requestFrameWindowIfNeeded(index, 'high');
+            }
         }
     }, [index, isDragMode, windowFrames.length, windowStart]);
+
+    useEffect(() => {
+        if (isDragMode || !needsPostDragHighRef.current) {
+            return;
+        }
+
+        if (dragRequestTimerRef.current) {
+            clearTimeout(dragRequestTimerRef.current);
+            dragRequestTimerRef.current = null;
+        }
+        pendingDragRequestRef.current = null;
+        needsPostDragHighRef.current = false;
+
+        const appliedWindow = lastAppliedWindowRef.current;
+        const isHighQualityCovered = Boolean(
+            appliedWindow &&
+            appliedWindow.quality === 'high' &&
+            index >= appliedWindow.rangeStart &&
+            index < appliedWindow.rangeEnd
+        );
+        if (isHighQualityCovered) {
+            return;
+        }
+
+        requestFrameWindowIfNeeded(index, 'high', true);
+    }, [index, isDragMode]);
+
+    useEffect(() => {
+        return () => {
+            if (dragRequestTimerRef.current) {
+                clearTimeout(dragRequestTimerRef.current);
+                dragRequestTimerRef.current = null;
+            }
+        };
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -216,7 +351,10 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                             setIsDragMode(true);
                             onChangeIndex(value);
                         }}
-                        onChangeComplete={() => setIsDragMode(false)}
+                        onChangeComplete={() => {
+                            needsPostDragHighRef.current = true;
+                            setIsDragMode(false);
+                        }}
                         style={{ flex: 1, margin: 0 }}
                     />
                 </Col>
