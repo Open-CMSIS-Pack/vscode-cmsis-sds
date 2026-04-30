@@ -6,9 +6,9 @@
 import { ExpandOutlined, LeftCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider, Space } from 'antd';
 import { useEffect, useRef, useState } from 'react';
-import { BroadcastMessage, ImageFrame, getIndexedSdsSuffix, getNearestFrameIndexAtTimestamp, isTimestampInFrameRange, Message } from '../../../webview/protocol';
+import { ImageFrame } from '../../../webview/protocol';
 import { decodeFrame } from '../../../webview/utilities';
-import { broadcastMessage } from '../../../webview/vscode-api';
+import { frameWindowViewer } from './frameWindowViewer';
 
 type VideoState = {
     frames: ImageFrame[];
@@ -34,125 +34,36 @@ const statsValueStyle: React.CSSProperties = {
     fontSize: '80%'
 };
 
-const DRAG_REQUEST_THROTTLE_MS = 80;
-
-
 export function VideoViewer({ state, filename }: VideoViewerProps) {
     const { frames, rangeStart = 0, width, height, fps, totalFrames } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [index, setIndex] = useState(rangeStart);
-    const [windowFrames, setWindowFrames] = useState<ImageFrame[]>(frames);
-    const [windowStart, setWindowStart] = useState(rangeStart);
-    const [isDragMode, setIsDragMode] = useState(false);
     const [zoom, setZoom] = useState(1);
     const [playing, setPlaying] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-    const requestSeqRef = useRef(0);
-    const latestAppliedSeqRef = useRef(0);
-    const dragRequestTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const pendingDragRequestRef = useRef<{ centerIndex: number; quality: 'low' | 'high' } | null>(null);
-    const lastRequestAtRef = useRef(0);
-    const lastRequestKeyRef = useRef<string>('');
-    const lastAppliedWindowRef = useRef<{ rangeStart: number; rangeEnd: number; quality: 'low' | 'high' } | null>(null);
-    const needsPostDragHighRef = useRef(false);
-
-    const getLoadedFrame = (absoluteIndex: number) => {
-        const localIndex = absoluteIndex - windowStart;
-        if (localIndex < 0 || localIndex >= windowFrames.length) {
-            return null;
-        }
-        return windowFrames[localIndex];
-    };
-
-    const requestFrameWindow = (centerIndex: number, quality: 'low' | 'high') => {
-        const requestId = ++requestSeqRef.current;
-        const windowSize = quality === 'low' ? 80 : 220;
-        broadcastMessage({
-            command: 'requestMediaFrameWindow',
-            requestId,
-            payload: {
-                mediaType: 'video',
-                centerIndex,
-                windowSize,
-                quality,
-            },
-        });
-    };
-
-    const buildRequestKey = (centerIndex: number, quality: 'low' | 'high') => {
-        const windowSize = quality === 'low' ? 80 : 220;
-        const maxIndex = Math.max(0, totalFrames - 1);
-        const clampedCenter = Math.max(0, Math.min(maxIndex, Math.floor(centerIndex)));
-        const rangeStart = Math.max(0, Math.min(clampedCenter - Math.floor(windowSize / 2), Math.max(0, totalFrames - windowSize)));
-        const rangeEnd = Math.min(totalFrames, rangeStart + windowSize);
-        return `video|${quality}|${windowSize}|${rangeStart}|${rangeEnd}`;
-    };
-
-    const requestFrameWindowIfNeeded = (centerIndex: number, quality: 'low' | 'high') => {
-        if (totalFrames <= 0) {
-            return false;
-        }
-
-        const requestKey = buildRequestKey(centerIndex, quality);
-        if (requestKey === lastRequestKeyRef.current) {
-            return false;
-        }
-
-        lastRequestKeyRef.current = requestKey;
-        lastRequestAtRef.current = Date.now();
-        requestFrameWindow(centerIndex, quality);
-        return true;
-    };
-
-    const scheduleDragFrameWindowRequest = (centerIndex: number, quality: 'low' | 'high') => {
-        pendingDragRequestRef.current = { centerIndex, quality };
-
-        const elapsed = Date.now() - lastRequestAtRef.current;
-        if (!dragRequestTimerRef.current && elapsed >= DRAG_REQUEST_THROTTLE_MS) {
-            const pending = pendingDragRequestRef.current;
-            pendingDragRequestRef.current = null;
-            if (pending) {
-                requestFrameWindowIfNeeded(pending.centerIndex, pending.quality);
-            }
-            return;
-        }
-
-        if (dragRequestTimerRef.current) {
-            return;
-        }
-
-        const delay = Math.max(0, DRAG_REQUEST_THROTTLE_MS - elapsed);
-        dragRequestTimerRef.current = setTimeout(() => {
-            dragRequestTimerRef.current = null;
-            const pending = pendingDragRequestRef.current;
-            pendingDragRequestRef.current = null;
-            if (pending) {
-                requestFrameWindowIfNeeded(pending.centerIndex, pending.quality);
-            }
-        }, delay);
-    };
-
-    useEffect(() => {
-        setWindowFrames(frames);
-        setWindowStart(rangeStart);
-        setIndex((prev) => {
-            const next = Math.max(0, Math.min(totalFrames - 1, prev));
-            return Number.isFinite(next) ? next : rangeStart;
-        });
-    }, [frames, rangeStart, totalFrames]);
+    const {
+        index,
+        windowFrames,
+        windowStart,
+        isDragMode,
+        setIsDragMode,
+        getLoadedFrame,
+        changeIndex,
+        markNeedsPostDragHighQuality,
+    } = frameWindowViewer({
+        state: { frames, rangeStart, totalFrames },
+        filename,
+        mediaType: 'video',
+        getWindowSize: quality => quality === 'low' ? 80 : 220,
+        getNearEdgeMargin: loadedFrameCount => Math.max(6, Math.floor(loadedFrameCount * 0.2)),
+        stationaryRequestQuality: playing ? 'low' : 'high',
+        onManualChangeStart: () => setPlaying(false),
+    });
 
     useEffect(() => {
         if (!playing) { return; }
         timerRef.current = setInterval(() => {
             const nextIndex = (index + 1) % Math.max(1, totalFrames);
-            const frame = getLoadedFrame(nextIndex);
-
-            setIndex(nextIndex);
-            broadcastMessage({
-                type: 'broadcast',
-                timeStamp: frame?.timestamp,
-                fileName: filename,
-            });
+            changeIndex(nextIndex, { manual: false });
         }, 1000 / fps);
 
         return () => {
@@ -162,65 +73,6 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
             }
         };
     }, [fps, playing, totalFrames, index, filename, windowFrames]);
-
-    useEffect(() => {
-        const loadedStart = windowStart;
-        const loadedEnd = windowStart + windowFrames.length - 1;
-        const requestQuality: 'low' | 'high' = playing || isDragMode ? 'low' : 'high';
-
-        if (windowFrames.length === 0 || index < loadedStart || index > loadedEnd) {
-            if (isDragMode) {
-                scheduleDragFrameWindowRequest(index, 'low');
-            } else {
-                requestFrameWindowIfNeeded(index, requestQuality);
-            }
-            return;
-        }
-
-        const nearEdgeMargin = Math.max(6, Math.floor(windowFrames.length * 0.2));
-        if (index <= loadedStart + nearEdgeMargin || index >= loadedEnd - nearEdgeMargin) {
-            if (isDragMode) {
-                scheduleDragFrameWindowRequest(index, 'low');
-            } else {
-                requestFrameWindowIfNeeded(index, requestQuality);
-            }
-        }
-    }, [index, isDragMode, playing, windowFrames.length, windowStart]);
-
-    useEffect(() => {
-        if (isDragMode || !needsPostDragHighRef.current) {
-            return;
-        }
-
-        if (dragRequestTimerRef.current) {
-            clearTimeout(dragRequestTimerRef.current);
-            dragRequestTimerRef.current = null;
-        }
-        pendingDragRequestRef.current = null;
-        needsPostDragHighRef.current = false;
-
-        const appliedWindow = lastAppliedWindowRef.current;
-        const isHighQualityCovered = Boolean(
-            appliedWindow &&
-            appliedWindow.quality === 'high' &&
-            index >= appliedWindow.rangeStart &&
-            index < appliedWindow.rangeEnd
-        );
-        if (isHighQualityCovered) {
-            return;
-        }
-
-        requestFrameWindowIfNeeded(index, 'high');
-    }, [index, isDragMode]);
-
-    useEffect(() => {
-        return () => {
-            if (dragRequestTimerRef.current) {
-                clearTimeout(dragRequestTimerRef.current);
-                dragRequestTimerRef.current = null;
-            }
-        };
-    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -238,88 +90,6 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
     }, [height, index, width, zoom, windowFrames, windowStart]);
 
     const togglePlay = () => setPlaying(p => !p);
-
-    useEffect(() => {
-        const handleMessage = (event: MessageEvent) => {
-            const msg = event.data as Message;
-            const messageType = (msg.type ?? msg.command) as string | undefined;
-
-            switch (messageType) {
-                case 'broadcast': {
-                    if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
-                        break;
-                    }
-
-                    if (!isTimestampInFrameRange((msg as BroadcastMessage).timeStamp, windowFrames)) {
-                        break;
-                    }
-
-                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number, windowFrames);
-                    if (nextIndex === null) {
-                        break;
-                    }
-
-                    setIndex(prevIndex => prevIndex === nextIndex ? prevIndex : nextIndex);
-                    break;
-                }
-                case 'mediaFrameWindowData': {
-                    const mediaMessage = msg as Message & {
-                        requestId?: number;
-                        payload?: {
-                            mediaType?: 'image' | 'video';
-                            rangeStart?: number;
-                            rangeEnd?: number;
-                            quality?: 'low' | 'high';
-                            frames?: ImageFrame[];
-                        };
-                    };
-                    if (mediaMessage.payload?.mediaType !== 'video') {
-                        break;
-                    }
-                    if (typeof mediaMessage.requestId === 'number') {
-                        if (mediaMessage.requestId < latestAppliedSeqRef.current) {
-                            break;
-                        }
-                        latestAppliedSeqRef.current = mediaMessage.requestId;
-                    }
-                    if (!Array.isArray(mediaMessage.payload?.frames)) {
-                        break;
-                    }
-
-                    setWindowFrames(mediaMessage.payload.frames);
-                    setWindowStart(typeof mediaMessage.payload.rangeStart === 'number' ? mediaMessage.payload.rangeStart : 0);
-                    if (
-                        typeof mediaMessage.payload.rangeStart === 'number' &&
-                        typeof mediaMessage.payload.rangeEnd === 'number'
-                    ) {
-                        lastAppliedWindowRef.current = {
-                            rangeStart: mediaMessage.payload.rangeStart,
-                            rangeEnd: mediaMessage.payload.rangeEnd,
-                            quality: mediaMessage.payload.quality === 'low' ? 'low' : 'high',
-                        };
-                    }
-                    break;
-                }
-            }
-        };
-
-        window.addEventListener('message', handleMessage);
-        return () => {
-            window.removeEventListener('message', handleMessage);
-        };
-    }, [filename, totalFrames, windowFrames]);
-
-    function onChangeIndex(nextIndex: number) {
-        setPlaying(false);
-        const clamped = Math.max(0, Math.min(totalFrames - 1, nextIndex));
-        setIndex(clamped);
-        const frame = getLoadedFrame(clamped);
-        broadcastMessage({
-            type: 'broadcast',
-            timeStamp: frame?.timestamp,
-            fileName: filename,
-        });
-    }
 
     return (
         <div className="media-page">
@@ -352,22 +122,22 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
             </Row>
             <div className="controls">
                 <Button icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />} type="link" onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</Button>
-                <Button icon={<LeftCircleOutlined />} type="link" onClick={() => { onChangeIndex(Math.max(0, index - 1)); }}></Button>
+                <Button icon={<LeftCircleOutlined />} type="link" onClick={() => { changeIndex(Math.max(0, index - 1)); }}></Button>
                 <Slider
                     min={0}
                     max={Math.max(0, totalFrames - 1)}
                     value={index}
                     onChange={value => {
                         setIsDragMode(true);
-                        onChangeIndex(value);
+                        changeIndex(value);
                     }}
                     onChangeComplete={() => {
-                        needsPostDragHighRef.current = true;
+                        markNeedsPostDragHighQuality();
                         setIsDragMode(false);
                     }}
                     style={{ flex: 1, margin: 0 }}
                 />
-                <Button icon={<RightCircleOutlined />} type="link" onClick={() => { onChangeIndex(Math.min(totalFrames - 1, index + 1)); }}></Button>
+                <Button icon={<RightCircleOutlined />} type="link" onClick={() => { changeIndex(Math.min(totalFrames - 1, index + 1)); }}></Button>
             </div>
         </div>
     );
