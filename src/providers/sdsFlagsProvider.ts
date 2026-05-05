@@ -37,9 +37,6 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<SdsFlagTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    readonly dragMimeTypes = ['application/vnd.code.tree.sdsIOInterface'];
-    readonly dropMimeTypes = ['application/vnd.code.tree.sdsIOInterface'];
-
     private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
     private nextId = 1;
     private mode: SdsIoMode = 'idle';

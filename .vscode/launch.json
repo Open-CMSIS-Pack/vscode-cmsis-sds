@@ -6,7 +6,7 @@
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "${workspaceFolder}/sds_recordings",
+                "C:\\etc\\git\\examples\\test_media_recording",
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "outFiles": [

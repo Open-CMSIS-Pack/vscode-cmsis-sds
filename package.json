@@ -141,7 +141,7 @@
                 {
                     "id": "arm-sds-explorer",
                     "title": "SDS Tools",
-                    "icon": "media/sds-icon.svg"
+                    "icon": "media/icons/sds-icon.svg"
                 }
             ]
         },
@@ -327,15 +327,26 @@
                 "language": "yaml",
                 "path": "./snippets/sds-metadata.json"
             }
-        ]
+        ],
+        "icons": {
+            "arm-sds-sds-icon": {
+                "description": "CMSIS SDS — sds-icon",
+                "default": {
+                    "fontPath": "./media/cmsissds.ttf",
+                    "fontCharacter": "\\E000"
+                }
+            }
+        }
     },
     "scripts": {
+        "build:icons": "fantasticon && node scripts/generate-icon-contributes.js",
         "compile": "npm-run-all compile:extension compile:webviews",
         "compile:extension": "tsc -p .",
         "compile:webviews": "node esbuild.js",
         "watch": "run-p watch:extension watch:webviews",
         "watch:extension": "tsc -watch -p .",
         "watch:webviews": "node esbuild.js --watch",
+        "prebuild": "npm run build:icons",
         "build": "node esbuild.js --production",
         "postbuild": "node scripts/copy-native-modules.js",
         "package": "npm run build && npm run postbuild && vsce package",
@@ -345,6 +356,7 @@
     },
     "devDependencies": {
         "@playwright/test": "^1.58.0",
+        "@twbs/fantasticon": "^3.1.0",
         "@types/node": "^22.19.15",
         "@types/react": "^18.3.12",
         "@types/react-dom": "^18.3.1",

@@ -52,7 +52,6 @@ export function activate(context: vscode.ExtensionContext) {
     const flagsProvider = new SdsIOInterfaceProvider(monitor);
     const flagsTreeView = vscode.window.createTreeView('sdsIOInterface', {
         treeDataProvider: flagsProvider,
-        dragAndDropController: flagsProvider,
         canSelectMany: false,
     });
     context.subscriptions.push(flagsTreeView);
@@ -390,8 +389,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Status Bar ──────────────────────────────────────────────
     const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusItem.text = '$(graph-line) CMSIS SDS';
-    statusItem.tooltip = 'CMSIS SDS — Click to quick-open an SDS file';
+    statusItem.text = '$(arm-sds-sds-icon) Arm CMSIS SDS';
+    statusItem.tooltip = 'Arm CMSIS SDS — Click to quick-open an SDS file';
     statusItem.command = 'arm-sds.quickOpen';
     statusItem.show();
     context.subscriptions.push(statusItem);
