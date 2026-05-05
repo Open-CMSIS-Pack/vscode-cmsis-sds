@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
 
 const FLAG_NAME_PATTERN = /^[a-zA-Z0-9\-_.+,/()]+$/;
@@ -40,11 +42,13 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     private nextId = 1;
     private mode: SdsIoMode = 'idle';
     private monitor?: SdsioMonitorClient;
+    private extensionInstallPath?: string;
     private monitorConnected = false;
     private remoteFlags = 0;
 
-    constructor(monitor?: SdsioMonitorClient) {
+    constructor(monitor?: SdsioMonitorClient, extensionInstallPath?: string) {
         this.monitor = monitor;
+        this.extensionInstallPath = extensionInstallPath;
         if (monitor) {
             monitor.on('connected', () => this._onMonitorConnected());
             monitor.on('disconnected', () => this._onMonitorDisconnected());
@@ -187,6 +191,60 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
 
     canStop(): boolean {
         return this.mode !== 'idle';
+    }
+
+    canConnect(): boolean {
+        return !this.monitorConnected;
+    }
+
+    async connectServer(): Promise<boolean> {
+        if (!this.monitor) {
+            return false;
+        }
+
+        if (this.monitorConnected) {
+            return true;
+        }
+
+        try {
+            const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const basePath = this.extensionInstallPath ?? workspaceRoot;
+            if (!basePath) {
+                return false;
+            }
+
+            const toolsDir = path.join(basePath, 'tools');
+            const bin = path.join(toolsDir, 'sdsio-server');
+            const binExe = `${bin}.exe`;
+            const serverBinary = fs.existsSync(binExe) ? binExe : bin;
+            if (!fs.existsSync(serverBinary)) {
+                return false;
+            }
+
+            const terminal = vscode.window.createTerminal({
+                name: `SDSIO Server ${new Date().toLocaleTimeString()}`,
+                cwd: basePath,
+            });
+            terminal.show(true);
+            terminal.sendText(`"${serverBinary}" -m 6060 socket --ipaddr 127.0.0.1`, true);
+        } catch {
+            // Ignore spawn failures and still try monitor reconnect below.
+        }
+
+        try {
+            await this.monitor.start();
+        } catch {
+            return false;
+        }
+
+        for (let i = 0; i < 20; i++) {
+            if (this.monitorConnected) {
+                return true;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        return this.monitorConnected;
     }
 
     getBitmaskSummary(): string {

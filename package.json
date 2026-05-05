@@ -134,6 +134,13 @@
                 "title": "Rename Flag",
                 "category": "SDS Tools",
                 "icon": "$(edit)"
+            },
+            {
+                "command": "arm-sds.sdsinterface.connect",
+                "title": "Connect SDSIO Monitor",
+                "category": "SDS Tools",
+                "icon": "$(plug)",
+                "enablement": "arm-sds.sdsio.canConnect"
             }
         ],
         "viewsContainers": {
@@ -163,12 +170,17 @@
         },
         "viewsWelcome": [
             {
-                "view": "sdsExplorer",
+                "view": "sdsExplorerWelcome",
                 "contents": "No SDS files found in the workspace.\n[Initialize SDS Workspace](command:arm-sds.initWorkspace)\n[Open SDS Recorder](command:arm-sds.openRecorder)"
             }
         ],
         "menus": {
             "view/title": [
+                {
+                    "command": "arm-sds.sdsinterface.connect",
+                    "when": "view == sdsIOInterface && arm-sds.sdsio.canConnect",
+                    "group": "navigation@0"
+                },
                 {
                     "command": "arm-sds.sdsinterface.play",
                     "when": "view == sdsExplorer",

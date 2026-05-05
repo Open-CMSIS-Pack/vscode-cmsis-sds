@@ -50,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(explorerTreeView);
 
-    const flagsProvider = new SdsIOInterfaceProvider(monitor);
+    const flagsProvider = new SdsIOInterfaceProvider(monitor, context.extensionPath);
     const flagsTreeView = vscode.window.createTreeView('sdsIOInterface', {
         treeDataProvider: flagsProvider,
         canSelectMany: false,
@@ -61,6 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
         flagsTreeView.message = flagsProvider.getBitmaskSummary();
     };
     const updateSdsIoCommandContext = () => {
+        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canConnect', flagsProvider.canConnect());
         void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canPlay', flagsProvider.canPlay());
         void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canRecord', flagsProvider.canRecord());
         void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canStop', flagsProvider.canStop());
@@ -71,6 +72,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         flagsProvider.onDidChangeTreeData(() => {
             updateSdsIoMessage();
+            updateSdsIoCommandContext();
         })
     );
 
@@ -85,6 +87,16 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.refreshExplorer', () => {
             explorerProvider.refresh();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.connect', async () => {
+            const ok = await flagsProvider.connectServer();
+            updateSdsIoCommandContext();
+            if (!ok) {
+                void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
+            }
         })
     );
 
