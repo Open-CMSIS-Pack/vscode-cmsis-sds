@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
+import { SdsioConfigManager } from '../sdsioConfigManager';
 
 const FLAG_NAME_PATTERN = /^[a-zA-Z0-9\-_.+,/()]+$/;
 const MAX_FLAGS = 8;
@@ -46,7 +47,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     private monitorConnected = false;
     private remoteFlags = 0;
 
-    constructor(monitor?: SdsioMonitorClient, extensionInstallPath?: string) {
+    constructor(private readonly configManager: SdsioConfigManager, monitor?: SdsioMonitorClient, extensionInstallPath?: string) {
         this.monitor = monitor;
         this.extensionInstallPath = extensionInstallPath;
         if (monitor) {
@@ -54,6 +55,10 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             monitor.on('disconnected', () => this._onMonitorDisconnected());
             monitor.on('info', (info: SdsioMonitorInfo) => this._onMonitorInfo(info));
         }
+
+        // Sync flag names whenever the config file changes or is replaced.
+        configManager.onDidChangeConfig(() => this.syncFlagNamesFromManager());
+        this.syncFlagNamesFromManager();
     }
 
     private _onMonitorConnected(): void {
@@ -88,6 +93,13 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         this._onDidChangeTreeData.fire();
     }
 
+    private syncFlagNamesFromManager(): void {
+        const { flagNames } = this.configManager.getConfig();
+        for (let i = 0; i < this.flags.length; i++) {
+            this.flags[i].name = flagNames.get(i) ?? `${i}`;
+        }
+        this._onDidChangeTreeData.fire();
+    }
 
     async renameFlag(item: SdsFlagTreeItem): Promise<void> {
         const flag = this.findFlag(item.flag.id);
@@ -95,6 +107,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             return;
         }
 
+        const index = this.flags.indexOf(flag);
         const fallbackName = this.getFallbackName(flag.id);
         const input = await vscode.window.showInputBox({
             prompt: 'Rename flag',
@@ -103,8 +116,15 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             ignoreFocusOut: true,
         });
 
-        flag.name = this.normalizeFlagName(input, fallbackName);
-        this.refresh();
+        const newName = this.normalizeFlagName(input, fallbackName);
+        flag.name = newName;
+
+        // Persist to .sdsio.yml; onDidChangeConfig will fire → syncFlagNamesFromManager.
+        if (index >= 0) {
+            this.configManager.setFlagName(index, newName);
+        } else {
+            this.refresh();
+        }
     }
 
     setEnabledByTreeItems(items: ReadonlyArray<[SdsFlagTreeItem, vscode.TreeItemCheckboxState]>): void {
@@ -224,6 +244,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             const terminal = vscode.window.createTerminal({
                 name: `SDSIO Server ${new Date().toLocaleTimeString()}`,
                 cwd: basePath,
+                iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
             });
             terminal.show(true);
             terminal.sendText(`"${serverBinary}" -m 6060 socket --ipaddr 127.0.0.1`, true);

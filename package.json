@@ -27,7 +27,8 @@
     "activationEvents": [
         "onLanguage:yaml",
         "workspaceContains:**/*.sds",
-        "workspaceContains:**/*.sds.yml"
+        "workspaceContains:**/*.sds.yml",
+        "workspaceContains:**/*.sdsio.yml"
     ],
     "repository": {
         "type": "git",
@@ -141,13 +142,36 @@
                 "category": "SDS Tools",
                 "icon": "$(plug)",
                 "enablement": "arm-sds.sdsio.canConnect"
+            },
+            {
+                "command": "arm-sds.sds.newConfig",
+                "title": "New SDS Configuration",
+                "category": "SDS",
+                "icon": "$(add)"
+            },
+            {
+                "command": "arm-sds.sds.openConfig",
+                "title": "Open SDS Configuration",
+                "category": "SDS",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "arm-sds.sds.selectConfig",
+                "title": "Select Configuration File in Workspace",
+                "category": "SDS"
+            },
+            {
+                "command": "arm-sds.sds.editConfig",
+                "title": "Edit Configuration",
+                "category": "SDS",
+                "icon": "$(file-code)"
             }
         ],
         "viewsContainers": {
             "activitybar": [
                 {
                     "id": "arm-sds-explorer",
-                    "title": "SDS Tools",
+                    "title": "Arm CMSIS SDS",
                     "icon": "media/icons/sds-icon.svg"
                 }
             ]
@@ -170,8 +194,8 @@
         },
         "viewsWelcome": [
             {
-                "view": "sdsExplorerWelcome",
-                "contents": "No SDS files found in the workspace.\n[Initialize SDS Workspace](command:arm-sds.initWorkspace)\n[Open SDS Recorder](command:arm-sds.openRecorder)"
+                "view": "sdsExplorer",
+                "contents": "No SDS configuration selected.\n[New SDS Configuration](command:arm-sds.sds.newConfig)\n[Open SDS Configuration](command:arm-sds.sds.openConfig)"
             }
         ],
         "menus": {
@@ -205,6 +229,21 @@
                     "command": "arm-sds.newRecording",
                     "when": "view == sdsExplorer_hidden_deprecated",
                     "group": "navigation@5"
+                },
+                {
+                    "command": "arm-sds.sds.editConfig",
+                    "when": "view == sdsExplorer && arm-sds.sdsio.hasConfig",
+                    "group": "navigation@5"
+                },
+                {
+                    "command": "arm-sds.sds.selectConfig",
+                    "when": "view == sdsExplorer",
+                    "group": "1_config"
+                },
+                {
+                    "command": "arm-sds.sds.newConfig",
+                    "when": "view == sdsExplorer",
+                    "group": "1_config"
                 }
             ],
             "view/item/context": [
@@ -270,13 +309,14 @@
                     "SDS Configuration"
                 ],
                 "extensions": [
-                    ".sds.yml"
+                    ".sds.yml",
+                    ".sdsio.yml"
                 ],
                 "configuration": "./language-configuration.json"
             }
         ],
         "configuration": {
-            "title": "SDS Tools",
+            "title": "SDS",
             "properties": {
                 "arm-sds.recorder.serialPort": {
                     "type": "string",
@@ -307,6 +347,11 @@
                         "light"
                     ],
                     "description": "Color scheme for the waveform viewer"
+                },
+                "arm-sds.sdsio.configFile": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Relative path to the active .sdsio.yml configuration file"
                 }
             }
         },
@@ -362,6 +407,7 @@
         "build": "node esbuild.js --production",
         "postbuild": "node scripts/copy-native-modules.js",
         "package": "npm run build && npm run postbuild && vsce package",
+        "test": "npm-run-all test:unit test:integration test:e2e",
         "test:unit": "vitest run --config vitest.config.ts",
         "test:integration": "vitest run --config vitest.config.ts",
         "test:e2e": "npx playwright test --config=playwright.config.ts"

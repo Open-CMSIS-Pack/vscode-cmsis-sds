@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import { SDS_METADATA_EXTENSION, SdsMediaType } from '../sds/types';
 import { parseMetadataFile } from '../sds/writer';
 import { detectMediaType } from '../sds/types';
+import { SdsioConfigManager } from '../sdsioConfigManager';
 
 export type SdsTreeItemType = 'group' | 'sdsFile' | 'metadataFile' | 'info';
 
@@ -64,18 +65,20 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     private _onDidChangeTreeData = new vscode.EventEmitter<SdsTreeItem | undefined | null>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    private fileWatcher: vscode.FileSystemWatcher | undefined;
+    private fileWatchers: vscode.FileSystemWatcher[] = [];
 
-    constructor() {
-        this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*.sds');
-        this.fileWatcher.onDidCreate(() => { try { this.refresh(); } catch { /* ignore */ } });
-        this.fileWatcher.onDidDelete(() => { try { this.refresh(); } catch { /* ignore */ } });
-        this.fileWatcher.onDidChange(() => { try { this.refresh(); } catch { /* ignore */ } });
+    constructor(private readonly configManager: SdsioConfigManager) {
+        this.fileWatchers.push(vscode.workspace.createFileSystemWatcher('**/*.sds'));
+        this.fileWatchers.push(vscode.workspace.createFileSystemWatcher('**/*.sds.yml'));
+        this.fileWatchers.push(vscode.workspace.createFileSystemWatcher('**/*.sdsio.yml'));
 
-        // Also watch metadata files
-        const ymlWatcher = vscode.workspace.createFileSystemWatcher('**/*.sds.yml');
-        ymlWatcher.onDidCreate(() => { try { this.refresh(); } catch { /* ignore */ } });
-        ymlWatcher.onDidDelete(() => { try { this.refresh(); } catch { /* ignore */ } });
+        for (const watcher of this.fileWatchers) {
+            watcher.onDidCreate(() => { try { this.refresh(); } catch { /* ignore */ } });
+            watcher.onDidDelete(() => { try { this.refresh(); } catch { /* ignore */ } });
+            watcher.onDidChange(() => { try { this.refresh(); } catch { /* ignore */ } });
+        }
+
+        configManager.onDidChangeConfig(() => { try { this.refresh(); } catch { /* ignore */ } });
     }
 
     refresh(): void {
@@ -99,10 +102,22 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     }
 
     private async getRootItems(): Promise<SdsTreeItem[]> {
+        if (!this.configManager.getConfigFile()) {
+            return [];
+        }
+
+        const { workdir, metadir } = this.configManager.getConfig();
         const groups = new Map<string, SdsTreeItem[]>();
 
-        for (const folder of vscode.workspace.workspaceFolders ?? []) {
-            await this.scanDirectory(folder.uri.fsPath, groups);
+        if (metadir) {
+            const sdsDirectory = workdir ?? metadir;
+            await this.scanConfiguredDirectories(metadir, sdsDirectory, groups);
+        } else if (workdir) {
+            await this.scanConfiguredDirectories(workdir, workdir, groups);
+        } else {
+            for (const folder of vscode.workspace.workspaceFolders ?? []) {
+                await this.scanDirectory(folder.uri.fsPath, groups, false);
+            }
         }
 
         const result: SdsTreeItem[] = [];
@@ -129,7 +144,41 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
             .sort((a, b) => a.itemType === 'group' && b.itemType !== 'group' ? -1 : 1);
     }
 
-    private async scanDirectory(dirPath: string, groups: Map<string, SdsTreeItem[]>): Promise<void> {
+    private async scanConfiguredDirectories(
+        metadataDirectory: string,
+        sdsDirectory: string,
+        groups: Map<string, SdsTreeItem[]>
+    ): Promise<void> {
+        const metadataByStream = new Map<string, string>();
+        const usedMetadataFiles = new Set<string>();
+
+        if (fs.existsSync(metadataDirectory)) {
+            this.collectMetadataFiles(metadataDirectory, metadataByStream);
+        }
+
+        await this.scanDirectory(sdsDirectory, groups, true, metadataByStream, usedMetadataFiles);
+
+        for (const [streamName, metadataPath] of metadataByStream.entries()) {
+            if (usedMetadataFiles.has(metadataPath)) {
+                continue;
+            }
+
+            if (!groups.has(streamName)) {
+                groups.set(streamName, []);
+            }
+
+            groups.get(streamName)!.push(
+                new SdsTreeItem(
+                    `${streamName}.sds.yml`,
+                    'metadataFile',
+                    metadataPath,
+                    vscode.TreeItemCollapsibleState.None
+                )
+            );
+        }
+    }
+
+    private collectMetadataFiles(dirPath: string, metadataByStream: Map<string, string>): void {
         try {
             const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
@@ -137,7 +186,39 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                 const fullPath = path.join(dirPath, entry.name);
 
                 if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
-                    await this.scanDirectory(fullPath, groups);
+                    this.collectMetadataFiles(fullPath, metadataByStream);
+                    continue;
+                }
+
+                if (!entry.isFile() || !entry.name.endsWith(SDS_METADATA_EXTENSION)) {
+                    continue;
+                }
+
+                const streamName = entry.name.slice(0, -SDS_METADATA_EXTENSION.length);
+                if (!metadataByStream.has(streamName)) {
+                    metadataByStream.set(streamName, fullPath);
+                }
+            }
+        } catch {
+            // Ignore inaccessible directories and parse errors.
+        }
+    }
+
+    private async scanDirectory(
+        dirPath: string,
+        groups: Map<string, SdsTreeItem[]>,
+        recursive: boolean,
+        metadataByStream?: Map<string, string>,
+        usedMetadataFiles?: Set<string>
+    ): Promise<void> {
+        try {
+            const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+            for (const entry of entries) {
+                const fullPath = path.join(dirPath, entry.name);
+
+                if (recursive && entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+                    await this.scanDirectory(fullPath, groups, recursive, metadataByStream, usedMetadataFiles);
                     continue;
                 }
 
@@ -153,7 +234,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                     }
 
                     // Check for associated metadata
-                    const metaPath = path.join(dirPath, `${streamName}${SDS_METADATA_EXTENSION}`);
+                    const metaPath = metadataByStream?.get(streamName) ?? path.join(dirPath, `${streamName}${SDS_METADATA_EXTENSION}`);
 
                     // File size for description
                     const stat = fs.statSync(fullPath);
@@ -196,6 +277,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
 
                     // Add metadata file if exists and not already added
                     if (fs.existsSync(metaPath)) {
+                        usedMetadataFiles?.add(metaPath);
                         const existingMeta = groups.get(streamName)!.find(
                             i => i.itemType === 'metadataFile' && i.filePath === metaPath
                         );
@@ -218,7 +300,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     }
 
     dispose(): void {
-        this.fileWatcher?.dispose();
+        this.fileWatchers.forEach(w => w.dispose());
     }
 }
 
