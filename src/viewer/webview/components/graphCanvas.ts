@@ -1,8 +1,7 @@
 /*
- * Copyright (c) 2026 Arm Limited
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
-
 export type ChartMargin = { top: number; right: number; bottom: number; left: number };
 
 export type PlotArea = { x: number; y: number; w: number; h: number };

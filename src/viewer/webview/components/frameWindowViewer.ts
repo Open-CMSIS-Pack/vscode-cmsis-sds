@@ -1,8 +1,7 @@
 /*
- * Copyright (c) 2026 Arm Limited
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import { useEffect, useRef, useState } from 'react';
 import { BroadcastMessage, ImageFrame, getIndexedSdsSuffix, getNearestFrameIndexAtTimestamp, isTimestampInFrameRange, Message } from '../../../webview/protocol';
 import { broadcastMessage } from '../../../webview/vscode-api';

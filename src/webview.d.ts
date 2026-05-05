@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Arm Limited
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */

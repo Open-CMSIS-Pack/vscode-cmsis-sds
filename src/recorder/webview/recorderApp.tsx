@@ -1,8 +1,7 @@
 /*
- * Copyright (c) 2026 Arm Limited
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { WebviewMessenger, getInitialState } from '../../webview/bridge';

@@ -1,12 +1,8 @@
 #!/usr/bin/env node
-/**
- * Reads the generated codepoint map from media/cmsissds.json and patches
- * the contributes.icons section of package.json in-place.
- *
- * Each SVG in media/icons/<name>.svg becomes a VS Code ThemeIcon
- * registered as "arm-sds-<name>", usable as $(arm-sds-<name>) in the extension.
+/*
+ * Copyright (C) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
  */
-
 'use strict';
 
 const fs = require('fs');

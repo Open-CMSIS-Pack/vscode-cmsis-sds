@@ -1,4 +1,7 @@
-/** @type {import('@twbs/fantasticon').RunnerOptions} */
+/*
+ * Copyright (C) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
 module.exports = {
     inputDir: './media/icons',
     outputDir: './media',

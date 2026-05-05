@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
 // Copy native modules (serialport, usb) into out/node_modules for VSIX packaging
 const fs = require('fs-extra');
 const path = require('path');

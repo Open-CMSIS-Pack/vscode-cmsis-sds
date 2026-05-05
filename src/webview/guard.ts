@@ -1,8 +1,7 @@
 /*
- * Copyright (c) 2026 Arm Limited
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import { Message } from './protocol';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

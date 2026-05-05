@@ -1,6 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /*
- * Copyright (c) 2025-2026 Matthias Hertel
+ * Copyright (C) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * Copyright (C) 2025-2026 Matthias Hertel
  * SPDX-License-Identifier: Apache-2.0
  */
 /**

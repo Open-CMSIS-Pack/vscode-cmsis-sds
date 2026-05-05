@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025-2026 Matthias Hertel
+ * Copyright (C) 2025-2026 Matthias Hertel
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
@@ -162,7 +162,7 @@ export class SdsDiagnostics {
     recordingEvent(event: 'start' | 'stop' | 'data' | 'error', detail: string): void {
         const level = event === 'error' ? DiagnosticLevel.Error
             : event === 'data' ? DiagnosticLevel.Debug
-            : DiagnosticLevel.Info;
+                : DiagnosticLevel.Info;
         this._log(level, DiagnosticSource.Recorder, `[${event.toUpperCase()}] ${detail}`);
     }
 

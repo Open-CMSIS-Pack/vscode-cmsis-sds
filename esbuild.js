@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
 const esbuild = require('esbuild');
 
 const production = process.argv.includes('--production');

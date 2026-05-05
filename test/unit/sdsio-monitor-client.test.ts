@@ -1,8 +1,7 @@
 /*
- * Copyright (c) 2026 Arm Limited
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import { describe, it, expect, vi } from 'vitest';
 import { HEADER_SIZE, MON_FLAGS, SdsioMonitorClient } from '../../src/recorder/sdsio/sdsIoMonitorClient';
 
