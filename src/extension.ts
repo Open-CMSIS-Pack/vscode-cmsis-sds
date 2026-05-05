@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(diagnostics.outputChannel);
 
     // ── SDSIO Monitor Client ────────────────────────────────────
-    const monitor = new SdsioMonitorClient({ port: 12345 });
+    const monitor = new SdsioMonitorClient({ port: 6060 });
     context.subscriptions.push({
         dispose: () => {
             monitor.stop();

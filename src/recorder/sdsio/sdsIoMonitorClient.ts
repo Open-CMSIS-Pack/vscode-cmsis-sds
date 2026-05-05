@@ -5,7 +5,7 @@
 /**
  * SDSIO Monitor Client — TCP client to observe and control SDSIO server.
  *
- * Connects to the SDSIO server's monitor port (default 12345) to:
+ * Connects to the SDSIO server's monitor port (default 6060s) to:
  * - Receive async OPEN/CLOSE/INFO messages
  * - Send FLAGS commands to update sdsFlags
  * - Track server state and flag changes
@@ -217,6 +217,22 @@ export class SdsioMonitorClient extends EventEmitter {
         return this.sendFlags(setMask, clearMask);
     }
 
+    /**
+     * Set one user flag bit (0..7).
+     */
+    setFlag(flagIndex: number): boolean {
+        const mask = this.userFlagMask(flagIndex);
+        return this.sendFlags(mask, 0);
+    }
+
+    /**
+     * Clear one user flag bit (0..7).
+     */
+    clearFlag(flagIndex: number): boolean {
+        const mask = this.userFlagMask(flagIndex);
+        return this.sendFlags(0, mask);
+    }
+
     // ── Internal ────────────────────────────────────────────
 
     private _connect(): void {
@@ -372,5 +388,12 @@ export class SdsioMonitorClient extends EventEmitter {
         }
 
         return { setMask, clearMask };
+    }
+
+    private userFlagMask(flagIndex: number): number {
+        if (!Number.isInteger(flagIndex) || flagIndex < 0 || flagIndex > 7) {
+            throw new RangeError(`Flag index must be an integer in range 0..7, got ${String(flagIndex)}`);
+        }
+        return (1 << flagIndex) >>> 0;
     }
 }

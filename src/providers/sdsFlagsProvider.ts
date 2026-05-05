@@ -105,15 +105,46 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     }
 
     setEnabledByTreeItems(items: ReadonlyArray<[SdsFlagTreeItem, vscode.TreeItemCheckboxState]>): void {
+        const changed: Array<{ index: number; enabled: boolean }> = [];
+
         for (const [item, checkboxState] of items) {
             const flag = this.findFlag(item.flag.id);
             if (!flag) {
                 continue;
             }
-            flag.enabled = checkboxState === vscode.TreeItemCheckboxState.Checked;
+
+            const enabled = checkboxState === vscode.TreeItemCheckboxState.Checked;
+            if (flag.enabled === enabled) {
+                continue;
+            }
+
+            flag.enabled = enabled;
+            const index = this.flags.findIndex((f) => f.id === flag.id);
+            if (index >= 0 && index < MAX_FLAGS) {
+                changed.push({ index, enabled });
+            }
         }
-        // Send updated flags to monitor
-        this.sendFlagsToMonitor();
+
+        if (changed.length === 0) {
+            this.refresh();
+            return;
+        }
+
+        if (this.monitor && this.monitorConnected && changed.length === 1) {
+            const op = changed[0];
+            const sent = op.enabled
+                ? this.monitor.setFlag(op.index)
+                : this.monitor.clearFlag(op.index);
+
+            // Fallback to full sync if a targeted update fails.
+            if (!sent) {
+                this.sendFlagsToMonitor();
+            }
+        } else {
+            // Multiple changed items are sent as one full mask update.
+            this.sendFlagsToMonitor();
+        }
+
         this.refresh();
     }
 
@@ -148,11 +179,11 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     }
 
     canPlay(): boolean {
-        return this.mode !== 'record';
+        return this.mode === 'idle';
     }
 
     canRecord(): boolean {
-        return this.mode !== 'play';
+        return this.mode === 'idle';
     }
 
     canStop(): boolean {
@@ -160,9 +191,8 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     }
 
     getBitmaskSummary(): string {
-        const { setMask, unsetMask } = this.getFlagMasks();
         const connection = this.monitorConnected ? '🟢 connected' : '⭕ disconnected';
-        return `${connection} | set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`;
+        return `${connection}`;
     }
 
     getFlagMasks(): SdsFlagMasks {
