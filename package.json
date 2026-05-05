@@ -1,7 +1,7 @@
 {
-    "name": "sds-tools",
-    "displayName": "SDS Tools",
-    "description": "VS Code extension for CMSIS Synchronous Data Stream (SDS) — record, view, and export sensor data",
+    "name": "arm-cmsis-sds",
+    "displayName": "Arm CMSIS SDS",
+    "description": "Record and manage synchronous data streams for ML/DSP development using the Arm SDS-Framework",
     "version": "0.8.0",
     "publisher": "open-cmsis",
     "license": "Apache-2.0",
