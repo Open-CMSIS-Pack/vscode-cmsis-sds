@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
 import { SdsioConfigManager } from '../sdsioConfigManager';
+import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
 
 const FLAG_NAME_PATTERN = /^[a-zA-Z0-9\-_.+,/()]+$/;
 const MAX_FLAGS = 8;
@@ -235,8 +236,8 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
 
             const toolsDir = path.join(basePath, 'tools');
             const bin = path.join(toolsDir, 'sdsio-server');
-            const binExe = `${bin}.exe`;
-            const serverBinary = fs.existsSync(binExe) ? binExe : bin;
+            const binWin32 = `${bin}.exe`;
+            const serverBinary = fs.existsSync(binWin32) ? binWin32 : bin;
             if (!fs.existsSync(serverBinary)) {
                 return false;
             }
@@ -246,8 +247,9 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
                 cwd: basePath,
                 iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
             });
+            const sdsIoFile = this.configManager.getConfigFile();
             terminal.show(true);
-            terminal.sendText(`"${serverBinary}" -m 6060 socket --ipaddr 127.0.0.1`, true);
+            terminal.sendText(`"${serverBinary}" --control ${sdsIoFile} --mon-port ${SDSIO_SERVER_MONITOR_PORT} socket --ipaddr 127.0.0.1`, true);
         } catch {
             // Ignore spawn failures and still try monitor reconnect below.
         }

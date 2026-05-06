@@ -5,7 +5,7 @@
 /**
  * SDSIO Monitor Client — TCP client to observe and control SDSIO server.
  *
- * Connects to the SDSIO server's monitor port (default 6060s) to:
+ * Connects to the SDSIO server's monitor port to:
  * - Receive async OPEN/CLOSE/INFO messages
  * - Send FLAGS commands to update sdsFlags
  * - Track server state and flag changes

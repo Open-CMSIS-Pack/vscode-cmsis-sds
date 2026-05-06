@@ -24,6 +24,7 @@ import { SdsRecorderPanel } from './recorder/sdsRecorderPanel';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
 import { parseSdsFile, decodeAllRecords, parseMetadataFile, exportToCsv, SDS_METADATA_EXTENSION, } from './sds';
 
+export const SDSIO_SERVER_MONITOR_PORT = 6060;
 const SDSIO_CONFIG_EXTENSION = '.sdsio.yml';
 const SDSIO_TEMPLATE = [
     'sdsio:',
@@ -51,7 +52,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(diagnostics.outputChannel);
 
     // ── SDSIO Monitor Client ────────────────────────────────────
-    const monitor = new SdsioMonitorClient({ port: 6060 });
+    const monitor = new SdsioMonitorClient({ port: SDSIO_SERVER_MONITOR_PORT });
     context.subscriptions.push({
         dispose: () => {
             monitor.stop();
@@ -106,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
                 ? toWorkspaceRelativeConfigPath(vscode.Uri.file(normalizedPath))
                 : '';
             await vscode.workspace
-                .getConfiguration('arm-sds.sdsio')
+                .getConfiguration('cmsis-sds.sdsio')
                 .update('configFile', relativePath, vscode.ConfigurationTarget.Workspace);
         } finally {
             isApplyingConfigSetting = false;
@@ -117,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((event) => {
-            if (!event.affectsConfiguration('arm-sds.sdsio.configFile') || isApplyingConfigSetting) {
+            if (!event.affectsConfiguration('cmsis-sds.sdsio.configFile') || isApplyingConfigSetting) {
                 return;
             }
 
@@ -611,7 +612,7 @@ export function activate(context: vscode.ExtensionContext) {
     diagnostics.info(DiagnosticSource.Extension, 'Extension activated successfully');
 
     function resolveConfigPathFromSettings(): string | undefined {
-        const configured = vscode.workspace.getConfiguration('arm-sds.sdsio').get<string>('configFile');
+        const configured = vscode.workspace.getConfiguration('cmsis-sds.sdsio').get<string>('configFile');
         if (!configured) {
             return undefined;
         }
@@ -735,6 +736,6 @@ function ensureWorkspaceConfigFile(workspaceRoot: string, configRelativePath: st
         }
     }
 
-    settings['arm-sds.sdsio.configFile'] = configRelativePath.replace(/\\/g, '/');
+    settings['cmsis-sds.sdsio.configFile'] = configRelativePath.replace(/\\/g, '/');
     fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 4)}\n`, 'utf-8');
 }

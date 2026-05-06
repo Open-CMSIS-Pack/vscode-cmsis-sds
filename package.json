@@ -348,7 +348,7 @@
                     ],
                     "description": "Color scheme for the waveform viewer"
                 },
-                "arm-sds.sdsio.configFile": {
+                "cmsis-sds.sdsio.configFile": {
                     "type": "string",
                     "default": "",
                     "description": "Relative path to the active .sdsio.yml configuration file"
