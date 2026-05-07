@@ -57,6 +57,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     private extensionInstallPath?: string;
     private monitorConnected = false;
     private remoteFlags = 0;
+    private sdsioServerTerminal?: vscode.Terminal;
 
     constructor(private readonly configManager: SdsioConfigManager, monitor?: SdsioMonitorClient, extensionInstallPath?: string) {
         this.monitor = monitor;
@@ -68,20 +69,25 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         }
 
         // Sync flag names whenever the config file changes or is replaced.
+        configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
         configManager.onDidChangeConfig(() => this.syncFlagNamesFromManager());
         this.syncFlagNamesFromManager();
     }
 
     private _onMonitorConnected(): void {
-        this.monitorConnected = true;
-        this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
-        this._onDidChangeTreeData.fire();
+        if (!this.monitorConnected) {
+            this.monitorConnected = true;
+            this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
+            this._onDidChangeTreeData.fire();
+        }
     }
 
     private _onMonitorDisconnected(): void {
-        this.monitorConnected = false;
-        this.diagnostics.info(DiagnosticSource.Server, 'Disconnected from SDSIO monitor');
-        this._onDidChangeTreeData.fire();
+        if (this.monitorConnected) {
+            this.monitorConnected = false;
+            this.diagnostics.info(DiagnosticSource.Server, 'Disconnected from SDSIO monitor');
+            this._onDidChangeTreeData.fire();
+        }
     }
 
     private _onMonitorInfo(info: SdsioMonitorInfo): void {
@@ -191,9 +197,6 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         this.mode = 'play';
         const modeSent = this.monitorConnected ? this.monitor?.startPlayback() === true : false;
         this.sendFlagsToMonitor();
-        void vscode.window.showInformationMessage(
-            `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
-        );
         this.diagnostics.info(DiagnosticSource.Server, `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
@@ -202,9 +205,6 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         this.mode = 'record';
         const modeSent = this.monitorConnected ? this.monitor?.startRecording() === true : false;
         this.sendFlagsToMonitor();
-        void vscode.window.showInformationMessage(
-            `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
-        );
         this.diagnostics.info(DiagnosticSource.Server, `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
@@ -213,9 +213,6 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         this.mode = 'idle';
         const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
         this.sendFlagsToMonitor();
-        void vscode.window.showInformationMessage(
-            `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
-        );
         this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
@@ -235,6 +232,21 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         return !this.monitorConnected;
     }
 
+    private async reConnectServer(): Promise<void> {
+        if (this.sdsioServerTerminal) {
+            this.diagnostics.info(DiagnosticSource.Server, 'Terminating existing SDSIO server terminal due to config file change');
+            this.sdsioServerTerminal.dispose();
+            this.sdsioServerTerminal = undefined;
+
+            if (this.monitorConnected && this.monitor) {
+                this.monitorConnected = false;
+                this.monitor.stop();
+            }
+
+            await this.connectServer();
+        }
+    }
+
     async connectServer(): Promise<boolean> {
         this.diagnostics.info(DiagnosticSource.Server, 'Attempting to connect to SDSIO monitor...');
         if (!this.monitor) {
@@ -248,6 +260,13 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         }
 
         try {
+            // Terminate any existing server terminal before starting a new one
+            if (this.sdsioServerTerminal) {
+                this.diagnostics.info(DiagnosticSource.Server, 'Terminating existing SDSIO server terminal before connecting');
+                this.sdsioServerTerminal.dispose();
+                this.sdsioServerTerminal = undefined;
+            }
+
             const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             const basePath = this.extensionInstallPath ?? workspaceRoot;
             if (!basePath) {
@@ -264,15 +283,15 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
                 return false;
             }
 
-            const terminal = vscode.window.createTerminal({
+            this.sdsioServerTerminal = vscode.window.createTerminal({
                 name: `SDSIO Server ${new Date().toLocaleTimeString()}`,
                 cwd: basePath,
                 iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
             });
             this.diagnostics.info(DiagnosticSource.Server, `Spawning SDSIO server from binary: ${serverBinary} with config file: ${this.configManager.getConfigFile()}`);
             const sdsIoFile = this.configManager.getConfigFile();
-            terminal.show(true);
-            terminal.sendText(`"${serverBinary}" --control ${sdsIoFile} --mon-port ${SDSIO_SERVER_MONITOR_PORT} socket --ipaddr 127.0.0.1`, true);
+            this.sdsioServerTerminal.show(true);
+            this.sdsioServerTerminal.sendText(`"${serverBinary}" --control ${sdsIoFile} --mon-port ${SDSIO_SERVER_MONITOR_PORT} socket --ipaddr 127.0.0.1`, true);
             this.diagnostics.info(DiagnosticSource.Server, 'SDSIO server process started, waiting for monitor connection...');
         } catch {
             // Ignore spawn failures and still try monitor reconnect below.

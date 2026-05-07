@@ -137,51 +137,23 @@ export class SdsDiagnostics {
         this._log(DiagnosticLevel.Error, source, fullMessage);
     }
 
-    // ── Structured Logging Helpers ─────────────────────────────
-
-    /** Log a server connection event */
-    serverConnection(host: string, status: 'connecting' | 'connected' | 'disconnected' | 'error', detail?: string): void {
-        const statusIcons: Record<string, string> = {
-            connecting: '⟳',
-            connected: '✓',
-            disconnected: '✕',
-            error: '✗',
-        };
-        const icon = statusIcons[status] || '?';
-        const msg = `[${icon}] ${host} — ${status}${detail ? ': ' + detail : ''}`;
-
-        if (status === 'error') {
-            this.error(DiagnosticSource.Server, msg);
-        } else if (status === 'disconnected') {
-            this.warn(DiagnosticSource.Server, msg);
-        } else {
-            this.info(DiagnosticSource.Server, msg);
-        }
-    }
-
-    /** Log a recording session event */
-    recordingEvent(event: 'start' | 'stop' | 'data' | 'error', detail: string): void {
-        const level = event === 'error' ? DiagnosticLevel.Error
-            : event === 'data' ? DiagnosticLevel.Debug
-                : DiagnosticLevel.Info;
-        this._log(level, DiagnosticSource.Recorder, `[${event.toUpperCase()}] ${detail}`);
-    }
-
-
     /** Write the startup banner */
     writeBanner(): void {
-        this._writeRaw('');
+        const extensionVersion = this._getInstalledExtensionVersion();
+
+        this._writeRaw(' ');
         this._writeRaw('╔═══════════════════════════════════════════════════════════════╗');
-        this._writeRaw('║                  CMSIS SDS Diagnostics                        ║');
-        this._writeRaw('║                Server & System Messages                       ║');
+        this._writeRaw('║                   Arm CMSIS SDS Diagnostics                   ║');
+        this._writeRaw('║                   Server & System  Messages                   ║');
         this._writeRaw('╚═══════════════════════════════════════════════════════════════╝');
-        this._writeRaw('');
+        this._writeRaw(' ');
         this._writeRaw(`  Started: ${new Date().toISOString()}`);
         this._writeRaw(`  VS Code: ${vscode.version}`);
+        this._writeRaw(`  Extension: arm-cmsis-sds v${extensionVersion}`);
         this._writeRaw(`  Platform: ${process.platform} (${process.arch})`);
-        this._writeRaw('');
+        this._writeRaw(' ');
         this._writeRaw('───────────────────────────────────────────────────────────────');
-        this._writeRaw('');
+        this._writeRaw(' ');
     }
 
     // ── Internal ───────────────────────────────────────────────
@@ -223,6 +195,13 @@ export class SdsDiagnostics {
 
     private _writeRaw(text: string): void {
         this._outputChannel.appendLine(text);
+    }
+
+    private _getInstalledExtensionVersion(): string {
+        const extension = vscode.extensions.all.find(
+            ext => ext.packageJSON?.name === 'arm-cmsis-sds'
+        );
+        return extension?.packageJSON?.version ?? 'unknown';
     }
 
     /** Dispose resources */

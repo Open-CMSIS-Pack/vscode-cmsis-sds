@@ -285,14 +285,24 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.play', () => {
+        vscode.commands.registerCommand('arm-sds.sdsinterface.play', async () => {
+            const connected = await flagsProvider.connectServer();
+            if (!connected) {
+                void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
+                return;
+            }
             flagsProvider.play();
             updateSdsIoCommandContext();
         })
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.record', () => {
+        vscode.commands.registerCommand('arm-sds.sdsinterface.record', async () => {
+            const connected = await flagsProvider.connectServer();
+            if (!connected) {
+                void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
+                return;
+            }
             flagsProvider.record();
             updateSdsIoCommandContext();
         })

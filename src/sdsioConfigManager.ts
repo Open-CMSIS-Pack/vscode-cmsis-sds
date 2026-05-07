@@ -29,8 +29,10 @@ export interface SdsioConfigData {
 }
 
 export class SdsioConfigManager {
+    private readonly _onDidChangeConfigFile = new vscode.EventEmitter<void>();
     private readonly _onDidChangeConfig = new vscode.EventEmitter<void>();
     /** Fired whenever the active config path or its parsed content changes. */
+    readonly onDidChangeConfigFile: vscode.Event<void> = this._onDidChangeConfigFile.event;
     readonly onDidChangeConfig: vscode.Event<void> = this._onDidChangeConfig.event;
 
     private activeConfigPath: string | undefined;
@@ -76,6 +78,7 @@ export class SdsioConfigManager {
         }
 
         this._onDidChangeConfig.fire();
+        this._onDidChangeConfigFile.fire();
     }
 
     /** Returns the absolute path of the currently active config, or undefined. */
@@ -131,6 +134,7 @@ export class SdsioConfigManager {
     dispose(): void {
         this.contentWatcher?.dispose();
         this._onDidChangeConfig.dispose();
+        this._onDidChangeConfigFile.dispose();
     }
 }
 
