@@ -584,31 +584,6 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // ── Status Bar ──────────────────────────────────────────────
-    const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusItem.text = '$(arm-sds-sds-icon) Arm CMSIS SDS';
-    statusItem.tooltip = 'Arm CMSIS SDS — Click to quick-open an SDS file';
-    statusItem.command = 'arm-sds.quickOpen';
-    statusItem.show();
-    context.subscriptions.push(statusItem);
-
-    const fileInfoItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-    context.subscriptions.push(fileInfoItem);
-
-    const updateFileInfoStatus = () => {
-        const editor = vscode.window.activeTextEditor;
-        if (editor && editor.document.fileName.endsWith('.sds.yml')) {
-            fileInfoItem.text = '$(file-code) SDS Metadata';
-            fileInfoItem.tooltip = editor.document.fileName;
-            fileInfoItem.command = 'arm-sds.showDiagnostics';
-            fileInfoItem.show();
-        } else {
-            fileInfoItem.hide();
-        }
-    };
-    vscode.window.onDidChangeActiveTextEditor(updateFileInfoStatus, null, context.subscriptions);
-    updateFileInfoStatus();
-
     diagnostics.info(DiagnosticSource.Extension, 'Extension activated successfully');
 
     function resolveConfigPathFromSettings(): string | undefined {

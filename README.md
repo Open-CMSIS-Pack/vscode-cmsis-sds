@@ -1,6 +1,6 @@
 # Arm CMSIS SDS Tools for VS Code
 
-<img src='./media/icon.png' width='90' alt='Arm CMSIS SDS Tools' align='left' />VS Code extension for Arm Synchronous Data Stream (SDS) — record, view, and export sensor data using workspace-based configuration.
+<img src='./media/icons/sds-icon.png' width='90' alt='Arm CMSIS SDS Tools' align='left' style='padding-right:1em' />VS Code extension for Arm Synchronous Data Stream (SDS) — record, view, and export sensor data using workspace-based configuration.
 
 Part of the [OpenCMSIS](https://github.com/Open-CMSIS-Pack) ecosystem.
 <br clear='all'/>

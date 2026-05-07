@@ -8,8 +8,9 @@ import * as path from 'path';
 import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
 import { SdsioConfigManager } from '../sdsioConfigManager';
 import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
+import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 
-const FLAG_NAME_PATTERN = /^[a-zA-Z0-9\-_.+,/()]+$/;
+const FLAG_NAME_PATTERN = /^[a-zA-Z0-9 \-_.+,/()]+$/;
 const MAX_FLAGS = 8;
 
 export type SdsFlag = {
@@ -27,16 +28,25 @@ type SdsIoMode = 'idle' | 'play' | 'record';
 
 export class SdsFlagTreeItem extends vscode.TreeItem {
     constructor(public readonly flag: SdsFlag) {
-        super(flag.name, vscode.TreeItemCollapsibleState.None);
+        super(SdsFlagTreeItem.getNumberedLabel(flag.id, flag.name), vscode.TreeItemCollapsibleState.None);
         this.id = flag.id;
         this.description = flag.enabled ? '(set)' : '(unset)';
         this.contextValue = 'sdsFlag';
         this.iconPath = new vscode.ThemeIcon('symbol-boolean');
         this.checkboxState = flag.enabled ? vscode.TreeItemCheckboxState.Checked : vscode.TreeItemCheckboxState.Unchecked;
     }
+
+    static getNumberedLabel: (flagIndex: string, flagLabel: string) => string = (flagIndex, flagLabel) => {
+        const index = flagIndex.split('-')[1];
+        if (index === flagLabel) {
+            return flagLabel;
+        }
+        return `${index}: ${flagLabel}`;
+    }
 }
 
 export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTreeItem> {
+    private readonly diagnostics = SdsDiagnostics.getInstance();
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<SdsFlagTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
@@ -64,11 +74,13 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
 
     private _onMonitorConnected(): void {
         this.monitorConnected = true;
+        this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
         this._onDidChangeTreeData.fire();
     }
 
     private _onMonitorDisconnected(): void {
         this.monitorConnected = false;
+        this.diagnostics.info(DiagnosticSource.Server, 'Disconnected from SDSIO monitor');
         this._onDidChangeTreeData.fire();
     }
 
@@ -80,6 +92,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             this.flags[i].enabled = bit !== 0;
         }
         this._onDidChangeTreeData.fire();
+        this.diagnostics.info(DiagnosticSource.Server, `Received monitor info: sdsFlags=0x${info.sdsFlags.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
     getTreeItem(element: SdsFlagTreeItem): vscode.TreeItem {
@@ -123,6 +136,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         // Persist to .sdsio.yml; onDidChangeConfig will fire → syncFlagNamesFromManager.
         if (index >= 0) {
             this.configManager.setFlagName(index, newName);
+            this.diagnostics.info(DiagnosticSource.Server, `Flag ${index} renamed to "${newName}" and saved to config`);
         } else {
             this.refresh();
         }
@@ -180,6 +194,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         void vscode.window.showInformationMessage(
             `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
+        this.diagnostics.info(DiagnosticSource.Server, `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
     record(): void {
@@ -190,6 +205,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         void vscode.window.showInformationMessage(
             `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
+        this.diagnostics.info(DiagnosticSource.Server, `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
     stop(): void {
@@ -200,6 +216,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         void vscode.window.showInformationMessage(
             `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`
         );
+        this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
     canPlay(): boolean {
@@ -219,11 +236,14 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     }
 
     async connectServer(): Promise<boolean> {
+        this.diagnostics.info(DiagnosticSource.Server, 'Attempting to connect to SDSIO monitor...');
         if (!this.monitor) {
+            this.diagnostics.error(DiagnosticSource.Server, 'No monitor client available to connect to.');
             return false;
         }
 
         if (this.monitorConnected) {
+            this.diagnostics.info(DiagnosticSource.Server, 'Already connected to SDSIO monitor.');
             return true;
         }
 
@@ -231,6 +251,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             const basePath = this.extensionInstallPath ?? workspaceRoot;
             if (!basePath) {
+                this.diagnostics.error(DiagnosticSource.Server, 'No workspace folder or extension install path available to locate server binary.');
                 return false;
             }
 
@@ -239,6 +260,7 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
             const binWin32 = `${bin}.exe`;
             const serverBinary = fs.existsSync(binWin32) ? binWin32 : bin;
             if (!fs.existsSync(serverBinary)) {
+                this.diagnostics.error(DiagnosticSource.Server, `SDSIO server binary not found at expected location: ${serverBinary}`);
                 return false;
             }
 
@@ -247,14 +269,17 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
                 cwd: basePath,
                 iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
             });
+            this.diagnostics.info(DiagnosticSource.Server, `Spawning SDSIO server from binary: ${serverBinary} with config file: ${this.configManager.getConfigFile()}`);
             const sdsIoFile = this.configManager.getConfigFile();
             terminal.show(true);
             terminal.sendText(`"${serverBinary}" --control ${sdsIoFile} --mon-port ${SDSIO_SERVER_MONITOR_PORT} socket --ipaddr 127.0.0.1`, true);
+            this.diagnostics.info(DiagnosticSource.Server, 'SDSIO server process started, waiting for monitor connection...');
         } catch {
             // Ignore spawn failures and still try monitor reconnect below.
         }
 
         try {
+            this.diagnostics.info(DiagnosticSource.Server, 'Attempting to connect monitor client to server...');
             await this.monitor.start();
         } catch {
             return false;

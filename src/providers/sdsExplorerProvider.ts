@@ -17,6 +17,7 @@ import { SDS_METADATA_EXTENSION, SdsMediaType } from '../sds/types';
 import { parseMetadataFile } from '../sds/writer';
 import { detectMediaType } from '../sds/types';
 import { SdsioConfigManager } from '../sdsioConfigManager';
+import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 
 export type SdsTreeItemType = 'group' | 'sdsFile' | 'metadataFile' | 'info';
 
@@ -62,7 +63,8 @@ export class SdsTreeItem extends vscode.TreeItem {
 }
 
 export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<SdsTreeItem | undefined | null>();
+    private readonly diagnostics = SdsDiagnostics.getInstance();
+    private readonly _onDidChangeTreeData = new vscode.EventEmitter<SdsTreeItem | undefined | null>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private fileWatchers: vscode.FileSystemWatcher[] = [];
@@ -82,6 +84,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     }
 
     refresh(): void {
+        this.diagnostics.info(DiagnosticSource.Extension, 'Refreshing SDS Explorer view');
         this._onDidChangeTreeData.fire(undefined);
     }
 
@@ -90,6 +93,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     }
 
     async getChildren(element?: SdsTreeItem): Promise<SdsTreeItem[]> {
+        this.diagnostics.debug(DiagnosticSource.Extension, `Getting children for ${element ? element.label : 'root'}`);
         if (!vscode.workspace.workspaceFolders) {
             return [];
         }
@@ -98,10 +102,13 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
             return this.getRootItems();
         }
 
+        this.diagnostics.debug(DiagnosticSource.Extension, `Returning ${element.children?.length ?? 0} children for ${element.label}`);
+
         return element.children ?? [];
     }
 
     private async getRootItems(): Promise<SdsTreeItem[]> {
+        this.diagnostics.debug(DiagnosticSource.Extension, 'Scanning workspace for SDS files');
         if (!this.configManager.getConfigFile()) {
             return [];
         }
@@ -138,6 +145,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                 result.push(group);
             }
         }
+        this.diagnostics.debug(DiagnosticSource.Extension, `Found ${result.length} top-level groups in SDS Explorer`);
 
         return result
             .sort((a, b) => a.label.localeCompare(b.label as string))
@@ -199,6 +207,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                     metadataByStream.set(streamName, fullPath);
                 }
             }
+            this.diagnostics.info(DiagnosticSource.Extension, `Collected ${metadataByStream.size} metadata files from ${dirPath}`);
         } catch {
             // Ignore inaccessible directories and parse errors.
         }
@@ -294,6 +303,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                     }
                 }
             }
+            this.diagnostics.info(DiagnosticSource.Extension, `Scanned ${dirPath} and found ${groups.size} groups so far`);
         } catch {
             // Skip inaccessible directories
         }

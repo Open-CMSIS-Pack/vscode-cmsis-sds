@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2025-2026 Matthias Hertel
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
@@ -100,9 +101,9 @@ export class SdsDiagnostics {
     clear(): void {
         this._outputChannel.clear();
         this._logHistory = [];
-        this._writeRaw('═══════════════════════════════════════════════════════════════');
-        this._writeRaw('  CMSIS SDS Diagnostics — Log cleared');
-        this._writeRaw('═══════════════════════════════════════════════════════════════');
+        this._writeRaw('╔═══════════════════════════════════════════════════════════════╗');
+        this._writeRaw('║              CMSIS SDS Diagnostics — Log cleared              ║');
+        this._writeRaw('╚═══════════════════════════════════════════════════════════════╝');
     }
 
     // ── Convenience Methods ────────────────────────────────────
@@ -172,7 +173,7 @@ export class SdsDiagnostics {
         this._writeRaw('');
         this._writeRaw('╔═══════════════════════════════════════════════════════════════╗');
         this._writeRaw('║                  CMSIS SDS Diagnostics                        ║');
-        this._writeRaw('║  Server & System Messages                                 ║');
+        this._writeRaw('║                Server & System Messages                       ║');
         this._writeRaw('╚═══════════════════════════════════════════════════════════════╝');
         this._writeRaw('');
         this._writeRaw(`  Started: ${new Date().toISOString()}`);
