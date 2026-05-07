@@ -23,6 +23,9 @@ The extension provides an integrated recording, playback, and analysis workflow 
 
 ### Data Viewing & Analysis
 
+![sds data view](/media/screenshots/data-video-telemtry.png)
+![sds data audio](./media/screenshots/data-audio.png)
+
 - **SDS Viewer** — Interactive waveform visualization with cursor sync across multiple streams
 - **Media Viewer** — View image, audio, and video SDS recordings
 - **CSV Export** — Export SDS sensor data to CSV format
