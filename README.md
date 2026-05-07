@@ -94,6 +94,8 @@ Click the **Connect** button in the SDSIO Interface view (sidebar). If `tools/sd
 
 Renamed flag labels appear immediately and persist in your `.sdsio.yml`.
 
+![alt text](media/screenshots/sdsio-flags-rename.png)
+
 ### 4. View & Export Your Data
 
 The SDS Files explorer shows all recordings and metadata in your configured `workdir` and `metadir`. Click on a `.sds` file to view it in the waveform viewer. Right-click to export to CSV.
