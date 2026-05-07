@@ -23,7 +23,7 @@
         "data stream",
         "waveform"
     ],
-    "icon": "media/icon.png",
+    "icon": "media/icons/sds-icon.png",
     "activationEvents": [
         "onLanguage:yaml",
         "workspaceContains:**/*.sds",
