@@ -199,10 +199,10 @@ export class SdsioMonitorClient extends EventEmitter {
     }
 
     /**
-     * Start playback mode: set bit31=0 and bit29=1.
+     * Start playback mode: set bit31=1 and bit29=1, clear no bits.
      */
     startPlayback(): boolean {
-        return this.sendFlags(SDS_FLAG_PLAYBACK, SDS_FLAG_IO_ACTIVE);
+        return this.sendFlags((SDS_FLAG_IO_ACTIVE | SDS_FLAG_PLAYBACK) >>> 0, 0);
     }
 
     /**
