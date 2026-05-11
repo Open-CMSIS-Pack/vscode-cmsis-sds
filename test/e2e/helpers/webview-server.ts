@@ -66,32 +66,6 @@ function extractHtml(sourceFile: string): string {
 }
 
 /**
- * Get the recorder panel HTML with template vars replaced by test defaults.
- */
-export function getRecorderHtml(): string {
-    const initialState = {
-        defaultPort: '',
-        defaultBaud: 115200,
-        defaultDir: './sds_recordings',
-    };
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recorder Test</title>
-</head>
-<body>
-    <div id="root"></div>
-    ${MOCK_VSCODE_API}
-    <script>window.__INITIAL_STATE__ = ${JSON.stringify(initialState).replace(/</g, '\\u003c')};</script>
-    <script src="/out/recorderWebview.js"></script>
-</body>
-</html>`;
-}
-
-/**
  * Get the viewer panel HTML with fixture data embedded.
  * Uses the first `getHtml` in the viewer (the main data view, not the error view).
  */
@@ -299,7 +273,6 @@ function injectMockApi(html: string): string {
 /**
  * Start a simple HTTP server that serves webview HTML.
  * Routes:
- *   /recorder → Recorder panel
  *   /viewer   → Viewer panel
  *   /image    → Image media viewer
  *   /audio    → Audio media viewer
@@ -336,9 +309,6 @@ export async function startServer(port = 0): Promise<{ server: http.Server; base
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             try {
                 switch (req.url) {
-                    case '/recorder':
-                        res.end(getRecorderHtml());
-                        break;
                     case '/viewer':
                         res.end(getViewerHtml());
                         break;

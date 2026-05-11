@@ -9,9 +9,6 @@
  * Based on the official SDS Framework specification:
  * https://arm-software.github.io/SDS-Framework/main/theory.html
  */
-import { SerialTransportOptions } from './../recorder/sdsio/serialTransport';
-import { SocketTransportOptions } from './../recorder/sdsio/socketTransport';
-
 /** Supported SDS data types as used in .sds.yml metadata */
 export type SdsDataType =
     | 'uint8_t'
@@ -31,24 +28,6 @@ export type SdsPixelFormat =
     | 'NV16' | 'NV61'
     | 'YUYV' | 'UYVY' | 'YUV422P'
     | 'YUV444' | 'YUV444P';
-
-export interface SdsioServerConfig {
-    mode: ConfigMode;
-    workDir: string;
-    /** Serial-specific options */
-    serial?: SerialTransportOptions;
-    /** Socket-specific options */
-    socket?: SocketTransportOptions;
-}
-
-export type SdsioServerState =
-    | 'stopped'
-    | 'starting'
-    | 'waiting'
-    | 'connected'
-    | 'recording'
-    | 'error';
-
 
 /** Image metadata within a content value */
 export interface SdsImageMeta {
@@ -155,44 +134,6 @@ export interface SdsDecodedSample {
     timestamp: number;
     timeSeconds: number;
     values: { [channelName: string]: number };
-}
-
-export type ConfigMode = 'serial' | 'socket' | 'usb' | 'demo';
-
-export interface ChildProcessMessage {
-    type: string;
-    msg: string;
-    [key: string]: string | number;
-}
-
-/**
- * Connection configuration for the SDS Recorder.
- */
-export interface SdsRecorderConfig {
-    mode: ConfigMode;
-    serialPort?: string;
-    baudRate?: number;
-    channels?: string[];
-    frequency?: number;
-    parity?: 'none' | 'even' | 'odd' | 'mark' | 'space';
-    stopBits?: 1 | 1.5 | 2;
-    ipAddress?: string;
-    tcpPort?: number;
-    outputDirectory: string;
-    streamName: string;
-}
-
-/**
- * Recording session state.
- */
-export interface SdsRecordingSession {
-    id: string;
-    config: SdsRecorderConfig;
-    startTime: Date;
-    recordCount: number;
-    totalBytes: number;
-    isRecording: boolean;
-    outputFile: string;
 }
 
 /**

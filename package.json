@@ -48,12 +48,6 @@
                 "icon": "$(graph-line)"
             },
             {
-                "command": "arm-sds.openRecorder",
-                "title": "Open SDS Recorder",
-                "category": "SDS Tools",
-                "icon": "$(record)"
-            },
-            {
                 "command": "arm-sds.openMediaViewer",
                 "title": "Open Media Viewer",
                 "category": "SDS Tools",
@@ -70,12 +64,6 @@
                 "title": "Refresh SDS Explorer",
                 "category": "SDS Tools",
                 "icon": "$(refresh)"
-            },
-            {
-                "command": "arm-sds.newRecording",
-                "title": "New SDS Recording",
-                "category": "SDS Tools",
-                "icon": "$(add)"
             },
             {
                 "command": "arm-sds.initWorkspace",
@@ -230,11 +218,6 @@
                     "group": "navigation@4"
                 },
                 {
-                    "command": "arm-sds.newRecording",
-                    "when": "view == sdsExplorer_hidden_deprecated",
-                    "group": "navigation@5"
-                },
-                {
                     "command": "arm-sds.sds.editConfig",
                     "when": "view == sdsExplorer && arm-sds.sdsio.hasConfig",
                     "group": "navigation@5"
@@ -322,21 +305,6 @@
         "configuration": {
             "title": "SDS",
             "properties": {
-                "arm-sds.recorder.serialPort": {
-                    "type": "string",
-                    "default": "",
-                    "description": "Default serial port for SDS recording"
-                },
-                "arm-sds.recorder.baudRate": {
-                    "type": "number",
-                    "default": 115200,
-                    "description": "Baud rate for serial communication"
-                },
-                "arm-sds.recorder.outputDirectory": {
-                    "type": "string",
-                    "default": "./sds_recordings",
-                    "description": "Default output directory for recordings (relative to workspace root)"
-                },
                 "arm-sds.viewer.defaultZoomLevel": {
                     "type": "number",
                     "default": 1,
@@ -365,12 +333,6 @@
                 "key": "ctrl+shift+v",
                 "mac": "cmd+shift+v",
                 "when": "resourceExtname == .sds"
-            },
-            {
-                "command": "arm-sds.openRecorder",
-                "key": "ctrl+shift+r",
-                "mac": "cmd+shift+r",
-                "when": "sdsExplorer.active"
             },
             {
                 "command": "arm-sds.quickOpen",

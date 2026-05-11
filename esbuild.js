@@ -42,7 +42,6 @@ const webviewBase = {
 };
 
 const webviewEntries = [
-    { entryPoints: ['src/recorder/webview/recorderApp.tsx'], outfile: 'out/recorderWebview.js' },
     { entryPoints: ['src/viewer/webview/viewerApp.tsx'], outfile: 'out/viewerWebview.js' },
     { entryPoints: ['src/viewer/webview/mediaViewerApp.tsx'], outfile: 'out/mediaViewerWebview.js' },
 ];

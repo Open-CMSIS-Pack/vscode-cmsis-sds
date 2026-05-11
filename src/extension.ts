@@ -7,7 +7,7 @@
  * CMSIS SDS — VS Code Extension Entry Point
  *
  * Registers commands, views, providers, and webview panels
- * for the CMSIS SDS extension (viewer, recorder, media viewer).
+ * for the CMSIS SDS extension (viewer, media viewer).
  */
 
 import * as vscode from 'vscode';
@@ -20,7 +20,6 @@ import { SdsioConfigManager } from './controller/sdsioConfigManager';
 import { SdsioMonitorClient } from './recorder/sdsio/sdsIoMonitorClient';
 import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
-import { SdsRecorderPanel } from './recorder/sdsRecorderPanel';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
 import { parseSdsFile, decodeAllRecords, parseMetadataFile, exportToCsv, SDS_METADATA_EXTENSION, } from './sds';
 
@@ -379,13 +378,6 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Open Recorder
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.openRecorder', () => {
-            SdsRecorderPanel.createOrShow(context.extensionUri);
-        })
-    );
-
     // Export CSV
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.exportCsv', async (arg?: SdsTreeItem | vscode.Uri | string) => {
@@ -401,13 +393,6 @@ export function activate(context: vscode.ExtensionContext) {
             } catch (err) {
                 vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
             }
-        })
-    );
-
-    // New Recording (opens recorder)
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.newRecording', () => {
-            SdsRecorderPanel.createOrShow(context.extensionUri);
         })
     );
 
@@ -468,7 +453,7 @@ export function activate(context: vscode.ExtensionContext) {
                             '',
                             '## Getting Started',
                             '',
-                            '1. Use **CMSIS SDS: Open SDS Recorder** to capture data',
+                            '1. Capture SDS data using SDSIO tools',
                             '2. View recordings with **CMSIS SDS: Open SDS Viewer**',
                             '3. Export with **CMSIS SDS: Export SDS to CSV**',
                             '',
@@ -499,13 +484,12 @@ export function activate(context: vscode.ExtensionContext) {
                     return;
                 }
 
-                // Workspace already open — ensure recordings directory exists, then open recorder
+                // Workspace already open — ensure recordings directory exists
                 const wsRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
                 const recordingsDir = path.join(wsRoot, 'sds_recordings');
                 if (!fs.existsSync(recordingsDir)) {
                     fs.mkdirSync(recordingsDir, { recursive: true });
                 }
-                SdsRecorderPanel.createOrShow(context.extensionUri);
             } catch (err) {
                 vscode.window.showErrorMessage(`Workspace init failed: ${err instanceof Error ? err.message : String(err)}`);
             }
