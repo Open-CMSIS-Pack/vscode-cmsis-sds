@@ -68,7 +68,7 @@ vi.mock('vscode', () => {
     };
 });
 
-import { SdsioConfigManager } from '../../src/sdsioConfigManager';
+import { SdsioConfigManager } from '../../src/controller/sdsioConfigManager';
 
 describe('SdsioConfigManager', () => {
     let tmpDir: string;

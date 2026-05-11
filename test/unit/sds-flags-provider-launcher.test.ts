@@ -64,7 +64,7 @@ vi.mock('vscode', () => {
     };
 });
 
-vi.mock('../../src/providers/sdsioServerLauncher', () => {
+vi.mock('../../src/controller/sdsioServerLauncher', () => {
     const SdsioServerLauncher = vi.fn(function SdsioServerLauncher() {
         return launcherMock;
     });
