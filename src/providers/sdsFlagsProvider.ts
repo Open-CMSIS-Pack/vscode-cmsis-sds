@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
-import { SdsioConfigManager } from '../sdsioConfigManager';
+import { SdsioConfigManager } from '../controller/sdsioConfigManager';
 import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
+import { SdsioServerLauncher } from '../controller/sdsioServerLauncher';
 
 const FLAG_NAME_PATTERN = /^[a-zA-Z0-9 \-_.+,/()]+$/;
 const MAX_FLAGS = 8;
@@ -57,11 +56,12 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     private extensionInstallPath?: string;
     private monitorConnected = false;
     private remoteFlags = 0;
-    private sdsioServerTerminal?: vscode.Terminal;
+    private readonly serverLauncher: SdsioServerLauncher;
 
     constructor(private readonly configManager: SdsioConfigManager, monitor?: SdsioMonitorClient, extensionInstallPath?: string) {
         this.monitor = monitor;
         this.extensionInstallPath = extensionInstallPath;
+        this.serverLauncher = new SdsioServerLauncher(this.diagnostics);
         if (monitor) {
             monitor.on('connected', () => this._onMonitorConnected());
             monitor.on('disconnected', () => this._onMonitorDisconnected());
@@ -233,10 +233,8 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     }
 
     private async reConnectServer(): Promise<void> {
-        if (this.sdsioServerTerminal) {
-            this.diagnostics.info(DiagnosticSource.Server, 'Terminating existing SDSIO server terminal due to config file change');
-            this.sdsioServerTerminal.dispose();
-            this.sdsioServerTerminal = undefined;
+        if (this.serverLauncher.hasTerminal()) {
+            await this.serverLauncher.stop('Terminating existing SDSIO server terminal due to config file change');
 
             if (this.monitorConnected && this.monitor) {
                 this.monitorConnected = false;
@@ -260,39 +258,27 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         }
 
         try {
-            // Terminate any existing server terminal before starting a new one
-            if (this.sdsioServerTerminal) {
-                this.diagnostics.info(DiagnosticSource.Server, 'Terminating existing SDSIO server terminal before connecting');
-                this.sdsioServerTerminal.dispose();
-                this.sdsioServerTerminal = undefined;
+            if (this.serverLauncher.hasTerminal()) {
+                await this.serverLauncher.stop('Terminating existing SDSIO server terminal before connecting');
             }
 
-            const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-            const basePath = this.extensionInstallPath ?? workspaceRoot;
+            const basePath = this.extensionInstallPath;
             if (!basePath) {
                 this.diagnostics.error(DiagnosticSource.Server, 'No workspace folder or extension install path available to locate server binary.');
                 return false;
             }
 
-            const toolsDir = path.join(basePath, 'tools');
-            const bin = path.join(toolsDir, 'sdsio-server');
-            const binWin32 = `${bin}.exe`;
-            const serverBinary = fs.existsSync(binWin32) ? binWin32 : bin;
-            if (!fs.existsSync(serverBinary)) {
-                this.diagnostics.error(DiagnosticSource.Server, `SDSIO server binary not found at expected location: ${serverBinary}`);
+            const sdsIoFile = this.configManager.getConfigFile();
+            if (!sdsIoFile) {
+                this.diagnostics.error(DiagnosticSource.Server, 'No SDSIO config file selected. Please select or create a .sdsio.yml file.');
                 return false;
             }
 
-            this.sdsioServerTerminal = vscode.window.createTerminal({
-                name: `SDSIO Server ${new Date().toLocaleTimeString()}`,
-                cwd: basePath,
-                iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
+            await this.serverLauncher.start({
+                basePath,
+                configFile: sdsIoFile,
+                monitorPort: SDSIO_SERVER_MONITOR_PORT,
             });
-            this.diagnostics.info(DiagnosticSource.Server, `Spawning SDSIO server from binary: ${serverBinary} with config file: ${this.configManager.getConfigFile()}`);
-            const sdsIoFile = this.configManager.getConfigFile();
-            this.sdsioServerTerminal.show(true);
-            this.sdsioServerTerminal.sendText(`"${serverBinary}" --control ${sdsIoFile} --mon-port ${SDSIO_SERVER_MONITOR_PORT} socket --ipaddr 127.0.0.1`, true);
-            this.diagnostics.info(DiagnosticSource.Server, 'SDSIO server process started, waiting for monitor connection...');
         } catch {
             // Ignore spawn failures and still try monitor reconnect below.
         }

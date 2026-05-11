@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import { SDS_METADATA_EXTENSION, SdsMediaType } from '../sds/types';
 import { parseMetadataFile } from '../sds/writer';
 import { detectMediaType } from '../sds/types';
-import { SdsioConfigManager } from '../sdsioConfigManager';
+import { SdsioConfigManager } from '../controller/sdsioConfigManager';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 
 export type SdsTreeItemType = 'group' | 'sdsFile' | 'metadataFile' | 'info';

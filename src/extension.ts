@@ -16,7 +16,7 @@ import * as fs from 'fs';
 
 import { SdsExplorerProvider, SdsTreeItem } from './providers/sdsExplorerProvider';
 import { SdsIOInterfaceProvider, SdsFlagTreeItem } from './providers/sdsFlagsProvider';
-import { SdsioConfigManager } from './sdsioConfigManager';
+import { SdsioConfigManager } from './controller/sdsioConfigManager';
 import { SdsioMonitorClient } from './recorder/sdsio/sdsIoMonitorClient';
 import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
