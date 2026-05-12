@@ -1,9 +1,9 @@
 {
-    "name": "arm-cmsis-sds",
+    "name": "cmsis-sds",
     "displayName": "Arm CMSIS SDS",
     "description": "Record and manage synchronous data streams for ML/DSP development using the Arm SDS-Framework",
     "version": "0.8.0",
-    "publisher": "open-cmsis",
+    "publisher": "arm",
     "license": "Apache-2.0",
     "engines": {
         "node": "^22.22.0",
