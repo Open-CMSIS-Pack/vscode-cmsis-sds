@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2025-2026 Matthias Hertel
+ * Copyright (C) 2025-2026 Matthias Hertel
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
@@ -21,7 +22,6 @@ import {
     SdsMetadata,
     SdsContentValue,
     SdsDataType,
-    SdsMediaType,
     sdsDataTypeSize,
     sdsFrameSize,
     detectMediaType,
@@ -29,6 +29,13 @@ import {
 
 /** Record header size: timestamp (4 bytes) + data_size (4 bytes) */
 const RECORD_HEADER_SIZE = 8;
+
+export interface SdsRecordIndexEntry {
+    recordIndex: number;
+    timestamp: number;
+    dataSize: number;
+    dataOffset: number;
+}
 
 /**
  * Parse an SDS binary file into memory.
@@ -260,12 +267,12 @@ export function decodeImageFrameToRGBA(
     height: number,
     pixelFormat: string
 ): Uint8Array {
-    const rgba = new Uint8Array(width * height * 4);
+    const expectedSize = width * height;
+    const rgba = new Uint8Array(expectedSize * 4);
 
     switch (pixelFormat) {
         case 'RGB888': {
-            const expectedSize = width * height * 3;
-            for (let i = 0; i < width * height; i++) {
+            for (let i = 0; i < expectedSize; i++) {
                 if (i * 3 + 2 < data.length) {
                     rgba[i * 4 + 0] = data[i * 3 + 0];
                     rgba[i * 4 + 1] = data[i * 3 + 1];
@@ -276,7 +283,7 @@ export function decodeImageFrameToRGBA(
             break;
         }
         case 'RAW8': {
-            for (let i = 0; i < width * height && i < data.length; i++) {
+            for (let i = 0; i < expectedSize && i < data.length; i++) {
                 rgba[i * 4 + 0] = data[i];
                 rgba[i * 4 + 1] = data[i];
                 rgba[i * 4 + 2] = data[i];
@@ -285,7 +292,7 @@ export function decodeImageFrameToRGBA(
             break;
         }
         case 'RGB565': {
-            for (let i = 0; i < width * height && i * 2 + 1 < data.length; i++) {
+            for (let i = 0; i < expectedSize && i * 2 + 1 < data.length; i++) {
                 const pixel = data[i * 2] | (data[i * 2 + 1] << 8);
                 rgba[i * 4 + 0] = ((pixel >> 11) & 0x1F) * 255 / 31;
                 rgba[i * 4 + 1] = ((pixel >> 5) & 0x3F) * 255 / 63;
@@ -297,7 +304,7 @@ export function decodeImageFrameToRGBA(
         case 'NV12':
         case 'NV21': {
             // Y plane = width*height bytes, UV plane = width*height/2 bytes interleaved
-            const yPlaneSize = width * height;
+            const yPlaneSize = expectedSize;
             for (let row = 0; row < height; row++) {
                 for (let col = 0; col < width; col++) {
                     const yIdx = row * width + col;
@@ -326,7 +333,7 @@ export function decodeImageFrameToRGBA(
         }
         default: {
             // Fallback: treat as grayscale
-            for (let i = 0; i < width * height && i < data.length; i++) {
+            for (let i = 0; i < expectedSize && i < data.length; i++) {
                 rgba[i * 4 + 0] = data[i];
                 rgba[i * 4 + 1] = data[i];
                 rgba[i * 4 + 2] = data[i];
@@ -430,6 +437,51 @@ export function* parseSdsRecordIterator(filePath: string): Generator<SdsRecord &
     } finally {
         fs.closeSync(fd);
     }
+}
+
+/**
+ * Build a lightweight index of SDS records using only headers.
+ * This avoids loading all record payloads into memory.
+ */
+export function indexSdsRecords(filePath: string): SdsRecordIndexEntry[] {
+    const fd = fs.openSync(filePath, 'r');
+    const headerBuf = Buffer.alloc(RECORD_HEADER_SIZE);
+    let position = 0;
+    let index = 0;
+    const out: SdsRecordIndexEntry[] = [];
+
+    try {
+        const fileSize = fs.fstatSync(fd).size;
+
+        while (position + RECORD_HEADER_SIZE <= fileSize) {
+            const headerRead = fs.readSync(fd, headerBuf, 0, RECORD_HEADER_SIZE, position);
+            if (headerRead < RECORD_HEADER_SIZE) {
+                break;
+            }
+
+            const timestamp = headerBuf.readUInt32LE(0);
+            const dataSize = headerBuf.readUInt32LE(4);
+            const dataOffset = position + RECORD_HEADER_SIZE;
+
+            if (dataOffset + dataSize > fileSize) {
+                break;
+            }
+
+            out.push({
+                recordIndex: index,
+                timestamp,
+                dataSize,
+                dataOffset,
+            });
+
+            position = dataOffset + dataSize;
+            index++;
+        }
+    } finally {
+        fs.closeSync(fd);
+    }
+
+    return out;
 }
 
 function clamp(value: number): number {

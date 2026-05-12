@@ -1,5 +1,9 @@
 /*
- * Copyright (c) 2025-2026 Matthias Hertel
+ * Copyright (C) 2026 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/*
+ * Copyright (C) 2025-2026 Matthias Hertel
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
@@ -41,10 +45,10 @@ test.describe('Viewer Panel — Structure', () => {
     test('toolbar buttons exist', async ({ page }) => {
         await openViewer(page);
 
-        await expect(page.locator('#btnZoomIn')).toBeVisible();
-        await expect(page.locator('#btnZoomOut')).toBeVisible();
-        await expect(page.locator('#btnFit')).toBeVisible();
-        await expect(page.locator('#btnExport')).toBeVisible();
+        await expect(page.locator('button[title="Zoom In"]').first()).toBeVisible();
+        await expect(page.locator('button[title="Zoom Out"]').first()).toBeVisible();
+        await expect(page.locator('button[title="Fit to Window"]').first()).toBeVisible();
+        await expect(page.locator('button[title="Export CSV"]')).toBeVisible();
     });
 
     test('chart canvas is rendered', async ({ page }) => {
@@ -62,30 +66,17 @@ test.describe('Viewer Panel — Structure', () => {
     test('channel toggle buttons are created from data', async ({ page }) => {
         await openViewer(page);
 
-        const toggleContainer = page.locator('#channelToggles');
-        await expect(toggleContainer).toBeVisible();
-
-        // Should have 3 toggles for x, y, z channels
-        const toggles = toggleContainer.locator('.channel-toggle');
-        await expect(toggles).toHaveCount(3);
-
-        // Check labels contain channel names
-        const texts = await toggles.allTextContents();
-        expect(texts.some(t => t.includes('x'))).toBe(true);
-        expect(texts.some(t => t.includes('y'))).toBe(true);
-        expect(texts.some(t => t.includes('z'))).toBe(true);
+        await expect(page.getByRole('button', { name: 'x', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'y', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'z', exact: true })).toBeVisible();
     });
 
     test('stats bar displays file info', async ({ page }) => {
         await openViewer(page);
 
-        const statsBar = page.locator('#statsBar');
-        await expect(statsBar).toBeVisible();
-
-        const text = await statsBar.textContent();
-        expect(text).toBeTruthy();
-        // Should contain record count or file info
-        expect(text!.length).toBeGreaterThan(0);
+        await expect(page.getByText('Records', { exact: true })).toBeVisible();
+        await expect(page.getByText('Duration', { exact: true })).toBeVisible();
+        await expect(page.getByText('Data Rate', { exact: true })).toBeVisible();
     });
 });
 
@@ -96,7 +87,7 @@ test.describe('Viewer Panel — Interactions', () => {
         await openViewer(page);
         await page.evaluate(() => { (window as any).__messages = []; });
 
-        await page.click('#btnExport');
+        await page.locator('button[title="Export CSV"]').click();
 
         const msgs = await getMessages(page);
         expect(msgs.some((m: any) => m.command === 'exportCsv')).toBe(true);
@@ -105,16 +96,17 @@ test.describe('Viewer Panel — Interactions', () => {
     test('channel toggle buttons can be clicked', async ({ page }) => {
         await openViewer(page);
 
-        const firstToggle = page.locator('#channelToggles .channel-toggle').first();
+        const firstToggle = page.getByRole('button', { name: 'x', exact: true });
         await expect(firstToggle).toBeVisible();
 
-        // Click to toggle off — should remove 'active' class
+        const beforeStyle = await firstToggle.getAttribute('style');
         await firstToggle.click();
-        await expect(firstToggle).not.toHaveClass(/active/);
+        const afterFirstClickStyle = await firstToggle.getAttribute('style');
+        expect(afterFirstClickStyle).not.toBe(beforeStyle);
 
-        // Click again to toggle on — should re-add 'active' class
         await firstToggle.click();
-        await expect(firstToggle).toHaveClass(/active/);
+        const afterSecondClickStyle = await firstToggle.getAttribute('style');
+        expect(afterSecondClickStyle).toBe(beforeStyle);
     });
 
     test('zoom buttons are clickable without errors', async ({ page }) => {
@@ -124,10 +116,9 @@ test.describe('Viewer Panel — Interactions', () => {
         const errors: string[] = [];
         page.on('pageerror', (err) => errors.push(err.message));
 
-        await page.click('#btnZoomIn');
-        await page.click('#btnZoomIn');
-        await page.click('#btnZoomOut');
-        await page.click('#btnFit');
+        await page.locator('button[title="Zoom In"]').first().click();
+        await page.locator('button[title="Zoom Out"]').first().click();
+        await page.locator('button[title="Fit to Window"]').first().click();
 
         expect(errors).toEqual([]);
     });
@@ -139,10 +130,9 @@ test.describe('Viewer Panel — Experimental', () => {
     test('filter and FFT buttons are hidden when experimental=false', async ({ page }) => {
         await openViewer(page);
 
-        // These buttons should not exist when experimental is false
-        const filterBtn = page.locator('#btnFilter');
-        const fftBtn = page.locator('#btnFFT');
-        const statsBtn = page.locator('#btnStats');
+        const filterBtn = page.getByRole('button', { name: /filter/i });
+        const fftBtn = page.getByRole('button', { name: /fft/i });
+        const statsBtn = page.getByRole('button', { name: /stats/i });
 
         await expect(filterBtn).toHaveCount(0);
         await expect(fftBtn).toHaveCount(0);

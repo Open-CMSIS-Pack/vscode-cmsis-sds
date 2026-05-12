@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2025-2026 Matthias Hertel
+ * Copyright (C) 2025-2026 Matthias Hertel
+ * Copyright (C) 2026 Arm Limited
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
@@ -8,7 +9,6 @@
  * Based on the official SDS Framework specification:
  * https://arm-software.github.io/SDS-Framework/main/theory.html
  */
-
 /** Supported SDS data types as used in .sds.yml metadata */
 export type SdsDataType =
     | 'uint8_t'
@@ -114,6 +114,18 @@ export interface SdsParsedFile {
     durationMs: number;
 }
 
+/** Aggregate statistics returned by getSdsFileStats. */
+export interface SdsFileStats {
+    fileSize: number;
+    totalRecords: number;
+    recordingTimeSeconds: number;
+    recordingIntervalMs: number;
+    avgBlockSize: number;
+    minBlockSize: number;
+    maxBlockSize: number;
+    dataRate: number;
+}
+
 /**
  * Decoded data point — one value from one record, after applying
  * scale and offset from the metadata.
@@ -122,34 +134,6 @@ export interface SdsDecodedSample {
     timestamp: number;
     timeSeconds: number;
     values: { [channelName: string]: number };
-}
-
-/**
- * Connection configuration for the SDS Recorder.
- */
-export interface SdsRecorderConfig {
-    mode: 'serial' | 'socket' | 'usb' | 'demo';
-    serialPort?: string;
-    baudRate?: number;
-    parity?: 'N' | 'E' | 'O' | 'M' | 'S';
-    stopBits?: 1 | 1.5 | 2;
-    ipAddress?: string;
-    tcpPort?: number;
-    outputDirectory: string;
-    streamName: string;
-}
-
-/**
- * Recording session state.
- */
-export interface SdsRecordingSession {
-    id: string;
-    config: SdsRecorderConfig;
-    startTime: Date;
-    recordCount: number;
-    totalBytes: number;
-    isRecording: boolean;
-    outputFile: string;
 }
 
 /**

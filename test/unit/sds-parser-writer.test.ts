@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025-2026 Matthias Hertel
+ * Copyright (C) 2025-2026 Matthias Hertel
  * SPDX-License-Identifier: Apache-2.0
  */
 /**
@@ -330,14 +330,14 @@ describe('encodeRecords / decodeAllRecords roundtrip', () => {
 
 describe('data type roundtrip', () => {
     const testCases: Array<{ type: string; value: number; tolerance: number }> = [
-        { type: 'uint8_t',  value: 200,       tolerance: 0 },
-        { type: 'int8_t',   value: -50,        tolerance: 0 },
-        { type: 'uint16_t', value: 50000,      tolerance: 0 },
-        { type: 'int16_t',  value: -10000,     tolerance: 0 },
-        { type: 'uint32_t', value: 3000000000,  tolerance: 0 },
-        { type: 'int32_t',  value: -100000,    tolerance: 0 },
-        { type: 'float',    value: 3.14159,    tolerance: 0.001 },
-        { type: 'double',   value: 3.141592653589793, tolerance: 1e-10 },
+        { type: 'uint8_t', value: 200, tolerance: 0 },
+        { type: 'int8_t', value: -50, tolerance: 0 },
+        { type: 'uint16_t', value: 50000, tolerance: 0 },
+        { type: 'int16_t', value: -10000, tolerance: 0 },
+        { type: 'uint32_t', value: 3000000000, tolerance: 0 },
+        { type: 'int32_t', value: -100000, tolerance: 0 },
+        { type: 'float', value: 3.14159, tolerance: 0.001 },
+        { type: 'double', value: 3.141592653589793, tolerance: 1e-10 },
     ];
 
     for (const tc of testCases) {
