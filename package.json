@@ -362,8 +362,10 @@
         }
     },
     "scripts": {
+        "all": "npm install && npm run download-tools && npm run test",
         "build:icons": "fantasticon && node scripts/generate-icon-contributes.js",
         "compile": "npm-run-all compile:extension compile:webviews",
+        "compile:scripts": "tsc -p scripts --outDir out/scripts",
         "compile:extension": "tsc -p .",
         "compile:webviews": "node esbuild.js",
         "watch": "run-p watch:extension watch:webviews",
@@ -372,19 +374,23 @@
         "prebuild": "npm run build:icons",
         "build": "node esbuild.js --production",
         "postbuild": "node scripts/copy-native-modules.js",
-        "package": "npm run build && npm run postbuild && vsce package",
         "lint:md": "markdownlint **/*.md -c ./.github/markdownlint.jsonc -i ./node_modules -i ./dist -i ./coverage -i ./out -i ./tools -i ./test-data -i ./src/e2e-tests/data -i CHANGELOG.md",
+        "download-tools": "npm run compile:scripts && tsx scripts/download-tools.ts sdsio",
+        "download-tools:nightly": "npm run compile:scripts && tsx scripts/download-tools.ts sdsioNightly",
+        "package": "npm run build && npm run postbuild && tsx scripts/package.ts",
         "test": "npm-run-all test:unit test:integration test:e2e",
         "test:unit": "vitest run --config vitest.config.ts",
         "test:integration": "vitest run --config vitest.config.ts",
         "test:e2e": "npx playwright test --config=playwright.config.ts"
     },
     "devDependencies": {
+        "@open-cmsis-pack/vsce-helper": "^0.3.0",
         "@playwright/test": "^1.58.0",
         "@twbs/fantasticon": "^3.1.0",
-        "@types/node": "^22.19.15",
+        "@types/node": "^22.19.19",
         "@types/react": "^18.3.12",
         "@types/react-dom": "^18.3.1",
+        "@types/semver": "^7.5.8",
         "@types/vscode": "^1.108.1",
         "@typescript-eslint/eslint-plugin": "8.56.1",
         "@typescript-eslint/parser": "8.56.1",
@@ -392,7 +398,12 @@
         "esbuild": "^0.27.3",
         "eslint": "^10.0.2",
         "markdownlint-cli": "^0.47.0",
+        "fs-extra": "^11.3.3",
+        "glob": "^13.0.6",
         "npm-run-all": "^4.1.5",
+        "semver": "^7.6.0",
+        "tsx": "^4.21.0",
+        "type-fest": "^5.4.4",
         "typescript": "^5.9.3",
         "vitest": "^4.1.1"
     },
@@ -427,5 +438,9 @@
         "markdownlint-cli": {
             "minimatch": "^10.2.4"
         }
+    },
+    "cmsis": {
+        "sdsio": "ARM-software/SDS-Framework@3.0.0-rc0",
+        "sdsioNightly": "ARM-software/SDS-Framework@build_sdsio-server"
     }
 }
