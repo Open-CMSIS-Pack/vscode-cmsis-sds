@@ -46,8 +46,8 @@ const sdsio : Downloadable = new Downloadable(
             'win32-arm64': { os: 'windows', arch: '' },
             'linux-x64': { os: 'linux', arch: '' },
             'linux-arm64': { os: 'linux', arch: '-arm64' },
-            'darwin-x64': { os: 'macos', arch: '-latest' },
-            'darwin-arm64': { os: 'macos', arch: '-latest' },
+            'darwin-x64': { os: 'macos', arch: '' },
+            'darwin-arm64': { os: 'macos', arch: '' },
         }[target];
         const json = await downloader.getPackageJson<CmsisPackageJson>();
         const reqVersion = json?.cmsis?.sdsio;
@@ -76,7 +76,7 @@ const sdsioNightly : Downloadable = new Downloadable(
             'linux-x64': { os: 'linux', arch: '' },
             'linux-arm64': { os: 'linux', arch: '-arm64' },
             'darwin-x64': { os: 'macos', arch: '' },
-            'darwin-arm64': { os: 'macos', arch: '-latest' },
+            'darwin-arm64': { os: 'macos', arch: '' },
         }[target];
         const json = await downloader.getPackageJson<CmsisPackageJson>();
         const workflow = json?.cmsis?.sdsioNightly;

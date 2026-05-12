@@ -5,8 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 Arm CMSIS SDS extension pack redistributes software components licensed
 under the following licenses:
 
-- cmsis-toolbox licensed under the Apache-2.0 license
-- arm-none-eabi-gdb licensed under https://github.com/ARM-software/vscode-environment-manager/blob/main/LICENSE
+- sdsio-server licensed under the Apache-2.0 license
 
 Details of third party licenses can be viewed here:
 - https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/blob/main/docs/third-party-licenses.md
