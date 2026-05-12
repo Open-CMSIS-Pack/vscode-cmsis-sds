@@ -193,27 +193,21 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
     }
 
     play(): void {
-        const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'play';
         const modeSent = this.monitorConnected ? this.monitor?.startPlayback() === true : false;
-        this.sendFlagsToMonitor();
-        this.diagnostics.info(DiagnosticSource.Server, `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
+        this.diagnostics.info(DiagnosticSource.Server, `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
     }
 
     record(): void {
-        const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'record';
         const modeSent = this.monitorConnected ? this.monitor?.startRecording() === true : false;
-        this.sendFlagsToMonitor();
-        this.diagnostics.info(DiagnosticSource.Server, `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
+        this.diagnostics.info(DiagnosticSource.Server, `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
     }
 
     stop(): void {
-        const { setMask, unsetMask } = this.getFlagMasks();
         this.mode = 'idle';
         const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
-        this.sendFlagsToMonitor();
-        this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'}; user flags -> set: 0x${setMask.toString(16).toUpperCase().padStart(2, '0')}, clear: 0x${unsetMask.toString(16).toUpperCase().padStart(2, '0')}`);
+        this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
     }
 
     canPlay(): boolean {
