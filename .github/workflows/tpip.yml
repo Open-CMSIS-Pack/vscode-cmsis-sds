@@ -27,7 +27,8 @@ jobs:
     permissions:
       # contents: write  # for Git to git push # disabled until resurrecting direct git push
       packages: read
-
+    # Temporarily disable CodeQL analysis until made public
+    if: false && github.repository == 'Open-CMSIS-Pack/vscode-cmsis-sds'
     name: Generate report
     runs-on: ubuntu-latest
     steps:

@@ -382,6 +382,8 @@
         "test:unit": "vitest run --config vitest.config.ts",
         "test:integration": "vitest run --config vitest.config.ts",
         "test:e2e": "npx playwright test --config=playwright.config.ts",
+        "copyright:check": "tsx scripts/copyright-manager.ts --mode=check --include=src/**/*.ts,scripts/**/*.ts --exclude=**/node_modules/**,coverage/**,dist/**,tools/**,out/**",
+        "copyright:fix": "tsx scripts/copyright-manager.ts --mode=fix --include=src/**/*.ts,scripts/**/*.ts --exclude=**/node_modules/**,coverage/**,dist/**,tools/**,out/**",
         "tpip:report": "tsx scripts/tpip-reporter --header docs/tpip-header.md docs/third-party-licenses.json TPIP.md",
         "tpip:update": "tsx scripts/update-tpip docs/third-party-licenses.json"
     },
@@ -389,6 +391,8 @@
         "@open-cmsis-pack/vsce-helper": "^0.3.0",
         "@playwright/test": "^1.58.0",
         "@twbs/fantasticon": "^3.1.0",
+        "@types/fs-extra": "^11.0.4",
+        "@types/minimist": "^1.2.5",
         "@types/node": "^22.19.19",
         "@types/react": "^18.3.12",
         "@types/react-dom": "^18.3.1",

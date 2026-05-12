@@ -110,6 +110,9 @@ jobs:
       - name: Copy native modules (serialport, usb)
         run: npm run postbuild
 
+      - name: Check copyright
+        run: npm run copyright:check
+
       - name: Package VSIX
         run: npm run package -- --target ${{ matrix.vsce_target }}
 

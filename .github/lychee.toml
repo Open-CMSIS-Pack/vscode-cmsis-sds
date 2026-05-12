@@ -29,8 +29,7 @@ scheme = ["http", "https", "file"]
 # Exclude links
 exclude = [
   # Exclude links as cookies needed to be accepted
-  'https://developer.arm.com',
-  'https://www.st.com/en/development-tools'
+  'https://developer.arm.com'
 ]
 
 # Exclude paths from getting checked. The values are treated as regular expressions
