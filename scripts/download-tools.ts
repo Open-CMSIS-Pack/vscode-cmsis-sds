@@ -56,10 +56,10 @@ const sdsio : Downloadable = new Downloadable(
             return undefined;
         }
         // Here, reference is expected to be a release asset version
-        const { repo, owner, reference } = splitGitReference(reqVersion, 'sdsio', 'SDSIO');
+        const { repo, owner, reference } = splitGitReference(reqVersion, 'ARM-software', 'SDS-Framework');
         const releaseAsset = new GitHubReleaseAsset(
             owner, repo, reference,
-            `sdsio-server-${os}${arch}-${reference}.zip`, 
+            `sdsio-server-${os}${arch}-0.9.9.zip`, 
             { token: process.env.GITHUB_TOKEN });
         const asset = new ArchiveFileAsset(releaseAsset);
         return asset;
