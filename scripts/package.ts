@@ -26,6 +26,60 @@ import { parse as parseSemver } from 'semver';
 
 const argv = process.argv.slice(2);
 
+function getOptionValue(args: string[], longName: string, shortName: string): string | undefined {
+    for (let index = 0; index < args.length; index++) {
+        const arg = args[index];
+
+        if (arg === longName || arg === shortName) {
+            const nextValue = args[index + 1];
+            if (!nextValue || nextValue.startsWith('-')) {
+                return undefined;
+            }
+
+            return nextValue;
+        }
+
+        if (arg.startsWith(`${longName}=`)) {
+            const value = arg.slice(`${longName}=`.length).trim();
+            return value.length > 0 ? value : undefined;
+        }
+
+        if (arg.startsWith(`${shortName}=`)) {
+            const value = arg.slice(`${shortName}=`.length).trim();
+            return value.length > 0 ? value : undefined;
+        }
+    }
+
+    return undefined;
+}
+
+function removeOption(args: string[], longName: string, shortName: string): string[] {
+    const cleanedArgs: string[] = [];
+
+    for (let index = 0; index < args.length; index++) {
+        const arg = args[index];
+
+        if (arg === longName || arg === shortName) {
+            const nextValue = args[index + 1];
+
+            // Skip flag and its value if the next token is an option value.
+            if (nextValue && !nextValue.startsWith('-')) {
+                index++;
+            }
+
+            continue;
+        }
+
+        if (arg.startsWith(`${longName}=`) || arg.startsWith(`${shortName}=`)) {
+            continue;
+        }
+
+        cleanedArgs.push(arg);
+    }
+
+    return cleanedArgs;
+}
+
 function isOddMinorVersion(version: string): boolean {
     const parsedVersion = parseSemver(version);
 
@@ -46,13 +100,19 @@ function sleep(ms: number): void {
 }
 
 // default target: host OS and architecture
-let target = `${os.platform()}-${os.arch()}`;
+const defaultTarget = `${os.platform()}-${os.arch()}`;
+const parsedTarget = getOptionValue(argv, '--target', '-t');
+let target = parsedTarget ?? defaultTarget;
 
-const targetFlag = argv.findIndex(arg => arg == '--target' || arg == '-t');
-if (targetFlag !== -1) {
-    target = argv[targetFlag + 1];
-} else {
-    argv.push('--target', target);
+if (!parsedTarget) {
+    // Ignore malformed/empty --target usage and package for the current host by default.
+    if (argv.includes('--target') || argv.includes('-t') || argv.some(arg => arg.startsWith('--target=')) || argv.some(arg => arg.startsWith('-t='))) {
+        console.warn(`Missing value for --target/-t. Falling back to default target: ${defaultTarget}`);
+    }
+
+    const normalizedArgs = removeOption(argv, '--target', '-t');
+    argv.length = 0;
+    argv.push(...normalizedArgs, '--target', target);
 }
 
 // copy pre-downloaded node-pty for the target platform
