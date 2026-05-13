@@ -39,7 +39,7 @@ function splitGitReference(reference: string, owner: string, repo: string) {
 }
 
 const sdsio : Downloadable = new Downloadable(
-    'SDSIO', 'sdsio',
+    'SDSIO', '',
     async (target) => {
         const { os, arch } = {
             'win32-x64': { os: 'windows', arch: '' },
@@ -68,7 +68,7 @@ const sdsio : Downloadable = new Downloadable(
 
 
 const sdsioNightly : Downloadable = new Downloadable(
-    'SDSIO', 'sdsio',
+    'SDSIO', '',
     async (target) => {
         const { os, arch } = {
             'win32-x64': { os: 'windows', arch: '' },
