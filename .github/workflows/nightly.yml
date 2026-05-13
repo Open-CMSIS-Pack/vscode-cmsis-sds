@@ -36,7 +36,7 @@ jobs:
           jobSummary: false
 
   build-and-test:
-    if: false && github.repository == 'Open-CMSIS-Pack/vscode-cmsis-sds'
+    if: github.repository == 'Open-CMSIS-Pack/vscode-cmsis-sds'
     strategy:
       fail-fast: false
       matrix:
@@ -53,11 +53,10 @@ jobs:
     name: Build and Test (${{ matrix.os }})
 
     steps:
-      # Not available in private repositories
-      # - name: Harden the runner (Audit all outbound calls)
-      #   uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
-      #   with:
-      #     egress-policy: audit
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
 
       - name: Configure git settings
         run: git config --global core.autocrlf false

@@ -20,8 +20,7 @@ jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
-    # Temporarily disable CodeQL analysis until made public
-    if: false && github.event.repository.default_branch == github.ref_name || github.event_name == 'pull_request'
+    if: github.event.repository.default_branch == github.ref_name || github.event_name == 'pull_request'
     permissions:
       security-events: write
       id-token: write
