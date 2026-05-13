@@ -112,9 +112,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
 
-      # Disabled as there is use of `any` on many places. Code needs refactoring.
-      # - name: Lint
-      #   run: npm run lint
+      - name: Lint
+        if: runner.os == 'Linux'
+        run: npm run lint
 
       - name: Compile TypeScript
         run: npm run compile

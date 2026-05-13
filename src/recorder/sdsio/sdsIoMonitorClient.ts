@@ -332,7 +332,7 @@ export class SdsioMonitorClient extends EventEmitter {
     private _handleInfo(header: SdsioMonitorHeader): void {
         const sdsFlags = header.arg1;
         const sdsIdleRate = header.arg2;
-        const errorLen = header.arg3;
+        //const errorLen = header.arg3;
 
         const info: SdsioMonitorInfo = {
             sdsFlags,

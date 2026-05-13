@@ -385,7 +385,8 @@
         "copyright:check": "tsx scripts/copyright-manager.ts --mode=check --include=src/**/*.ts,scripts/**/*.ts --exclude=**/node_modules/**,coverage/**,dist/**,tools/**,out/**",
         "copyright:fix": "tsx scripts/copyright-manager.ts --mode=fix --include=src/**/*.ts,scripts/**/*.ts --exclude=**/node_modules/**,coverage/**,dist/**,tools/**,out/**",
         "tpip:report": "tsx scripts/tpip-reporter --header docs/tpip-header.md docs/third-party-licenses.json TPIP.md",
-        "tpip:update": "tsx scripts/update-tpip docs/third-party-licenses.json"
+        "tpip:update": "tsx scripts/update-tpip docs/third-party-licenses.json",
+        "lint": "eslint \"src/**/*.{ts,tsx}\" \"scripts/**/*.{ts,js}\""
     },
     "devDependencies": {
         "@open-cmsis-pack/vsce-helper": "^0.3.0",
