@@ -9,6 +9,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 defaults:
   run:
     shell: bash
@@ -33,7 +36,7 @@ jobs:
           jobSummary: false
 
   build-and-test:
-    if: github.repository == 'Open-CMSIS-Pack/vscode-cmsis-sds'
+    if: false && github.repository == 'Open-CMSIS-Pack/vscode-cmsis-sds'
     strategy:
       fail-fast: false
       matrix:
