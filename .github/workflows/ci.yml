@@ -113,6 +113,7 @@ jobs:
         run: npm ci
 
       - name: Lint
+        if: runner.os == 'Linux'
         run: npm run lint
 
       - name: Compile TypeScript
