@@ -244,8 +244,8 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
 
                 if (!entry.isFile()) { continue; }
 
-                // Match .sds files: <name>.<index>.sds
-                const sdsMatch = entry.name.match(/^(.+)\.(\d+)\.sds$/);
+                // Match .sds files: <name>.<index>.sds and <name>.<index>.p.sds
+                const sdsMatch = entry.name.match(/^(.+)\.(\d+)(\.p)?\.sds$/);
                 if (sdsMatch) {
                     const streamName = sdsMatch[1];
 

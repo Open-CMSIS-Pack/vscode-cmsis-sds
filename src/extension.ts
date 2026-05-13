@@ -42,15 +42,15 @@ const SDSIO_TEMPLATE = [
     '    usb:',
     '  workdir: .',
     '  metadir: .',
-    '  # flag-info:',
-    '  #   - 0: Flag 0',
-    '  #   - 1: Flag 1',
-    '  #   - 2: Flag 2',
-    '  #   - 3: Flag 3',
-    '  #   - 4: Flag 4',
-    '  #   - 5: Flag 5',
-    '  #   - 6: Flag 6',
-    '  #   - 7: Flag 7',
+    '  flag-info:',
+    '    - 0: Flag 0',
+    '    - 1: Flag 1',
+    '    - 2: Flag 2',
+    '    - 3: Flag 3',
+    '    - 4: Flag 4',
+    '    - 5: Flag 5',
+    '    - 6: Flag 6',
+    '    - 7: Flag 7',
     '',
 ].join('\n');
 
@@ -369,7 +369,7 @@ export function activate(context: vscode.ExtensionContext) {
                     return;
                 }
                 // Create a starter metadata template
-                const streamName = path.basename(filePath).replace(/\.\d+\.sds$/, '');
+                const streamName = path.basename(filePath).replace(/\.\d+(\.p)?\.sds$/, '');
                 const template = [
                     `sds:`,
                     `  name: ${streamName}`,
@@ -660,11 +660,12 @@ async function selectSdsFile(): Promise<string | undefined> {
 /**
  * Return the expected metadata (.sds.yml) path for a given .sds file.
  * Pattern: <name>.<index>.sds → <name>.sds.yml in the same directory.
+ * Pattern: <name>.<index>.p.sds → <name>.sds.yml in the same directory.
  */
 function metadataPathFor(sdsPath: string): string | undefined {
     const dir = path.dirname(sdsPath);
     const base = path.basename(sdsPath);
-    const match = base.match(/^(.+)\.\d+\.sds$/);
+    const match = base.match(/^(.+)\.\d+(\.p)?\.sds$/);
     if (match) {
         return path.join(dir, `${match[1]}${SDS_METADATA_EXTENSION}`);
     }

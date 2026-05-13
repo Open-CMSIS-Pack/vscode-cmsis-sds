@@ -342,7 +342,7 @@ export class SdsViewerPanel {
         const dir = path.dirname(sdsPath);
         const base = path.basename(sdsPath);
         // <name>.<index>.sds -> <name>.sds.yml
-        const match = base.match(/^(.+)\.\d+\.sds$/);
+        const match = base.match(/^(.+)\.\d+(\.p)?\.sds$/);
         if (match) {
             const metaPath = path.join(dir, `${match[1]}${SDS_METADATA_EXTENSION}`);
             if (fs.existsSync(metaPath)) {
