@@ -96,7 +96,17 @@ jobs:
         run: |
           sed -i "/https:\/\/securityscorecards\.dev\/viewer/d" README.md
           sed -i "/https:\/\/img.shields.io\//d" README.md
-    
+
+      - name: Upload dist
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: dist
+          path: |
+            ./README.md
+            ./package.json
+          retention-days: 1
+
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -117,19 +127,6 @@ jobs:
 
       - name: Check copyright
         run: npm run copyright:check
-
-      - name: Download tools (Release Builds)
-        run: npm run download-tools -- --target ${{ matrix.vsce_target }} --no-cache
-
-      - name: Package VSIX
-        run: npm run package -- --target ${{ matrix.vsce_target }}
-
-      - name: Upload VSIX package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vscode-cmsis-sds-${{ matrix.vsce_target }}
-          path: ./*.vsix
-          retention-days: 1
 
       - name: Run unit tests
         run: npm run test:unit
@@ -158,11 +155,64 @@ jobs:
           name: e2e-report-${{ matrix.vsce_target }}
           path: e2e-report
 
+  package:
+    needs: build-and-test
+    strategy:
+      fail-fast: true
+      matrix:
+        target:
+          - win32-x64
+          - linux-x64
+          - darwin-arm64
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - name: Configure git settings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          node-version-file: package.json
+          registry-url: https://npm.pkg.github.com
+          package-manager-cache: false
+
+      - name: Download dist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: .
+
+      - name: Download tools
+        run: |
+          npm ci
+          npm run download-tools -- --target ${{ matrix.target }} --no-cache
+
+      - name: Package VSIX
+        run: npm run package -- --target ${{ matrix.vsce_target }}
+
+      - name: Upload VSIX package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vscode-cmsis-sds-${{ matrix.vsce_target }}
+          path: ./*.vsix
+          retention-days: 1
+
   publish:
     name: Publish release
     runs-on: [ubuntu-latest]
     if: github.event_name == 'release'
-    needs: [ build-and-test ]
+    needs: [ package ]
     permissions:
       contents: write
     steps:
