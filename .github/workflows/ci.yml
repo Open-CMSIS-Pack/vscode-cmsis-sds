@@ -91,12 +91,18 @@ jobs:
           # Update package.json
           npm version --new-version "${NIGHTLY_VERSION}" --no-git-tag-version
 
+      - name: Remove badges
+        if: runner.os == 'Linux'
+        run: |
+          sed -i "/https:\/\/securityscorecards\.dev\/viewer/d" README.md
+          sed -i "/https:\/\/img.shields.io\//d" README.md
+    
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
 
-      # Disabled as there is use of `any` on many places. Code needs refactoring before going public.
+      # Disabled as there is use of `any` on many places. Code needs refactoring.
       # - name: Lint
       #   run: npm run lint
 
