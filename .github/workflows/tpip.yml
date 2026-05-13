@@ -23,14 +23,14 @@ permissions:
   contents: read
 
 jobs:
-  report:
+  update-tpip:
+    name: Update TPIP Report
     permissions:
-      # contents: write  # for Git to git push # disabled until resurrecting direct git push
+      contents: write
       packages: read
-    # Temporarily disable CodeQL analysis until made public
-    if: false && github.repository == 'Open-CMSIS-Pack/vscode-cmsis-sds'
-    name: Generate report
+      actions: read
     runs-on: ubuntu-latest
+
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
@@ -39,9 +39,10 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.ref }}
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -50,9 +51,23 @@ jobs:
           package-manager-cache: false
 
       - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NODE_OPTIONS: --max-old-space-size=8192
         run: npm ci
 
-      - name: Generate third-party licenses report
+      - name: Update TPIP excerpt
+        id: excerpt
+        run: |
+          npm run tpip:update
+          if git diff --exit-code docs/third-party-licenses.json > /dev/null; then
+            echo "update=0" >> $GITHUB_OUTPUT
+          else
+            echo "update=1" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update TPIP report
+        if: ${{ steps.excerpt.outputs.update == 1 }}
         run: npm run tpip:report
 
       - name: Commit changes
@@ -60,6 +75,6 @@ jobs:
         run: |
           git config --local user.email "git@github.com"
           git config --local user.name "GitHub Action"
-          git add TPIP.md
+          git add TPIP.md docs/third-party-licenses.json
           git commit -m "Update third-party licenses report [skip ci]"
           git push

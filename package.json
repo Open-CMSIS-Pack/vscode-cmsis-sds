@@ -441,6 +441,7 @@
         "yargs": "^18.0.0"
     },
     "overrides": {
+        "tar@>=6.1.2": "^7.5.11",
         "@vscode/vsce": {
             "cheerio": "1.0.0-rc.12"
         },
