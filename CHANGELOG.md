@@ -4,6 +4,10 @@
 
 - First public release of the extension.
 - Improve/reactify component.
+  - Synchronize Data Views with Media Viewers (video, image, audio) 
+  - Add a new Audio Media Viewer
+  - Include sdsio-server component
+  - Add Server UI Controlls to sdsio-server (Record/Playback/Stop, Flags)
 - Fix package name and publisher in package.json.
 - Remove transparent background of PNG icon.
 - Update extension icon to use new Arm marketplace image.
