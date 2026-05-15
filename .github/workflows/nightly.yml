@@ -43,6 +43,8 @@ jobs:
         include:
           - os: ubuntu-latest
             vsce_target: linux-x64
+          - os: ubuntu-24.04-arm
+            vsce_target: linux-arm64
           - os: windows-latest
             vsce_target: win32-x64
           - os: macos-latest
@@ -84,9 +86,9 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
 
-      # Disabled as there is use of `any` on many places. Code needs refactoring.
-      # - name: Lint
-      #   run: npm run lint
+      - name: Lint
+        if: runner.os == 'Linux'
+        run: npm run lint
 
       - name: Compile TypeScript
         run: npm run compile
@@ -181,6 +183,7 @@ jobs:
         target:
           - win32-x64
           - linux-x64
+          - linux-arm64
           - darwin-arm64
     runs-on: ubuntu-latest
     permissions:
