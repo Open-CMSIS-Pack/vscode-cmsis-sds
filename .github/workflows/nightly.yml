@@ -18,6 +18,7 @@ defaults:
 
 jobs:
   validate-links:
+    if: github.repository == 'Open-CMSIS-Pack/vscode-cmsis-sds'
     name: Validate Markdown Links
     runs-on: ubuntu-latest
     steps:
@@ -100,6 +101,7 @@ jobs:
         run: npm run postbuild
 
       - name: Update current version
+        if: runner.os == 'Linux' && github.repository_owner == 'Open-CMSIS-Pack'
         run: |
           # Increment patch version by 1 (e.g. 1.64.1 -> 1.64.2)
           BASE_VERSION=$(node -p "require('./package.json').version.split('-')[0]")
@@ -131,7 +133,7 @@ jobs:
 
           # Update package.json
           npm version "${NIGHTLY_VERSION}" --no-git-tag-version
-          sed -i "s/## Unreleased/## ${NIGHTLY_VERSION}/" CHANGELOG.md
+          sed -i "s/## Unreleased/## ${VERSION}/" CHANGELOG.md
           echo "Version is ${NIGHTLY_VERSION}"
 
       - name: Remove badges
@@ -148,6 +150,7 @@ jobs:
           path: |
             ./README.md
             ./package.json
+            ./CHANGELOG.md
           retention-days: 1
 
       - name: Run unit tests
