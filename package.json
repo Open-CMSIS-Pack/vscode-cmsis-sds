@@ -442,6 +442,7 @@
     },
     "overrides": {
         "tar@>=6.1.2": "^7.5.11",
+        "@tootallnate/once": "3.0.1",
         "@vscode/vsce": {
             "cheerio": "1.0.0-rc.12"
         },
