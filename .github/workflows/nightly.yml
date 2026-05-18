@@ -94,9 +94,6 @@ jobs:
       - name: Bundle extension (esbuild)
         run: npm run build
 
-      - name: Copy native modules (serialport, usb)
-        run: npm run postbuild
-
       - name: Update current version
         run: |
           # Increment patch version by 1 (e.g. 1.64.1 -> 1.64.2)
