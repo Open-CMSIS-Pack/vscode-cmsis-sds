@@ -29,6 +29,8 @@ jobs:
         include:
           - os: ubuntu-latest
             vsce_target: linux-x64
+          - os: ubuntu-24.04-arm
+            vsce_target: linux-arm64
           - os: windows-latest
             vsce_target: win32-x64
           - os: macos-latest
@@ -100,6 +102,7 @@ jobs:
               ;;
           esac
           VERSION="$(jq -r ".version" < package.json)"
+          sed -i "s/## Unreleased/## ${VERSION}/" CHANGELOG.md
           echo "Updated version to ${VERSION}"
 
       - name: Remove badges
@@ -171,6 +174,7 @@ jobs:
         target:
           - win32-x64
           - linux-x64
+          - linux-arm64
           - darwin-arm64
     runs-on: ubuntu-latest
     permissions:
