@@ -119,6 +119,7 @@ jobs:
           path: |
             ./README.md
             ./package.json
+            ./CHANGELOG.md
           retention-days: 1
 
       - name: Install dependencies
