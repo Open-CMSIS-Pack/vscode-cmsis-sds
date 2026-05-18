@@ -26,10 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
-      checks: write
       contents: read
       security-events: write
-      packages: read
 
     steps:
       - name: Harden the runner (Audit all outbound calls)

@@ -22,7 +22,7 @@ jobs:
     name: Lint Markdown Files
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: read
       actions: read
     steps:
