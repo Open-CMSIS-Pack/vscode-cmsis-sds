@@ -16,6 +16,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 defaults:
   run:
     shell: bash
@@ -36,6 +39,8 @@ jobs:
           - os: macos-latest
             vsce_target: darwin-arm64
     runs-on: ${{ matrix.os }}
+    permissions:
+      packages: read
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -119,6 +124,7 @@ jobs:
           path: |
             ./README.md
             ./package.json
+            ./CHANGELOG.md
           retention-days: 1
 
       - name: Install dependencies
@@ -226,6 +232,7 @@ jobs:
     if: github.event_name == 'release'
     needs: [ package ]
     permissions:
+      # for softprops/action-gh-release to create a GitHub release
       contents: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
