@@ -251,6 +251,17 @@ export class SdsIOInterfaceProvider implements vscode.TreeDataProvider<SdsFlagTr
         }
     }
 
+    async disconnectServer(): Promise<void> {
+        if (this.monitorConnected && this.monitor) {
+            this.monitorConnected = false;
+            this.monitor.stop();
+        }
+        if (this.serverLauncher.hasTerminal()) {
+            await this.serverLauncher.stop('Terminating SDSIO server terminal due to manual disconnect');
+        }
+        this.refresh();
+    }
+
     async connectServer(): Promise<boolean> {
         this.diagnostics.info(DiagnosticSource.Server, 'Attempting to connect to SDSIO monitor...');
         if (!this.monitor) {

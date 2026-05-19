@@ -136,6 +136,13 @@
                 "enablement": "arm-sds.sdsio.canConnect"
             },
             {
+                "command": "arm-sds.sdsinterface.disconnect",
+                "title": "Disconnect SDSIO Monitor",
+                "category": "SDS Tools",
+                "icon": "$(debug-disconnect)",
+                "enablement": "!arm-sds.sdsio.canConnect"
+            },
+            {
                 "command": "arm-sds.sds.newConfig",
                 "title": "New SDS Configuration",
                 "category": "SDS",
@@ -195,6 +202,11 @@
                 {
                     "command": "arm-sds.sdsinterface.connect",
                     "when": "view == sdsIOInterface && arm-sds.sdsio.canConnect",
+                    "group": "navigation@0"
+                },
+                {
+                    "command": "arm-sds.sdsinterface.disconnect",
+                    "when": "view == sdsIOInterface && !arm-sds.sdsio.canConnect",
                     "group": "navigation@0"
                 },
                 {

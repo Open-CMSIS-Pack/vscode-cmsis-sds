@@ -288,9 +288,13 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('arm-sds.sdsinterface.connect', async () => {
             await flagsProvider.connectServer();
             updateSdsIoCommandContext();
-            // if (!ok) {
-            //     void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
-            // }
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.sdsinterface.disconnect', async () => {
+            await flagsProvider.disconnectServer();
+            updateSdsIoCommandContext();
         })
     );
 
