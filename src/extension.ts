@@ -94,14 +94,6 @@ export function activate(context: vscode.ExtensionContext) {
         canSelectMany: false,
     });
     context.subscriptions.push(flagsTreeView);
-    context.subscriptions.push({
-        dispose: () => {
-            void flagsProvider.shutdown('Extension resources are being disposed');
-            if (activeFlagsProvider === flagsProvider) {
-                activeFlagsProvider = undefined;
-            }
-        },
-    });
 
     let isApplyingConfigSetting = false;
 
