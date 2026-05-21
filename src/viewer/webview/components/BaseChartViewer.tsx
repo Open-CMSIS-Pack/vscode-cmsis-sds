@@ -245,7 +245,9 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
 
     return (
         <div ref={containerRef} style={{ position: 'relative', height: '100%' }}>
-            <Line {...config} onReady={mergedOnReady} />
+            <div id='chart' style={{ height: '100%' }}>
+                <Line {...config} onReady={mergedOnReady} />
+            </div>
             {cursorLeftPx !== null && (
                 <div
                     style={{

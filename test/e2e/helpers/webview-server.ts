@@ -121,13 +121,13 @@ export function getViewerHtml(): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Viewer Test</title>
-    <link rel="stylesheet" href="/out/viewerWebview.css">
+    <link rel="stylesheet" href="/out/dataViewerWebview.css">
 </head>
 <body>
     <div id="root"></div>
     ${MOCK_VSCODE_API}
     <script>window.__INITIAL_STATE__ = ${JSON.stringify(initialState).replace(/</g, '\\u003c')};</script>
-    <script src="/out/viewerWebview.js"></script>
+    <script src="/out/dataViewerWebview.js"></script>
 </body>
 </html>`;
 }

@@ -364,20 +364,23 @@ function DataViewerApp() {
                 </Col>
                 <Col span={10}></Col>
                 <Col span={10} style={{ textAlign: 'right' }}>
-                    {/* <Space>
-                        <Space.Compact>
-                            {channelNames.map((name, i) => {
-                                const cColor = colors[i % colors.length];
-                                const active = activeChannels.has(name);
-                                return (
-                                    <Button key={name} style={{ borderColor: cColor, backgroundColor: active ? cColor : 'transparent' }} ghost onClick={() => toggleChannel(name)}>
-                                        {name}
-                                    </Button>
-                                );
-                            })}
-                        </Space.Compact>
-                        <Button icon={<SaveOutlined />} type='text' title='Export CSV' onClick={onExport}></Button>
-                    </Space> */}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        {channelNames.map((name, i) => {
+                            const cColor = colors[i % colors.length];
+                            const active = activeChannels.has(name);
+                            return (
+                                <Button
+                                    key={name}
+                                    style={{ borderColor: cColor, backgroundColor: active ? cColor : 'transparent' }}
+                                    ghost
+                                    onClick={() => toggleChannel(name)}
+                                >
+                                    {name}
+                                </Button>
+                            );
+                        })}
+                        <Button type='text' title='Export CSV' onClick={onExport}>Export</Button>
+                    </div>
                 </Col>
             </Row>
             <Row gutter={8} className='info-bar'>
