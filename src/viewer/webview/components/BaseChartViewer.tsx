@@ -19,6 +19,7 @@ export interface BaseChartViewerProps {
     highlightedX?: number | null;
     xRange?: [number, number];
     onCursorChange?: (x: number) => void;
+    onZoomRangeChange?: (range: [number, number]) => void;
     [key: string]: any;
 }
 
@@ -33,6 +34,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     highlightedX,
     xRange,
     onCursorChange,
+    onZoomRangeChange,
     ...rest
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -158,6 +160,32 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return plotRegion.left + ((plotRegion.right - plotRegion.left) * (cursorPercent / 100));
     }, [cursorPercent, plotRegion]);
 
+    const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+        if (!onZoomRangeChange || !resolveXRange) {
+            return;
+        }
+
+        event.preventDefault();
+
+        const currentRange = xRange && Number.isFinite(xRange[0]) && Number.isFinite(xRange[1]) && xRange[1] > xRange[0]
+            ? xRange
+            : resolveXRange;
+        const currentSpan = currentRange[1] - currentRange[0];
+        if (!Number.isFinite(currentSpan) || currentSpan <= 0) {
+            return;
+        }
+
+        const focusTime = cursorTimeFromClientPoint(event.clientX, event.clientY);
+        const anchorTime = focusTime === null ? (currentRange[0] + currentRange[1]) / 2 : focusTime;
+        const relativeAnchor = (anchorTime - currentRange[0]) / currentSpan;
+        const zoomFactor = Math.exp(event.deltaY * 0.0015);
+        const nextSpan = currentSpan * zoomFactor;
+
+        const nextStart = anchorTime - (nextSpan * relativeAnchor);
+        const nextEnd = nextStart + nextSpan;
+        onZoomRangeChange([nextStart, nextEnd]);
+    }, [cursorTimeFromClientPoint, onZoomRangeChange, resolveXRange, xRange]);
+
     useEffect(() => {
         return () => {
             if (detachCanvasListenersRef.current) {
@@ -244,7 +272,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     };
 
     return (
-        <div ref={containerRef} style={{ position: 'relative', height: '100%' }}>
+        <div ref={containerRef} style={{ position: 'relative', height: '100%' }} onWheel={handleWheel}>
             <div id='chart' style={{ height: '100%' }}>
                 <Line {...config} onReady={mergedOnReady} />
             </div>

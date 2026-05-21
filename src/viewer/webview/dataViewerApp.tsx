@@ -408,6 +408,7 @@ function DataViewerApp() {
                     highlightedX={highlightedTime}
                     xRange={viewRange}
                     onCursorChange={onCursorChange}
+                    onZoomRangeChange={(range) => setViewRange(clampRange(range[0], range[1]))}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
                     tooltip={{
                         showMarkers: true,
