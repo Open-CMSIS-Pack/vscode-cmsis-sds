@@ -175,6 +175,18 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             return;
         }
 
+        if (event.shiftKey) {
+            const wheelDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+            if (wheelDelta === 0) {
+                return;
+            }
+
+            const direction = wheelDelta > 0 ? 1 : -1;
+            const panAmount = currentSpan * 0.08 * direction;
+            onZoomRangeChange([currentRange[0] + panAmount, currentRange[1] + panAmount]);
+            return;
+        }
+
         const focusTime = cursorTimeFromClientPoint(event.clientX, event.clientY);
         const anchorTime = focusTime === null ? (currentRange[0] + currentRange[1]) / 2 : focusTime;
         const relativeAnchor = (anchorTime - currentRange[0]) / currentSpan;
