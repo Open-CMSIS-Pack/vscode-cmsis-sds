@@ -243,11 +243,12 @@ export class SdsMediaViewerPanel {
     }
     private buildInitialState() {
         const metadata = this.metadata;
+        const decimationPreset = this.getDecimationPreset();
         if (!metadata) {
             return { fileName: path.basename(this.sdsFilePath), error: 'Media data not available.' };
         }
 
-        const base = { fileName: path.basename(this.sdsFilePath) };
+        const base = { fileName: path.basename(this.sdsFilePath), decimationPreset };
         switch (this.mediaType) {
             case 'image': {
                 this.panel.iconPath = new vscode.ThemeIcon('device-camera');
@@ -304,6 +305,7 @@ export class SdsMediaViewerPanel {
                         rangeEnd: audioWindow?.rangeEnd ?? domainEnd,
                         domainStart,
                         domainEnd,
+                        decimationPreset,
                         sampleRate: audioMeta.sample_rate,
                         bitDepth: audioMeta.bit_depth,
                         channels: audioMeta.audio_channels,
@@ -481,6 +483,11 @@ export class SdsMediaViewerPanel {
 
     private getErrorHtml(message: string): string {
         return this.getHtml({ error: message, fileName: path.basename(this.sdsFilePath) });
+    }
+
+    private getDecimationPreset(): 'accuracy' | 'performance' {
+        const value = vscode.workspace.getConfiguration().get<string>('arm-sds.viewer.decimationPreset', 'accuracy');
+        return value === 'performance' ? 'performance' : 'accuracy';
     }
 
     private generateNonce(): string {

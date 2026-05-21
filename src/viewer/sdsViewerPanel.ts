@@ -205,6 +205,7 @@ export class SdsViewerPanel {
                 domainStart,
                 domainEnd,
                 fileName: path.basename(this.sdsFilePath),
+                decimationPreset: this.getDecimationPreset(),
             });
         } catch (err) {
             this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
@@ -354,10 +355,10 @@ export class SdsViewerPanel {
     private getHtml(initialState: Record<string, unknown>): string {
         const webview = this.panel.webview;
         const styleUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'out', 'viewerWebview.css')
+            vscode.Uri.joinPath(this.extensionUri, 'out', 'dataViewerWebview.css')
         );
         const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this.extensionUri, 'out', 'viewerWebview.js')
+            vscode.Uri.joinPath(this.extensionUri, 'out', 'dataViewerWebview.js')
         );
         const nonce = this.generateNonce();
         const stateJson = JSON.stringify(initialState).replace(/</g, '\\u003c');
@@ -382,6 +383,11 @@ export class SdsViewerPanel {
 
     private getErrorHtml(message: string): string {
         return this.getHtml({ error: message });
+    }
+
+    private getDecimationPreset(): 'accuracy' | 'performance' {
+        const value = vscode.workspace.getConfiguration().get<string>('arm-sds.viewer.decimationPreset', 'accuracy');
+        return value === 'performance' ? 'performance' : 'accuracy';
     }
 
     private generateNonce(): string {
