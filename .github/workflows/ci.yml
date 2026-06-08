@@ -30,13 +30,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             vsce_target: linux-x64
           - os: ubuntu-24.04-arm
             vsce_target: linux-arm64
-          - os: windows-latest
+          - os: windows-2025
             vsce_target: win32-x64
-          - os: macos-latest
+          - os: macos-15
             vsce_target: darwin-arm64
     runs-on: ${{ matrix.os }}
     permissions:
@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
 
@@ -182,13 +182,13 @@ jobs:
           - linux-x64
           - linux-arm64
           - darwin-arm64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       packages: read
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
 
@@ -228,7 +228,7 @@ jobs:
 
   publish:
     name: Publish release
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-24.04]
     if: github.event_name == 'release'
     needs: [ package ]
     permissions:
@@ -236,7 +236,7 @@ jobs:
       contents: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
 
