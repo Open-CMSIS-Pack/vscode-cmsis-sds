@@ -1,6 +1,6 @@
 // Shared base for time-series chart viewers using Ant Design Charts
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Line } from '@ant-design/charts';
+import { ChartEvent, Line } from '@ant-design/charts';
 
 export interface ChartSample {
     x: number;
@@ -36,7 +36,11 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     ...rest
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const plotRef = useRef<any>(null);
     const detachCanvasListenersRef = useRef<(() => void) | null>(null);
+    const resolveXRangeRef = useRef<[number, number] | null>(null);
+    const onCursorChangeRef = useRef<typeof onCursorChange>(onCursorChange);
     const plotRegionRef = useRef<{ left: number; right: number; top: number; bottom: number } | null>(null);
     const [plotRegion, setPlotRegion] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
     const width = 800;
@@ -93,24 +97,12 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             return null;
         }
 
-        const fallback = {
-            left: 0,
-            right: canvasEl.clientWidth,
-            top: 0,
-            bottom: canvasEl.clientHeight,
-        };
-
         const coordinate = plot?.chart?.getCoordinate?.();
+
         const start = coordinate?.start;
         const end = coordinate?.end;
-        if (
-            start &&
-            end &&
-            typeof start.x === 'number' &&
-            typeof start.y === 'number' &&
-            typeof end.x === 'number' &&
-            typeof end.y === 'number'
-        ) {
+
+        if (start && end) {
             return {
                 left: Math.min(start.x, end.x),
                 right: Math.max(start.x, end.x),
@@ -118,18 +110,22 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 bottom: Math.max(start.y, end.y),
             };
         }
-
-        return fallback;
+        return { left: 0, right: canvasEl.clientWidth, top: 0, bottom: canvasEl.clientHeight };
     }, []);
 
     const cursorTimeFromClientPoint = useCallback((clientX: number, clientY: number) => {
-        if (!resolveXRange) {
+        const activeRange = resolveXRangeRef.current;
+        if (!activeRange) {
             return null;
         }
 
-        const rect = containerRef.current?.getBoundingClientRect();
+        const rect = canvasRef.current?.getBoundingClientRect() ?? containerRef.current?.getBoundingClientRect();
         const region = plotRegionRef.current;
-        if (!rect || !region) {
+        if (!rect) {
+            return null;
+        }
+
+        if (!region) {
             return null;
         }
 
@@ -138,19 +134,20 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         if (regionWidth <= 0 || regionHeight <= 0) {
             return null;
         }
-
         const localX = clientX - rect.left;
         const localY = clientY - rect.top;
-
         // Ignore clicks above/below the plotted data region (axes, legend, padding).
         if (localY < region.top || localY > region.bottom) {
             return null;
         }
 
-        const clampedX = Math.max(region.left, Math.min(region.right, localX));
-        const relative = (clampedX - region.left) / regionWidth;
-        return resolveXRange[0] + (resolveXRange[1] - resolveXRange[0]) * relative;
-    }, [resolveXRange]);
+        if (localX < region.left || localX > region.right) {
+            return null;
+        }
+
+        const relative = (localX - region.left) / regionWidth;
+        return activeRange[0] + (activeRange[1] - activeRange[0]) * relative;
+    }, []);
 
     const cursorLeftPx = useMemo(() => {
         if (cursorPercent === null || !plotRegion) {
@@ -199,6 +196,14 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     }, [cursorTimeFromClientPoint, onZoomRangeChange, resolveXRange, xRange]);
 
     useEffect(() => {
+        resolveXRangeRef.current = resolveXRange;
+    }, [resolveXRange]);
+
+    useEffect(() => {
+        onCursorChangeRef.current = onCursorChange;
+    }, [onCursorChange]);
+
+    useEffect(() => {
         return () => {
             if (detachCanvasListenersRef.current) {
                 detachCanvasListenersRef.current();
@@ -232,18 +237,34 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     const userOnReady = rest.onReady;
 
     const mergedOnReady = (plot: any) => {
+        plotRef.current = plot;
         if (detachCanvasListenersRef.current) {
             detachCanvasListenersRef.current();
             detachCanvasListenersRef.current = null;
         }
 
         const canvasEl = containerRef.current?.querySelector<HTMLCanvasElement>('canvas') ?? null;
+        canvasRef.current = canvasEl;
         const region = resolvePlotRegion(plot, canvasEl);
         plotRegionRef.current = region;
         setPlotRegion(region);
 
         if (onCursorChange && resolveXRange && canvasEl) {
+            plot.chart.on(`plot:${ChartEvent.POINTER_MOVE}`, (e: any) => {
+                if (e.target.attributes.class === 'plot' && e.buttons === 1) {
+                    console.log("N", e.nativeEvent.clientX, e.nativeEvent.clientY);
+                    emitCursor(e.nativeEvent);
+                }
+            });
+            plot.chart.on(`plot:${ChartEvent.POINTER_DOWN}`, (e: any) => {
+                if (e.target.attributes.class === 'plot' && e.buttons === 1) {
+                    console.log("N", e.nativeEvent.clientX, e.nativeEvent.clientY);
+                    emitCursor(e.nativeEvent);
+                }
+            });
+
             const emitCursor = (event: MouseEvent) => {
+                console.log("O", event.clientX, event.clientY);
                 const time = cursorTimeFromClientPoint(event.clientX, event.clientY);
                 if (time === null) {
                     return;
@@ -251,29 +272,9 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 onCursorChange(time);
             };
 
-            const onCanvasClick = (event: MouseEvent) => {
-                emitCursor(event);
-            };
-
-            const onCanvasMouseDown = (event: MouseEvent) => {
-                emitCursor(event);
-            };
-
-            const onCanvasMouseMove = (event: MouseEvent) => {
-                if ((event.buttons & 1) !== 1) {
-                    return;
-                }
-                emitCursor(event);
-            };
-
-            canvasEl.addEventListener('click', onCanvasClick);
-            canvasEl.addEventListener('mousedown', onCanvasMouseDown);
-            canvasEl.addEventListener('mousemove', onCanvasMouseMove);
-
             detachCanvasListenersRef.current = () => {
-                canvasEl.removeEventListener('click', onCanvasClick);
-                canvasEl.removeEventListener('mousedown', onCanvasMouseDown);
-                canvasEl.removeEventListener('mousemove', onCanvasMouseMove);
+                canvasRef.current = null;
+                plotRef.current = null;
             };
         }
 

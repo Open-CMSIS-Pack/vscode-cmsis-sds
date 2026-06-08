@@ -446,33 +446,6 @@ function DataViewerApp() {
                         disabled={domainEnd <= domainStart}
                     />
                 </Col>
-                {/* <Col flex='none' style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
-                    Window: {windowLength.toFixed(3)} s
-                </Col>
-                <Col flex='none' style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
-                    Cursor: {highlightedTime !== null ? `${highlightedTime.toFixed(4)} s` : 'n/a'}
-                </Col>
-                <Col flex='none'>
-                    <Space.Compact>
-                        <Button
-                            type={decimationPreset === 'accuracy' ? 'primary' : 'default'}
-                            size='small'
-                            onClick={() => setDecimationPreset('accuracy')}
-                        >
-                            Accuracy
-                        </Button>
-                        <Button
-                            type={decimationPreset === 'performance' ? 'primary' : 'default'}
-                            size='small'
-                            onClick={() => setDecimationPreset('performance')}
-                        >
-                            Performance
-                        </Button>
-                    </Space.Compact>
-                </Col>
-                <Col flex='none' style={{ opacity: 0.75, fontSize: '80%', whiteSpace: 'nowrap' }}>
-                    Mode: {isDragMode ? 'preview' : 'detail'} ({decimationPreset})
-                </Col> */}
                 <Col flex='none'>
                     <Button icon={<ZoomInOutlined />} type='text' title='Zoom In' onClick={onZoomIn}></Button>
                     <Button icon={<ZoomOutOutlined />} type='text' title='Zoom Out' onClick={onZoomOut} disabled={domainSpan === windowLength}></Button>
