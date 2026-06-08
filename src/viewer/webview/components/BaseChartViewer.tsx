@@ -14,7 +14,6 @@ export interface BaseChartViewerProps {
     yField?: string;
     seriesField?: string;
     title?: string;
-    height?: number;
     color?: string[];
     highlightedX?: number | null;
     xRange?: [number, number];
@@ -29,7 +28,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     yField = 'y',
     seriesField,
     title,
-    height = 320,
     color,
     highlightedX,
     xRange,
@@ -41,6 +39,8 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     const detachCanvasListenersRef = useRef<(() => void) | null>(null);
     const plotRegionRef = useRef<{ left: number; right: number; top: number; bottom: number } | null>(null);
     const [plotRegion, setPlotRegion] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
+    const width = 800;
+    const height = 400;
 
     const resolveXRange = useMemo<[number, number] | null>(() => {
         if (xRange && Number.isFinite(xRange[0]) && Number.isFinite(xRange[1]) && xRange[1] > xRange[0]) {
@@ -214,7 +214,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         seriesField,
         // Ensure multi-series line colors follow the provided palette.
         colorField: seriesField,
-        height,
         color,
         scale: color && color.length > 0
             ? {
@@ -292,7 +291,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 <div
                     style={{
                         position: 'absolute',
-                        top: plotRegion?.top ?? 0,
+                        top: plotRegion?.top ?? width,
                         height: plotRegion ? Math.max(0, plotRegion.bottom - plotRegion.top) : height,
                         left: `${cursorLeftPx - 0.5}px`,
                         borderLeft: '1px dashed rgba(220, 80, 80, 0.95)',

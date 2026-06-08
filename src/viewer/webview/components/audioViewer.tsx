@@ -355,7 +355,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     xField="x"
                     yField="y"
                     seriesField="channel"
-                    height={420}
                     smooth={false}
                     highlightedX={highlightedTime}
                     xRange={viewRange}

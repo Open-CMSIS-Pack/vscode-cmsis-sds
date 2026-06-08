@@ -403,7 +403,6 @@ function DataViewerApp() {
                     yField='y'
                     seriesField='channel'
                     color={colors}
-                    height={420}
                     smooth={false}
                     highlightedX={highlightedTime}
                     xRange={viewRange}
