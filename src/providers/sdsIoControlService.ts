@@ -194,7 +194,7 @@ export class SdsIoControlService {
     }
 
     canDisconnect(): boolean {
-        return this.monitorConnected || (this.monitorConnected && this.serverLauncher.hasTerminal());
+        return this.monitorConnected || this.serverLauncher.hasTerminal();
     }
 
     async disconnectServer(): Promise<void> {
