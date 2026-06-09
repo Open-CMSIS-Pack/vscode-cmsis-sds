@@ -33,6 +33,7 @@ import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
 import { parseSdsFile, decodeAllRecords, parseMetadataFile, exportToCsv, SDS_METADATA_EXTENSION, } from './sds';
+import { SDS_FILE_MATCHER } from './webview/utilities';
 
 export const SDSIO_SERVER_MONITOR_PORT = 6060;
 const SDSIO_CONFIG_EXTENSION = '.sdsio.yml';
@@ -375,7 +376,7 @@ export function activate(context: vscode.ExtensionContext) {
                     return;
                 }
                 // Create a starter metadata template
-                const streamName = path.basename(filePath).replace(/\.\d+(\.p)?\.sds$/, '');
+                const streamName = path.basename(filePath).replace(SDS_FILE_MATCHER, '$1');
                 const template = [
                     `sds:`,
                     `  name: ${streamName}`,
@@ -675,7 +676,7 @@ async function selectSdsFile(): Promise<string | undefined> {
 function metadataPathFor(sdsPath: string): string | undefined {
     const dir = path.dirname(sdsPath);
     const base = path.basename(sdsPath);
-    const match = base.match(/^(.+)\.\d+(\.p)?\.sds$/);
+    const match = base.match(SDS_FILE_MATCHER);
     if (match) {
         return path.join(dir, `${match[1]}${SDS_METADATA_EXTENSION}`);
     }

@@ -15,6 +15,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import * as fs from 'fs';
 
 vi.mock('vscode', () => {
     class EventEmitter<T> {
@@ -95,6 +96,14 @@ vi.mock('../../src/sds/types', async () => {
 
 import { SdsExplorerProvider, SdsTreeItem } from '../../src/providers/sdsExplorerProvider';
 
+function createDirent(name: string, kind: 'file' | 'directory') {
+    return {
+        name,
+        isDirectory: () => kind === 'directory',
+        isFile: () => kind === 'file',
+    };
+}
+
 describe('SdsExplorerProvider', () => {
     it('returns two root nodes and includes flags node with description from flags source', async () => {
         const configManager = {
@@ -131,5 +140,76 @@ describe('SdsExplorerProvider', () => {
         const rootItems = await provider.getChildren();
 
         expect(rootItems).toEqual([]);
+    });
+
+    it('scanDirectory groups recursive files by stream name and keeps label and playback variants', async () => {
+        const readdirSyncMock = vi.mocked(fs.readdirSync);
+        const existsSyncMock = vi.mocked(fs.existsSync);
+        const statSyncMock = vi.mocked(fs.statSync);
+
+        readdirSyncMock.mockImplementation((dirPath: fs.PathLike) => {
+            const normalized = String(dirPath).replace(/\\/g, '/');
+            switch (normalized) {
+                case 'c:/workspace':
+                    return [
+                        createDirent('acc', 'directory'),
+                        createDirent('ml', 'directory'),
+                    ] as never;
+                case 'c:/workspace/acc':
+                    return [
+                        createDirent('acc.sds.yml', 'file'),
+                        createDirent('acc.0.sds', 'file'),
+                    ] as never;
+                case 'c:/workspace/ml':
+                    return [
+                        createDirent('ml_in.sds.yml', 'file'),
+                        createDirent('ml_in.0.sds', 'file'),
+                        createDirent('ml_in.1.p.sds', 'file'),
+                        createDirent('ml_in.rock.2.sds', 'file'),
+                        createDirent('ml_in.rock.3.p.sds', 'file'),
+                    ] as never;
+                default:
+                    return [] as never;
+            }
+        });
+
+        existsSyncMock.mockImplementation((targetPath: fs.PathLike) => {
+            const normalized = String(targetPath).replace(/\\/g, '/');
+            return normalized.endsWith('/acc.sds.yml') || normalized.endsWith('/ml_in.sds.yml');
+        });
+        statSyncMock.mockImplementation(() => ({ size: 32 }) as never);
+
+        const configManager = {
+            onDidChangeConfig: vi.fn(),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: undefined, metadir: undefined })),
+        };
+
+        const provider = new SdsExplorerProvider(configManager as never);
+        const groups = new Map<string, SdsTreeItem[]>();
+
+        await (provider as unknown as {
+            scanDirectory: (
+                dirPath: string,
+                groups: Map<string, SdsTreeItem[]>,
+                recursive: boolean,
+                metadataByStream?: Map<string, string>,
+                usedMetadataFiles?: Set<string>
+            ) => Promise<void>;
+        }).scanDirectory('c:/workspace', groups, true);
+
+        const actual = new Map(
+            [...groups.entries()].map(([groupName, items]) => [
+                groupName,
+                items
+                    .filter((item) => item.itemType === 'sdsFile')
+                    .map((item) => item.filePath.replace(/\\/g, '/').replace(/^.*\//, '').replace(/\.sds$/i, '')),
+            ])
+        );
+
+        expect(actual).toEqual(new Map([
+            ['acc', ['acc.0']],
+            ['ml_in', ['ml_in.0', 'ml_in.1.p', 'ml_in.rock.2', 'ml_in.rock.3.p']],
+        ]));
     });
 });

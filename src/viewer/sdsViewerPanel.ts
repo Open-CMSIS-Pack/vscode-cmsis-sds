@@ -37,6 +37,7 @@ import {
 import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { WebviewMessage } from '../webview/protocol';
+import { SDS_FILE_MATCHER } from '../webview/utilities';
 
 type VisibleRangeRequest = {
     command: 'requestVisibleRangeData';
@@ -342,7 +343,7 @@ export class SdsViewerPanel {
         const dir = path.dirname(sdsPath);
         const base = path.basename(sdsPath);
         // <name>.<index>.sds -> <name>.sds.yml
-        const match = base.match(/^(.+)\.\d+(\.p)?\.sds$/);
+        const match = base.match(SDS_FILE_MATCHER);
         if (match) {
             const metaPath = path.join(dir, `${match[1]}${SDS_METADATA_EXTENSION}`);
             if (fs.existsSync(metaPath)) {

@@ -1,3 +1,6 @@
 {
-    "cmsis-sds.sdsio.configFile": "test.sdsio.yml"
+    "cmsis-sds.sdsio.configFile": "test.sdsio.yml",
+    "chat.tools.terminal.autoApprove": {
+        "npx vitest": true
+    }
 }

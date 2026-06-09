@@ -23,6 +23,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { SDS_FILE_MATCHER } from '../webview/utilities';
 import {
     SdsRecord,
     SdsMetadata,
@@ -534,13 +535,12 @@ export function findNextFileIndex(directory: string, streamName: string): number
     }
 
     const files = fs.readdirSync(directory);
-    const pattern = new RegExp(`^${escapeRegex(streamName)}\\.(\\d+)(\\.p)?\\.sds$`);
     let maxIndex = -1;
 
     for (const file of files) {
-        const match = file.match(pattern);
-        if (match) {
-            const idx = parseInt(match[1], 10);
+        const match = file.match(SDS_FILE_MATCHER);
+        if (match && match[1] === streamName) {
+            const idx = parseInt(match[2], 10);
             if (idx > maxIndex) {
                 maxIndex = idx;
             }
@@ -548,8 +548,4 @@ export function findNextFileIndex(directory: string, streamName: string): number
     }
 
     return maxIndex + 1;
-}
-
-function escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

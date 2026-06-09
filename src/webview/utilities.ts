@@ -16,9 +16,17 @@
 
 import { ImageFrame } from "./protocol";
 
-const decodedFrameCache = new WeakMap<ImageFrame, Map<string, ImageData>>();
+// export const SDS_FILE_MATCHER = /^(.+)\.(\d+)(\.[a-zA-Z]+)?(\.p)?\.sds$/i;
+// regex matching <streamname>.<id>.<label>?.p?.sds - ? defines optional, .p is optional, <label> is optional and can be any string without dots and not p, <id> is a number, <streamname> is any string without dots
+export const SDS_FILE_MATCHER = /^(\w+)(\.\w+)?\.(\d+)(\.p)?\.sds$/i;
+
+export function isSdsFile(fileName: string): boolean {
+    return SDS_FILE_MATCHER.test(fileName);
+}
 
 export function decodeFrame(frame: ImageFrame, width: number, height: number): ImageData {
+    const decodedFrameCache = new WeakMap<ImageFrame, Map<string, ImageData>>();
+
     const cacheKey = `${width}x${height}`;
     const cachedFrames = decodedFrameCache.get(frame);
     const cachedImage = cachedFrames?.get(cacheKey);
