@@ -85,7 +85,7 @@ vi.mock('../../src/controller/sdsioServerLauncher', () => {
     };
 });
 
-import { SdsIOInterfaceProvider } from '../../src/providers/sdsFlagsProvider';
+import { SdsIoControlService } from '../../src/providers/sdsIoControlService';
 
 class FakeMonitor extends EventEmitter {
     start = vi.fn(async () => {
@@ -140,7 +140,7 @@ function createConfigManager(...args: [string?]): FakeConfigManager {
     };
 }
 
-describe('SdsIOInterfaceProvider launcher delegation', () => {
+describe('SdsIoControlService launcher delegation', () => {
     it('connectServer delegates server startup to launcher', async () => {
         launcherMock.hasTerminal.mockReset();
         launcherMock.stop.mockReset();
@@ -150,7 +150,7 @@ describe('SdsIOInterfaceProvider launcher delegation', () => {
 
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');
-        const provider = new SdsIOInterfaceProvider(
+        const provider = new SdsIoControlService(
             configManager as never,
             monitor as never,
             'c:/workspace/ext',
@@ -178,7 +178,7 @@ describe('SdsIOInterfaceProvider launcher delegation', () => {
 
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');
-        new SdsIOInterfaceProvider(
+        new SdsIoControlService(
             configManager as never,
             monitor as never,
             'c:/workspace/ext',
@@ -202,7 +202,7 @@ describe('SdsIOInterfaceProvider launcher delegation', () => {
 
         const monitor = new FakeMonitor();
         const configManager = createConfigManager(undefined);
-        const provider = new SdsIOInterfaceProvider(
+        const provider = new SdsIoControlService(
             configManager as never,
             monitor as never,
             'c:/workspace/ext',
