@@ -179,9 +179,9 @@
             "arm-sds-explorer": [
                 {
                     "id": "sdsExplorer",
-                    "name": "SDS Files",
-                    "icon": "$(graph-line)",
-                    "contextualTitle": "SDS Explorer"
+                    "name": "Files",
+                    "icon": "media/icons/sds-icon.svg",
+                    "contextualTitle": "SDS"
                 }
             ]
         },
