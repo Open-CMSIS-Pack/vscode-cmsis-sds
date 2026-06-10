@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { WebviewMessenger, getInitialState } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
-import { Button, Col, ConfigProvider, Row, Slider, theme } from 'antd';
+import { Button, Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
 import { ExpandOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { BroadcastMessage, getIndexedSdsSuffix, Message, WebviewMessage } from '../../webview/protocol';
 import { broadcastMessage } from '../../webview/vscode-api';
@@ -362,20 +362,23 @@ function DataViewerApp() {
                 <Col span={14}></Col>
                 <Col span={10} style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                        {channelNames.map((name, i) => {
-                            const cColor = colors[i % colors.length];
-                            const active = activeChannels.has(name);
-                            return (
-                                <Button
-                                    key={name}
-                                    style={{ borderColor: cColor, backgroundColor: active ? cColor : 'transparent' }}
-                                    ghost
-                                    onClick={() => toggleChannel(name)}
-                                >
-                                    {name}
-                                </Button>
-                            );
-                        })}
+                        <Space.Compact block>
+                            {channelNames.map((name, i) => {
+                                const cColor = colors[i % colors.length];
+                                const active = activeChannels.has(name);
+                                return (
+                                    <Button
+                                        key={name}
+                                        size='small'
+                                        style={{ borderColor: cColor, backgroundColor: active ? cColor : 'transparent' }}
+                                        ghost
+                                        onClick={() => toggleChannel(name)}
+                                    >
+                                        {name}
+                                    </Button>
+                                );
+                            })}
+                        </Space.Compact>
                         <Button type='text' title='Export CSV' onClick={onExport}>Export</Button>
                     </div>
                 </Col>

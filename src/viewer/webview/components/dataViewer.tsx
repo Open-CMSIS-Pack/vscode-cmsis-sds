@@ -32,7 +32,6 @@ export const DataViewer: React.FC<DataViewerProps> = ({ samples, channelNames, t
                 <Col flex="auto">
                     <h3>{title || 'SDS Viewer'}</h3>
                 </Col>
-                {/* Add controls here as needed */}
             </Row>
             <BaseChartViewer
                 data={chartData}
@@ -42,7 +41,6 @@ export const DataViewer: React.FC<DataViewerProps> = ({ samples, channelNames, t
                 height={320}
                 title={title}
             />
-            {/* Add zoom/slider controls here as needed */}
         </div>
     );
 };
