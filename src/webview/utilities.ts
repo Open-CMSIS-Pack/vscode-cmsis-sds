@@ -28,9 +28,9 @@ export function isSdsFile(fileName: string): boolean {
     return SDS_FILE_MATCHER.test(fileName);
 }
 
-export function decodeFrame(frame: ImageFrame, width: number, height: number): ImageData {
-    const decodedFrameCache = new WeakMap<ImageFrame, Map<string, ImageData>>();
+const decodedFrameCache = new WeakMap<ImageFrame, Map<string, ImageData>>();
 
+export function decodeFrame(frame: ImageFrame, width: number, height: number): ImageData {
     const cacheKey = `${width}x${height}`;
     const cachedFrames = decodedFrameCache.get(frame);
     const cachedImage = cachedFrames?.get(cacheKey);
