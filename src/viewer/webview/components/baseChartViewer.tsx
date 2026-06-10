@@ -250,29 +250,29 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         setPlotRegion(region);
 
         if (onCursorChange && resolveXRange && canvasEl) {
-            plot.chart.on(`plot:${ChartEvent.POINTER_MOVE}`, (e: any) => {
-                if (e.target.attributes.class === 'plot' && e.buttons === 1) {
-                    console.log("N", e.nativeEvent.clientX, e.nativeEvent.clientY);
-                    emitCursor(e.nativeEvent);
-                }
-            });
-            plot.chart.on(`plot:${ChartEvent.POINTER_DOWN}`, (e: any) => {
-                if (e.target.attributes.class === 'plot' && e.buttons === 1) {
-                    console.log("N", e.nativeEvent.clientX, e.nativeEvent.clientY);
-                    emitCursor(e.nativeEvent);
-                }
-            });
-
             const emitCursor = (event: MouseEvent) => {
-                console.log("O", event.clientX, event.clientY);
                 const time = cursorTimeFromClientPoint(event.clientX, event.clientY);
                 if (time === null) {
                     return;
                 }
-                onCursorChange(time);
+                onCursorChangeRef.current?.(time);
             };
 
+            const pointerMoveEvent = `plot:${ChartEvent.POINTER_MOVE}`;
+            const pointerDownEvent = `plot:${ChartEvent.POINTER_DOWN}`;
+
+            const handlePointerEvent = (e: any) => {
+                if (e?.target?.attributes?.class === 'plot' && e?.buttons === 1 && e?.nativeEvent) {
+                    emitCursor(e.nativeEvent as MouseEvent);
+                }
+            };
+
+            plot.chart.on(pointerMoveEvent, handlePointerEvent);
+            plot.chart.on(pointerDownEvent, handlePointerEvent);
+
             detachCanvasListenersRef.current = () => {
+                plot.chart.off(pointerMoveEvent, handlePointerEvent);
+                plot.chart.off(pointerDownEvent, handlePointerEvent);
                 canvasRef.current = null;
                 plotRef.current = null;
             };
