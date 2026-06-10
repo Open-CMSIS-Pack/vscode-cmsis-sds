@@ -170,7 +170,7 @@ function DataViewerApp() {
 
         const handle = window.setTimeout(() => {
             requestVisibleRangeData(viewRange[0], viewRange[1], quality);
-        }, isDragging ? 40 : 100);
+        }, isDragging ? 10 : 100);
 
         return () => {
             window.clearTimeout(handle);
