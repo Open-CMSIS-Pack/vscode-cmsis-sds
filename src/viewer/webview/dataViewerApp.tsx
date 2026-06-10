@@ -23,9 +23,9 @@ import { Button, Col, ConfigProvider, Row, Slider, theme } from 'antd';
 import { ExpandOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { BroadcastMessage, getIndexedSdsSuffix, Message, WebviewMessage } from '../../webview/protocol';
 import { broadcastMessage } from '../../webview/vscode-api';
-import { BaseChartViewer, ChartSample } from './components/BaseChartViewer';
 import { decimateExtremaSeries, DecimationPreset } from './components/decimation';
 import { getIsDarkTheme } from '../../webview/utilities';
+import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
 

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { BaseChartViewer, ChartSample } from './BaseChartViewer';
+import { BaseChartViewer, ChartSample } from './baseChartViewer';
 import { Row, Col } from 'antd';
 
 export interface DataViewerProps {

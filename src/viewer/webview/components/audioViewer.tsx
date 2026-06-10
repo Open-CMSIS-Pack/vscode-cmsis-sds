@@ -19,7 +19,7 @@ import { Button, Col, Row, Slider } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BroadcastMessage, getIndexedSdsSuffix, Message, SampleFrame } from '../../../webview/protocol';
 import { broadcastMessage } from '../../../webview/vscode-api';
-import { BaseChartViewer, ChartSample } from './BaseChartViewer';
+import { BaseChartViewer, ChartSample } from './baseChartViewer';
 import { decimateExtremaSeries, DecimationPreset } from './decimation';
 import { getIsDarkTheme } from '../../../webview/utilities';
 
