@@ -16,9 +16,13 @@
 
 import { ImageFrame } from "./protocol";
 
-// export const SDS_FILE_MATCHER = /^(.+)\.(\d+)(\.[a-zA-Z]+)?(\.p)?\.sds$/i;
-// regex matching <streamname>.<id>.<label>?.p?.sds - ? defines optional, .p is optional, <label> is optional and can be any string without dots and not p, <id> is a number, <streamname> is any string without dots
-export const SDS_FILE_MATCHER = /^(\w+)(\.\w+)?\.(\d+)(\.p)?\.sds$/i;
+// Regex matching:
+//   <stream>.<index>.sds
+//   <stream>.<index>.p.sds
+//   <stream>.<label>.<index>.sds
+//   <stream>.<label>.<index>.p.sds
+// where <label> may contain one or more dot-separated segments.
+export const SDS_FILE_MATCHER = /^([^.]+)((?:\.[^.]+)*)\.(\d+)(\.p)?\.sds$/i;
 
 export function isSdsFile(fileName: string): boolean {
     return SDS_FILE_MATCHER.test(fileName);
