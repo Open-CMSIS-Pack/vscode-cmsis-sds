@@ -16,6 +16,18 @@
 
 import { ImageFrame } from "./protocol";
 
+// Regex matching:
+//   <stream>.<index>.sds
+//   <stream>.<index>.p.sds
+//   <stream>.<label>.<index>.sds
+//   <stream>.<label>.<index>.p.sds
+// where <label> may contain one or more dot-separated segments.
+export const SDS_FILE_MATCHER = /^([^.]+)((?:\.[^.]+)*)\.(\d+)(\.p)?\.sds$/i;
+
+export function isSdsFile(fileName: string): boolean {
+    return SDS_FILE_MATCHER.test(fileName);
+}
+
 const decodedFrameCache = new WeakMap<ImageFrame, Map<string, ImageData>>();
 
 export function decodeFrame(frame: ImageFrame, width: number, height: number): ImageData {
