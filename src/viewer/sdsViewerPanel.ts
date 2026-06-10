@@ -34,6 +34,7 @@ import {
     SDS_METADATA_EXTENSION,
     SdsDecodedSample,
 } from '../sds';
+import { ViewerSettings } from './viewerSettings';
 import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { WebviewMessage } from '../webview/protocol';
@@ -205,7 +206,7 @@ export class SdsViewerPanel {
                 domainStart,
                 domainEnd,
                 fileName: path.basename(this.sdsFilePath),
-                decimationPreset: this.getDecimationPreset(),
+                decimationPreset: ViewerSettings.getDecimationPreset(),
             });
         } catch (err) {
             this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
@@ -383,11 +384,6 @@ export class SdsViewerPanel {
 
     private getErrorHtml(message: string): string {
         return this.getHtml({ error: message });
-    }
-
-    private getDecimationPreset(): 'accuracy' | 'performance' {
-        const value = vscode.workspace.getConfiguration().get<string>('arm-sds.viewer.decimationPreset', 'accuracy');
-        return value === 'performance' ? 'performance' : 'accuracy';
     }
 
     private generateNonce(): string {

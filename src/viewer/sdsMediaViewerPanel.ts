@@ -38,6 +38,7 @@ import {
     detectMediaType,
     SdsParsedFile,
 } from '../sds';
+import { ViewerSettings } from './viewerSettings';
 import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { ImageFrame, SampleFrame, WebviewMessage } from '../webview/protocol';
@@ -243,7 +244,7 @@ export class SdsMediaViewerPanel {
     }
     private buildInitialState() {
         const metadata = this.metadata;
-        const decimationPreset = this.getDecimationPreset();
+        const decimationPreset = ViewerSettings.getDecimationPreset();
         if (!metadata) {
             return { fileName: path.basename(this.sdsFilePath), error: 'Media data not available.' };
         }
@@ -483,11 +484,6 @@ export class SdsMediaViewerPanel {
 
     private getErrorHtml(message: string): string {
         return this.getHtml({ error: message, fileName: path.basename(this.sdsFilePath) });
-    }
-
-    private getDecimationPreset(): 'accuracy' | 'performance' {
-        const value = vscode.workspace.getConfiguration().get<string>('arm-sds.viewer.decimationPreset', 'accuracy');
-        return value === 'performance' ? 'performance' : 'accuracy';
     }
 
     private generateNonce(): string {
