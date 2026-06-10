@@ -159,7 +159,7 @@ function DataViewerApp() {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, viewRange]);
+    }, [filename]);
 
     useEffect(() => {
         if (initial.error) {

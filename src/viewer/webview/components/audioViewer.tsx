@@ -319,7 +319,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     <Button
                         icon={isPlaying ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
                         type="text"
-                        title={isPlaying ? 'Stop Playback' : 'Play Loaded Samples'}
+                        title={isPlaying ? 'Stop Playback' : 'Play Visible Range'}
                         onClick={() => {
                             if (isPlaying) {
                                 stopPlayback();

@@ -1,3 +1,19 @@
+/**
+ * Copyright 2026 Arm Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 // Shared base for time-series chart viewers using Ant Design Charts
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChartEvent, Line } from '@ant-design/charts';
@@ -292,7 +308,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 <div
                     style={{
                         position: 'absolute',
-                        top: plotRegion?.top ?? width,
+                        top: plotRegion?.top ?? 0,
                         height: plotRegion ? Math.max(0, plotRegion.bottom - plotRegion.top) : height,
                         left: `${cursorLeftPx - 0.5}px`,
                         borderLeft: '1px dashed rgba(220, 80, 80, 0.95)',

@@ -23,7 +23,7 @@ export function decimateExtremaSeries(data: ChartSample[], maxPoints: number): C
         return data;
     }
 
-    const bucketSize = Math.max(2, Math.ceil(data.length / maxPoints));
+    const bucketSize = Math.max(2, Math.ceil(data.length / Math.max(1, Math.floor(maxPoints / 4))));
     const reduced: ChartSample[] = [];
 
     for (let i = 0; i < data.length; i += bucketSize) {
