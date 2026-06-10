@@ -29,6 +29,15 @@ import * as path from 'path';
 const SRC_ROOT = path.resolve(__dirname, '../../../src');
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
+function assertWebviewAssetsExist(assets: string[]): void {
+    const missing = assets.filter(asset => !fs.existsSync(path.join(REPO_ROOT, asset)));
+    if (missing.length > 0) {
+        throw new Error(
+            `Missing webview build artifacts: ${missing.join(', ')}. Run \"npm run compile:webviews\" before e2e tests.`
+        );
+    }
+}
+
 /** Mock vscode API script injected before the webview's own <script>. */
 const MOCK_VSCODE_API = `
 <script>
@@ -81,6 +90,8 @@ function extractHtml(sourceFile: string): string {
  * Uses the first `getHtml` in the viewer (the main data view, not the error view).
  */
 export function getViewerHtml(): string {
+    assertWebviewAssetsExist(['out/viewerWebview.css', 'out/viewerWebview.js']);
+
     const sampleData = [
         { timestamp: 0, timeSeconds: 0.0, values: { x: 1.0, y: 2.0, z: 3.0 } },
         { timestamp: 10, timeSeconds: 0.01, values: { x: 1.5, y: 2.5, z: 3.5 } },
@@ -218,6 +229,8 @@ export function getVideoViewerHtml(): string {
 }
 
 function buildMediaHtml(initialState: Record<string, unknown>): string {
+    assertWebviewAssetsExist(['out/mediaViewerWebview.css', 'out/mediaViewerWebview.js']);
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>

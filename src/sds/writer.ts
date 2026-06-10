@@ -534,7 +534,7 @@ export function findNextFileIndex(directory: string, streamName: string): number
     }
 
     const files = fs.readdirSync(directory);
-    const pattern = new RegExp(`^${escapeRegex(streamName)}\\.(\\d+)(\\.p)?\\.sds$`);
+    const pattern = new RegExp(`^${escapeRegex(streamName)}\\.(\\d+)(\\.[^.]+)?(\\.p)?\\.sds$`, 'i');
     let maxIndex = -1;
 
     for (const file of files) {
@@ -550,6 +550,6 @@ export function findNextFileIndex(directory: string, streamName: string): number
     return maxIndex + 1;
 }
 
-function escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

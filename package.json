@@ -406,6 +406,7 @@
         "test": "npm-run-all test:unit test:integration test:e2e",
         "test:unit": "vitest run --config vitest.config.ts",
         "test:integration": "vitest run --config vitest.config.ts",
+        "pretest:e2e": "npm run compile:webviews",
         "test:e2e": "npx playwright test --config=playwright.config.ts",
         "copyright:check": "tsx scripts/copyright-manager.ts --mode=check --include=src/**/*.ts,scripts/**/*.ts --exclude=**/node_modules/**,coverage/**,dist/**,tools/**,out/**",
         "copyright:fix": "tsx scripts/copyright-manager.ts --mode=fix --include=src/**/*.ts,scripts/**/*.ts --exclude=**/node_modules/**,coverage/**,dist/**,tools/**,out/**",

@@ -29,6 +29,7 @@ import { parseMetadataFile } from '../sds/writer';
 import { detectMediaType } from '../sds/types';
 import { SdsioConfigManager } from '../controller/sdsioConfigManager';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
+import { SDS_FILE_MATCHER } from '../webview/utilities';
 
 type SdsFlagsTreeSource = {
     getFlagTreeItems(): SdsTreeItem[];
@@ -280,7 +281,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                 if (!entry.isFile()) { continue; }
 
                 // Match .sds files: <name>.<index>.sds and <name>.<index>.p.sds
-                const sdsMatch = entry.name.match(/^(.+)\.(\d+)(\.p)?\.sds$/);
+                const sdsMatch = entry.name.match(SDS_FILE_MATCHER);
                 if (sdsMatch) {
                     const streamName = sdsMatch[1];
 

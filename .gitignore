@@ -10,3 +10,4 @@ e2e-report/
 media/cmsissds.json
 media/cmsissds.ttf
 tools/*
+.vscode/*
