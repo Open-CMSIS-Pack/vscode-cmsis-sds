@@ -22,6 +22,7 @@ import { broadcastMessage } from '../../../webview/vscode-api';
 import { BaseChartViewer, ChartSample } from './baseChartViewer';
 import { decimateExtremaSeries, DecimationPreset } from './decimation';
 import { getIsDarkTheme } from '../../../webview/utilities';
+import { useViewportRange } from './useViewportRange';
 
 type AudioState = {
     samples: SampleFrame[];
@@ -56,7 +57,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     } = state;
 
     const [isPlaying, setIsPlaying] = useState(false);
-    const [isDragMode, setIsDragMode] = useState(false);
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
     const [decimationPreset, setDecimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
@@ -96,89 +96,25 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
 
     const resolvedDomainStart = domainStart ?? sampleDomain[0];
     const resolvedDomainEnd = domainEnd ?? sampleDomain[1];
-    const domainSpan = Math.max(resolvedDomainEnd - resolvedDomainStart, 0.001);
-    const minViewSpan = Math.max(domainSpan / 1000, 0.001);
-    const sliderStep = Math.max(domainSpan / 1000, 0.0001);
-    const [viewRange, setViewRange] = useState<[number, number]>(() => [resolvedDomainStart, resolvedDomainEnd]);
+    const {
+        viewRange,
+        setViewRange,
+        setViewRangeClamped,
+        clampRange,
+        domainSpan,
+        sliderStep,
+        isDragging,
+        onZoomIn,
+        onZoomOut,
+        onFit,
+        onSliderChange,
+        onSliderAfterChange,
+    } = useViewportRange({ domainStart: resolvedDomainStart, domainEnd: resolvedDomainEnd });
 
     const loadedSampleCount = useMemo(
         () => samples.reduce((sum, frame) => sum + frame.samples.length, 0),
         [samples]
     );
-
-    useEffect(() => {
-        setViewRange([resolvedDomainStart, resolvedDomainEnd]);
-    }, [resolvedDomainEnd, resolvedDomainStart]);
-
-    const clampRange = useCallback((start: number, end: number): [number, number] => {
-        if (resolvedDomainEnd <= resolvedDomainStart) {
-            return [0, 1];
-        }
-
-        if (start > end) {
-            [start, end] = [end, start];
-        }
-
-        let span = end - start;
-        if (span < minViewSpan) {
-            const center = (start + end) / 2;
-            start = center - minViewSpan / 2;
-            end = center + minViewSpan / 2;
-            span = end - start;
-        }
-
-        if (start < resolvedDomainStart) {
-            end += resolvedDomainStart - start;
-            start = resolvedDomainStart;
-        }
-        if (end > resolvedDomainEnd) {
-            start -= end - resolvedDomainEnd;
-            end = resolvedDomainEnd;
-        }
-
-        start = Math.max(resolvedDomainStart, start);
-        end = Math.min(resolvedDomainEnd, end);
-
-        if (span <= 0) {
-            return [resolvedDomainStart, resolvedDomainEnd];
-        }
-
-        return [start, end];
-    }, [minViewSpan, resolvedDomainEnd, resolvedDomainStart]);
-
-    const onZoomIn = () => {
-        const center = (viewRange[0] + viewRange[1]) / 2;
-        const range = (viewRange[1] - viewRange[0]) * 0.5;
-        const [start, end] = clampRange(center - range / 2, center + range / 2);
-        setViewRange([start, end]);
-    };
-
-    const onZoomOut = () => {
-        const center = (viewRange[0] + viewRange[1]) / 2;
-        const range = (viewRange[1] - viewRange[0]) * 2;
-        const [start, end] = clampRange(center - range / 2, center + range / 2);
-        setViewRange([start, end]);
-    };
-
-    const onFit = () => {
-        if (resolvedDomainEnd > resolvedDomainStart) {
-            setViewRange([resolvedDomainStart, resolvedDomainEnd]);
-        }
-    };
-
-    const onSliderChange = (value: number[]) => {
-        if (value.length !== 2) {
-            return;
-        }
-
-        setIsDragMode(true);
-        const [start, end] = clampRange(value[0], value[1]);
-        setViewRange([start, end]);
-    };
-
-    const onSliderAfterChange = () => {
-        setIsDragMode(false);
-    };
 
     const sliderStyle: React.CSSProperties = {
         flex: 1,
@@ -209,10 +145,10 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         }
         const presetFactor = decimationPreset === 'accuracy' ? 2.8 : 1.3;
         const presetFloor = decimationPreset === 'accuracy' ? 2400 : 1200;
-        const dragFactor = isDragMode ? 0.7 : 1;
+        const dragFactor = isDragging ? 0.7 : 1;
         const maxPoints = Math.max(presetFloor, Math.floor(viewWidth * presetFactor * dragFactor));
         return decimateExtremaSeries(data, maxPoints);
-    }, [decimationPreset, isDragMode, sampleRate, samples, viewRange, viewWidth]);
+    }, [decimationPreset, isDragging, sampleRate, samples, viewRange, viewWidth]);
 
     const onCursorChange = useCallback((time: number) => {
         setHighlightedTime(time);
@@ -354,7 +290,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     highlightedX={highlightedTime}
                     xRange={viewRange}
                     onCursorChange={onCursorChange}
-                    onZoomRangeChange={(range) => setViewRange(clampRange(range[0], range[1]))}
+                    onZoomRangeChange={(range) => setViewRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
                     tooltip={{
                         showMarkers: true,

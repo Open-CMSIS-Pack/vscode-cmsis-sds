@@ -26,6 +26,7 @@ import { broadcastMessage } from '../../webview/vscode-api';
 import { decimateExtremaSeries, DecimationPreset } from './components/decimation';
 import { getIsDarkTheme } from '../../webview/utilities';
 import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
+import { useViewportRange } from './components/useViewportRange';
 
 type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
 
@@ -78,87 +79,26 @@ function DataViewerApp() {
 
     const domainStart = initial.domainStart ?? (samples.length > 0 ? samples[0].timeSeconds : 0);
     const domainEnd = initial.domainEnd ?? (samples.length > 0 ? samples[samples.length - 1].timeSeconds : 1);
-    const domainSpan = Math.max(domainEnd - domainStart, 0.001);
-    const minViewSpan = Math.max(domainSpan / 1000, 0.001);
-    const sliderStep = Math.max(domainSpan / 1000, 0.0001);
+    const {
+        viewRange,
+        setViewRange,
+        setViewRangeClamped,
+        clampRange,
+        domainSpan,
+        sliderStep,
+        isDragging,
+        onZoomIn,
+        onZoomOut,
+        onFit,
+        onSliderChange,
+        onSliderAfterChange,
+    } = useViewportRange({ domainStart, domainEnd });
 
-    const [viewRange, setViewRange] = useState<[number, number]>(() => [domainStart, domainEnd]);
-    const [isDragMode, setIsDragMode] = useState(false);
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
     const [decimationPreset, setDecimationPreset] = useState<DecimationPreset>(() => initial.decimationPreset ?? 'accuracy');
     const requestSeqRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
-
-    const clampRange = useCallback((start: number, end: number): [number, number] => {
-        if (domainEnd <= domainStart) {
-            return [0, 1];
-        }
-
-        if (start > end) {
-            [start, end] = [end, start];
-        }
-
-        let span = end - start;
-        if (span < minViewSpan) {
-            const center = (start + end) / 2;
-            start = center - minViewSpan / 2;
-            end = center + minViewSpan / 2;
-            span = end - start;
-        }
-
-        if (start < domainStart) {
-            end += domainStart - start;
-            start = domainStart;
-        }
-        if (end > domainEnd) {
-            start -= end - domainEnd;
-            end = domainEnd;
-        }
-
-        start = Math.max(domainStart, start);
-        end = Math.min(domainEnd, end);
-
-        if (span <= 0) {
-            return [domainStart, domainEnd];
-        }
-
-        return [start, end];
-    }, [domainEnd, domainStart, minViewSpan]);
-
-    const onZoomIn = () => {
-        const center = (viewRange[0] + viewRange[1]) / 2;
-        const range = (viewRange[1] - viewRange[0]) * 0.5;
-        const [start, end] = clampRange(center - range / 2, center + range / 2);
-        setViewRange([start, end]);
-    };
-
-    const onZoomOut = () => {
-        const center = (viewRange[0] + viewRange[1]) / 2;
-        const range = (viewRange[1] - viewRange[0]) * 2;
-        const [start, end] = clampRange(center - range / 2, center + range / 2);
-        setViewRange([start, end]);
-    };
-
-    const onFit = () => {
-        if (domainEnd > domainStart) {
-            setViewRange([domainStart, domainEnd]);
-        }
-    };
-
-    const onSliderChange = (value: number[]) => {
-        if (value.length !== 2) {
-            return;
-        }
-
-        setIsDragMode(true);
-        const [start, end] = clampRange(value[0], value[1]);
-        setViewRange([start, end]);
-    };
-
-    const onSliderAfterChange = () => {
-        setIsDragMode(false);
-    };
 
     const onExport = () => messenger.send({ command: 'exportCsv' });
 
@@ -226,16 +166,16 @@ function DataViewerApp() {
             return;
         }
 
-        const quality: 'low' | 'high' = isDragMode ? 'low' : 'high';
+        const quality: 'low' | 'high' = isDragging ? 'low' : 'high';
 
         const handle = window.setTimeout(() => {
             requestVisibleRangeData(viewRange[0], viewRange[1], quality);
-        }, isDragMode ? 40 : 100);
+        }, isDragging ? 40 : 100);
 
         return () => {
             window.clearTimeout(handle);
         };
-    }, [initial.error, isDragMode, requestVisibleRangeData, viewRange]);
+    }, [initial.error, isDragging, requestVisibleRangeData, viewRange]);
 
     useEffect(() => {
         if (initial.error) {
@@ -243,7 +183,7 @@ function DataViewerApp() {
         }
 
         const onResize = () => {
-            const quality: 'low' | 'high' = isDragMode ? 'low' : 'high';
+            const quality: 'low' | 'high' = isDragging ? 'low' : 'high';
             requestVisibleRangeData(viewRange[0], viewRange[1], quality);
         };
 
@@ -251,7 +191,7 @@ function DataViewerApp() {
         return () => {
             window.removeEventListener('resize', onResize);
         };
-    }, [initial.error, isDragMode, requestVisibleRangeData, viewRange]);
+    }, [initial.error, isDragging, requestVisibleRangeData, viewRange]);
 
     useEffect(() => {
         const onResize = () => {
@@ -332,7 +272,7 @@ function DataViewerApp() {
 
         const presetFactor = decimationPreset === 'accuracy' ? 2.4 : 1.1;
         const presetFloor = decimationPreset === 'accuracy' ? 1800 : 900;
-        const dragFactor = isDragMode ? 0.7 : 1;
+        const dragFactor = isDragging ? 0.7 : 1;
         const maxPointsPerChannel = Math.max(
             presetFloor,
             Math.floor(viewWidth * presetFactor * dragFactor)
@@ -343,7 +283,7 @@ function DataViewerApp() {
         }
 
         return reduced.sort((a, b) => a.x - b.x);
-    }, [activeChannels, channelNames, decimationPreset, isDragMode, samples, viewRange, viewWidth]);
+    }, [activeChannels, channelNames, decimationPreset, isDragging, samples, viewRange, viewWidth]);
 
     const onCursorChange = useCallback((time: number) => {
         setHighlightedTime(time);
@@ -407,7 +347,7 @@ function DataViewerApp() {
                     highlightedX={highlightedTime}
                     xRange={viewRange}
                     onCursorChange={onCursorChange}
-                    onZoomRangeChange={(range) => setViewRange(clampRange(range[0], range[1]))}
+                    onZoomRangeChange={(range) => setViewRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
                     tooltip={{
                         showMarkers: true,
