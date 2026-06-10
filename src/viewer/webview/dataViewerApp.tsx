@@ -359,10 +359,7 @@ function DataViewerApp() {
     return (
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Row>
-                <Col span={4} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <h2>{filename ? filename : 'Data Viewer'}</h2>
-                </Col>
-                <Col span={10}></Col>
+                <Col span={14}></Col>
                 <Col span={10} style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                         {channelNames.map((name, i) => {

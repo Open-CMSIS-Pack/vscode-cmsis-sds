@@ -335,11 +335,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
 
     return (
         <div className="media-page">
-            <Row>
-                <Col flex="none">
-                    <h2>{filename ? filename : 'Audio Viewer'}</h2>
-                </Col>
-            </Row>
             <div className="info-bar">
                 <span>{sampleRate} Hz</span>
                 <span>{bitDepth}-bit</span>
