@@ -15,6 +15,4 @@
  */
 
 // This file exports the new AntD-based chart viewer components for migration
-export * from './baseChartViewer';
 export * from './dataViewer';
-// AudioViewer will be exported after migration
