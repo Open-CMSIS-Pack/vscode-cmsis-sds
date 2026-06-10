@@ -90,7 +90,7 @@ function extractHtml(sourceFile: string): string {
  * Uses the first `getHtml` in the viewer (the main data view, not the error view).
  */
 export function getViewerHtml(): string {
-    assertWebviewAssetsExist(['out/viewerWebview.css', 'out/viewerWebview.js']);
+    assertWebviewAssetsExist(['out/dataViewerWebview.css', 'out/dataViewerWebview.js']);
 
     const sampleData = [
         { timestamp: 0, timeSeconds: 0.0, values: { x: 1.0, y: 2.0, z: 3.0 } },
