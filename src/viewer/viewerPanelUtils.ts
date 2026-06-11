@@ -20,18 +20,51 @@ import * as vscode from 'vscode';
 import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { SDS_FILE_MATCHER } from '../webview/utilities';
+import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
 
-export function resolveMetadataPathForSdsFile(sdsPath: string, metadataExtension: string): string | undefined {
-    const dir = path.dirname(sdsPath);
+/**
+ * Resolve the metadata (.sds.yml) file path for a given .sds file.
+ * 1. If a SdsioConfigManager is provided and a .sdsio.yml is found via configuration,
+ *    search in the configured metadir for the metadata file.
+ * 2. Fall back to looking for the metadata file in the same directory as the .sds file.
+ *
+ * @param sdsPath - Path to the .sds data file
+ * @param metadataExtension - File extension for metadata (e.g., '.sds.yml')
+ * @param configManager - Optional SdsioConfigManager instance for config-based lookup
+ */
+export function resolveMetadataPathForSdsFile(
+    sdsPath: string,
+    metadataExtension: string,
+    configManager?: SdsioConfigManager
+): string | undefined {
     const base = path.basename(sdsPath);
-    // const match = base.match(/^(.+)\.\d+(\.p)?\.sds$/);
     const match = base.match(SDS_FILE_MATCHER);
     if (!match) {
         return undefined;
     }
 
-    const metadataPath = path.join(dir, `${match[1]}${metadataExtension}`);
-    return fs.existsSync(metadataPath) ? metadataPath : undefined;
+    const streamName = match[1];
+    const metadataFilename = `${streamName}${metadataExtension}`;
+
+    // Tier 1: Check configured metadir if configManager is available
+    if (configManager) {
+        const config = configManager.getConfig();
+        if (config.metadir) {
+            const metadataPath = path.join(config.metadir, metadataFilename);
+            if (fs.existsSync(metadataPath)) {
+                return metadataPath;
+            }
+        }
+    }
+
+    // Tier 2: Check same directory as the .sds file (backward compatibility)
+    const dir = path.dirname(sdsPath);
+    const metadataPath = path.join(dir, metadataFilename);
+    if (fs.existsSync(metadataPath)) {
+        return metadataPath;
+    }
+
+    return undefined;
 }
 
 export function generateNonce(length = 16): string {

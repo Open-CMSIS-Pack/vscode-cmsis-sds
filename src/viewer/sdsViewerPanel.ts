@@ -41,6 +41,7 @@ import {
     registerViewerWebview,
     resolveMetadataPathForSdsFile,
 } from './viewerPanelUtils';
+import { getActiveConfigManager } from '../extension';
 
 type VisibleRangeRequest = {
     command: 'requestVisibleRangeData';
@@ -110,7 +111,7 @@ export class SdsViewerPanel {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.sdsFilePath = sdsFilePath;
-        this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION);;
+        this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION, getActiveConfigManager());
         this.webview = panel.webview;
         this.disposables.push(registerViewerWebview(this.webview));
 

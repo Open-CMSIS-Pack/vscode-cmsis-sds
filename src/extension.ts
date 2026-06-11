@@ -56,6 +56,7 @@ const SDSIO_TEMPLATE = [
 ].join('\n');
 
 let activeSdsIoControlService: SdsIoControlService | undefined;
+let activeConfigManager: SdsioConfigManager | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     // ── Diagnostics Output Channel ──────────────────────────────
@@ -78,6 +79,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Config Manager ──────────────────────────────────────────
     const configManager = new SdsioConfigManager();
+    activeConfigManager = configManager;
     context.subscriptions.push({ dispose: () => configManager.dispose() });
 
     // ── Tree Views ──────────────────────────────────────────────
@@ -646,7 +648,13 @@ export async function deactivate() {
         await activeSdsIoControlService.shutdown('VS Code is closing; terminating SDSIO server gracefully');
         activeSdsIoControlService = undefined;
     }
+    activeConfigManager = undefined;
     SdsDiagnostics.getInstance().dispose();
+}
+
+/** Get the active config manager instance, if available. */
+export function getActiveConfigManager(): SdsioConfigManager | undefined {
+    return activeConfigManager;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
