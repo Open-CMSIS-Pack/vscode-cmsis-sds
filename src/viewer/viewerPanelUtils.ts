@@ -49,10 +49,22 @@ export function resolveMetadataPathForSdsFile(
     // Tier 1: Check configured metadir if configManager is available
     if (configManager) {
         const config = configManager.getConfig();
-        if (config.metadir) {
-            const metadataPath = path.join(config.metadir, metadataFilename);
-            if (fs.existsSync(metadataPath)) {
-                return metadataPath;
+        const metadir = config.metadir;
+        if (metadir) {
+            const candidates: string[] = [];
+            // If the SDS file lives under the configured workdir, mirror its relative folder structure into metadir.
+            if (config.workdir) {
+                const relDir = path.relative(config.workdir, path.dirname(sdsPath));
+                if (!relDir.startsWith('..') && !path.isAbsolute(relDir)) {
+                    candidates.push(path.join(metadir, relDir, metadataFilename));
+                }
+            }
+            // Backward-compatible: metadata directly in metadir
+            candidates.push(path.join(metadir, metadataFilename));
+            for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                    return candidate;
+                }
             }
         }
     }

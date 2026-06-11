@@ -56,7 +56,6 @@ const SDSIO_TEMPLATE = [
 ].join('\n');
 
 let activeSdsIoControlService: SdsIoControlService | undefined;
-let activeConfigManager: SdsioConfigManager | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     // ── Diagnostics Output Channel ──────────────────────────────
@@ -79,7 +78,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Config Manager ──────────────────────────────────────────
     const configManager = new SdsioConfigManager();
-    activeConfigManager = configManager;
     context.subscriptions.push({ dispose: () => configManager.dispose() });
 
     // ── Tree Views ──────────────────────────────────────────────
@@ -350,7 +348,7 @@ export function activate(context: vscode.ExtensionContext) {
                     if (!fp) { return; }
                     filePath = fp;
                 }
-                SdsViewerPanel.createOrShow(context.extensionUri, filePath);
+                SdsViewerPanel.createOrShow(context.extensionUri, filePath, configManager);
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open viewer: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -563,7 +561,7 @@ export function activate(context: vscode.ExtensionContext) {
                     if (!fp) { return; }
                     filePath = fp;
                 }
-                SdsMediaViewerPanel.createOrShow(context.extensionUri, filePath);
+                SdsMediaViewerPanel.createOrShow(context.extensionUri, filePath, configManager);
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open media viewer: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -590,7 +588,7 @@ export function activate(context: vscode.ExtensionContext) {
                     matchOnDescription: true,
                 });
                 if (pick) {
-                    SdsViewerPanel.createOrShow(context.extensionUri, pick.uri.fsPath);
+                    SdsViewerPanel.createOrShow(context.extensionUri, pick.uri.fsPath, configManager);
                 }
             } catch (err) {
                 vscode.window.showErrorMessage(`Quick open failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -648,13 +646,7 @@ export async function deactivate() {
         await activeSdsIoControlService.shutdown('VS Code is closing; terminating SDSIO server gracefully');
         activeSdsIoControlService = undefined;
     }
-    activeConfigManager = undefined;
     SdsDiagnostics.getInstance().dispose();
-}
-
-/** Get the active config manager instance, if available. */
-export function getActiveConfigManager(): SdsioConfigManager | undefined {
-    return activeConfigManager;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────

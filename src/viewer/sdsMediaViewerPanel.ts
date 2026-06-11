@@ -45,7 +45,7 @@ import {
     registerViewerWebview,
     resolveMetadataPathForSdsFile,
 } from './viewerPanelUtils';
-import { getActiveConfigManager } from '../extension';
+import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
 
 type MediaFrameWindowRequest = {
     command: 'requestMediaFrameWindow';
@@ -92,6 +92,7 @@ export class SdsMediaViewerPanel {
     public static createOrShow(
         extensionUri: vscode.Uri,
         sdsFilePath: string,
+        configManager?: SdsioConfigManager,
         metadataPath?: string
     ): SdsMediaViewerPanel {
         const column = vscode.window.activeTextEditor
@@ -115,7 +116,7 @@ export class SdsMediaViewerPanel {
             }
         );
 
-        const viewer = new SdsMediaViewerPanel(panel, extensionUri, sdsFilePath, metadataPath);
+        const viewer = new SdsMediaViewerPanel(panel, extensionUri, sdsFilePath, configManager, metadataPath);
 
         SdsMediaViewerPanel.panels.set(sdsFilePath, viewer);
         return viewer;
@@ -125,12 +126,13 @@ export class SdsMediaViewerPanel {
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
         sdsFilePath: string,
+        configManager?: SdsioConfigManager,
         metadataPath?: string
     ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.sdsFilePath = sdsFilePath;
-        this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION, getActiveConfigManager());
+        this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION, configManager);
         this.mediaType = 'sensor';
 
         this.panel.iconPath = new vscode.ThemeIcon('device-camera');
