@@ -347,6 +347,7 @@ function DataViewerApp() {
                     xField='x'
                     yField='y'
                     seriesField='channel'
+                    totalBlocks={stats.totalRecords ?? samples.length}
                     color={colors}
                     smooth={false}
                     highlightedX={highlightedTime}

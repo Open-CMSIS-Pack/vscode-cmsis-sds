@@ -301,6 +301,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     xField="x"
                     yField="y"
                     seriesField="channel"
+                    totalBlocks={totalSamples}
                     smooth={false}
                     highlightedX={highlightedTime}
                     xRange={viewRange}
@@ -324,13 +325,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                         }),
                         title: (value: any) => {
                             const t = typeof value === 'number' ? value : Number(value.x);
-                            if (!Number.isFinite(t)) {
-                                return t;
-                            }
-                            const block = sampleBlockFromTime(t);
-                            return block !== null
-                                ? `Block: ${block} | Time: ${t.toFixed(4)} s`
-                                : `Time: ${t.toFixed(4)} s`;
+                            return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
                         },
                     }}
                 />

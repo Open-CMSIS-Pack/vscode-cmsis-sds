@@ -33,6 +33,8 @@ export interface BaseChartViewerProps {
     color?: string[];
     highlightedX?: number | null;
     xRange?: [number, number];
+    totalBlocks?: number;
+    blockIndexFromX?: (x: number) => number | null;
     onCursorChange?: (x: number) => void;
     onZoomRangeChange?: (range: [number, number]) => void;
     [key: string]: any;
@@ -47,6 +49,8 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     color,
     highlightedX,
     xRange,
+    totalBlocks,
+    blockIndexFromX: blockIndexFromXProp,
     onCursorChange,
     onZoomRangeChange,
     ...rest
@@ -172,17 +176,23 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return plotRegion.left + ((plotRegion.right - plotRegion.left) * (cursorPercent / 100));
     }, [cursorPercent, plotRegion]);
 
-    const blockIndexFromX = useCallback((value: unknown): number | null => {
-        if (!resolveXRange || data.length === 0) {
-            return null;
-        }
-
+    const computeBlockIndexFromX = useCallback((value: unknown): number | null => {
         const x = typeof value === 'number'
             ? value
             : Number((value as any)?.x ?? value);
         if (!Number.isFinite(x)) {
             return null;
         }
+
+        if (typeof blockIndexFromXProp === 'function') {
+            return blockIndexFromXProp(x);
+        }
+
+        if (!resolveXRange) {
+            return null;
+        }
+
+        const effectiveTotalBlocks = Math.max(1, totalBlocks ?? data.length);
 
         const [minX, maxX] = resolveXRange;
         if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX) {
@@ -191,9 +201,9 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
 
         const relative = (x - minX) / (maxX - minX);
         const clamped = Math.max(0, Math.min(1, relative));
-        const blockIndex = Math.round(clamped * Math.max(0, data.length - 1)) + 1;
-        return Math.max(1, Math.min(data.length, blockIndex));
-    }, [data.length, resolveXRange]);
+        const blockIndex = Math.round(clamped * Math.max(0, effectiveTotalBlocks - 1)) + 1;
+        return Math.max(1, Math.min(effectiveTotalBlocks, blockIndex));
+    }, [blockIndexFromXProp, data.length, resolveXRange, totalBlocks]);
 
     const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
         if (!onZoomRangeChange || !resolveXRange) {
@@ -250,9 +260,21 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         };
     }, []);
 
-    const userTooltip = rest.tooltip as { title?: unknown } | undefined;
+    const {
+        tooltip: restTooltip,
+        axis: restAxis,
+        onReady: userOnReady,
+        ...otherRest
+    } = rest as {
+        tooltip?: { title?: unknown;[key: string]: unknown };
+        axis?: { x?: { labelFormatter?: unknown;[key: string]: unknown };[key: string]: unknown };
+        onReady?: (plot: any) => void;
+        [key: string]: unknown;
+    };
+
+    const userTooltip = restTooltip as { title?: unknown } | undefined;
     const tooltipTitle = (value: unknown) => {
-        const blockIndex = blockIndexFromX(value);
+        const blockIndex = computeBlockIndexFromX(value);
         const blockTitle = blockIndex !== null ? `Block: ${blockIndex}` : 'Block';
 
         if (userTooltip?.title && typeof userTooltip.title === 'function') {
@@ -280,10 +302,13 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 },
             }
             : undefined,
+        ...otherRest,
         axis: {
+            ...(restAxis ?? {}),
             x: {
+                ...(restAxis?.x ?? {}),
                 labelFormatter: (value: string) => {
-                    const blockIndex = blockIndexFromX(value);
+                    const blockIndex = computeBlockIndexFromX(value);
                     return blockIndex !== null ? String(blockIndex) : value;
                 },
             },
@@ -296,10 +321,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             title: tooltipTitle,
         },
         slider: { x: false, y: false },
-        ...rest,
     };
-
-    const userOnReady = rest.onReady;
 
     const mergedOnReady = (plot: any) => {
         plotRef.current = plot;
