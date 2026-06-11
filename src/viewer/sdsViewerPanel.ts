@@ -110,7 +110,7 @@ export class SdsViewerPanel {
         this.panel = panel;
         this.extensionUri = extensionUri;
         this.sdsFilePath = sdsFilePath;
-        this.metadataPath = metadataPath;
+        this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION);;
         this.webview = panel.webview;
         this.disposables.push(registerViewerWebview(this.webview));
 
@@ -163,11 +163,6 @@ export class SdsViewerPanel {
     }
 
     private update(): void {
-        // Find metadata file if not specified
-        if (!this.metadataPath) {
-            this.metadataPath = resolveMetadataPathForSdsFile(this.sdsFilePath, SDS_METADATA_EXTENSION);
-        }
-
         try {
             const parsed = parseSdsFile(this.sdsFilePath);
 

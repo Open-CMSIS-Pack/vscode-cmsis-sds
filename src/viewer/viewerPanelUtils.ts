@@ -19,11 +19,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
+import { SDS_FILE_MATCHER } from '../webview/utilities';
 
 export function resolveMetadataPathForSdsFile(sdsPath: string, metadataExtension: string): string | undefined {
     const dir = path.dirname(sdsPath);
     const base = path.basename(sdsPath);
-    const match = base.match(/^(.+)\.\d+(\.p)?\.sds$/);
+    // const match = base.match(/^(.+)\.\d+(\.p)?\.sds$/);
+    const match = base.match(SDS_FILE_MATCHER);
     if (!match) {
         return undefined;
     }
