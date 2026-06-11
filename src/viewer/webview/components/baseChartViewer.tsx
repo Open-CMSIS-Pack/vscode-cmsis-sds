@@ -59,7 +59,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     const onCursorChangeRef = useRef<typeof onCursorChange>(onCursorChange);
     const plotRegionRef = useRef<{ left: number; right: number; top: number; bottom: number } | null>(null);
     const [plotRegion, setPlotRegion] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
-    const width = 800;
     const height = 400;
 
     const resolveXRange = useMemo<[number, number] | null>(() => {
@@ -173,6 +172,29 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return plotRegion.left + ((plotRegion.right - plotRegion.left) * (cursorPercent / 100));
     }, [cursorPercent, plotRegion]);
 
+    const blockIndexFromX = useCallback((value: unknown): number | null => {
+        if (!resolveXRange || data.length === 0) {
+            return null;
+        }
+
+        const x = typeof value === 'number'
+            ? value
+            : Number((value as any)?.x ?? value);
+        if (!Number.isFinite(x)) {
+            return null;
+        }
+
+        const [minX, maxX] = resolveXRange;
+        if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX) {
+            return 1;
+        }
+
+        const relative = (x - minX) / (maxX - minX);
+        const clamped = Math.max(0, Math.min(1, relative));
+        const blockIndex = Math.round(clamped * Math.max(0, data.length - 1)) + 1;
+        return Math.max(1, Math.min(data.length, blockIndex));
+    }, [data.length, resolveXRange]);
+
     const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
         if (!onZoomRangeChange || !resolveXRange) {
             return;
@@ -228,6 +250,21 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         };
     }, []);
 
+    const userTooltip = rest.tooltip as { title?: unknown } | undefined;
+    const tooltipTitle = (value: unknown) => {
+        const blockIndex = blockIndexFromX(value);
+        const blockTitle = blockIndex !== null ? `Block: ${blockIndex}` : 'Block';
+
+        if (userTooltip?.title && typeof userTooltip.title === 'function') {
+            const userTitle = userTooltip.title(value);
+            if (typeof userTitle === 'string' && userTitle.length > 0) {
+                return `${blockTitle} | ${userTitle}`;
+            }
+        }
+
+        return blockTitle;
+    };
+
     const config = {
         data,
         xField,
@@ -243,9 +280,21 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 },
             }
             : undefined,
+        axis: {
+            x: {
+                labelFormatter: (value: string) => {
+                    const blockIndex = blockIndexFromX(value);
+                    return blockIndex !== null ? String(blockIndex) : value;
+                },
+            },
+        },
         animate: false,
         legend: { position: 'top' },
-        tooltip: { showMarkers: true },
+        tooltip: {
+            showMarkers: true,
+            ...(userTooltip ?? {}),
+            title: tooltipTitle,
+        },
         slider: { x: false, y: false },
         ...rest,
     };

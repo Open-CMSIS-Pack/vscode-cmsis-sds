@@ -267,11 +267,12 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     }, []);
 
     const sampleBlockFromTime = useCallback((time: number): number | null => {
-        if (sampleRate <= 0) {
+        if (sampleRate <= 0 || totalSamples <= 0 || !Number.isFinite(time)) {
             return null;
         }
-        return Math.floor(time * sampleRate);
-    }, [sampleRate]);
+        const blockIndex = Math.floor(time * sampleRate) + 1;
+        return Math.max(1, Math.min(totalSamples, blockIndex));
+    }, [sampleRate, totalSamples]);
 
     return (
         <div className="media-page">
@@ -323,7 +324,13 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                         }),
                         title: (value: any) => {
                             const t = typeof value === 'number' ? value : Number(value.x);
-                            return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
+                            if (!Number.isFinite(t)) {
+                                return t;
+                            }
+                            const block = sampleBlockFromTime(t);
+                            return block !== null
+                                ? `Block: ${block} | Time: ${t.toFixed(4)} s`
+                                : `Time: ${t.toFixed(4)} s`;
                         },
                     }}
                 />
