@@ -59,3 +59,18 @@ export const getIsDarkTheme = () => {
     const classList = document.body.classList;
     return classList.contains('vscode-dark') || classList.contains('vscode-high-contrast');
 };
+
+export const statsTitleStyle: React.CSSProperties = {
+    opacity: 0.5,
+    fontSize: '80%'
+};
+
+export const statsValueStyle: React.CSSProperties = {
+    paddingRight: 32,
+    fontSize: '80%'
+};
+
+export const sliderStyle: React.CSSProperties = {
+    flex: 1,
+    margin: 0,
+};

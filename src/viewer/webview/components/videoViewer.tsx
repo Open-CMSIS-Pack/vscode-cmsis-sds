@@ -15,34 +15,29 @@
  */
 
 import { ExpandOutlined, LeftCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
-import { Button, Col, Row, Slider, Space } from 'antd';
+import { Button, Col, Row, Slider } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ImageFrame } from '../../../webview/protocol';
-import { decodeFrame } from '../../../webview/utilities';
+import { decodeFrame, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
 import { frameWindowViewer } from './frameWindowViewer';
+import { SdsFileStats } from '../../../sds';
 
-type VideoState = {
+export type VideoState = {
     frames: ImageFrame[];
     rangeStart?: number;
     width: number;
     height: number;
     fps: number;
     totalFrames: number;
+    interval: string;
+    fileStats: SdsFileStats;
+    codec: string;
+    pixelFormat: string;
 };
 
 type VideoViewerProps = {
     state: VideoState;
     filename?: string;
-};
-
-const statsTitleStyle: React.CSSProperties = {
-    opacity: 0.5,
-    fontSize: '80%'
-};
-
-const statsValueStyle: React.CSSProperties = {
-    paddingRight: 32,
-    fontSize: '80%'
 };
 
 export function VideoViewer({ state, filename }: VideoViewerProps) {
@@ -104,49 +99,54 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
 
     return (
         <div className="media-page">
-            <Row>
-                <Col flex="auto" style={{ textAlign: 'right' }}>
-                    <Space>
-                        <Button icon={<ZoomInOutlined />} type="text" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
-                        <Button icon={<ZoomOutOutlined />} type="text" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
-                        <Button icon={<ExpandOutlined />} type="text" onClick={() => setZoom(1)}></Button>
-                    </Space>
-                </Col>
-            </Row>
             <Row className="info-bar">
-                <Col style={statsTitleStyle}>Dimensions</Col>
-                <Col style={statsValueStyle}>{width}×{height}</Col>
-                <Col style={statsTitleStyle}>FPS</Col>
-                <Col style={statsValueStyle}>{fps}</Col>
-                <Col style={statsTitleStyle}>Frame</Col>
+                <Col style={statsTitleStyle}>Block</Col>
                 <Col style={statsValueStyle}>{Math.min(index + 1, totalFrames)} of {totalFrames}</Col>
-                <Col style={statsTitleStyle}>Loaded</Col>
-                <Col style={statsValueStyle}>{windowFrames.length}</Col>
+                <Col style={statsTitleStyle}>Size</Col>
+                <Col style={statsValueStyle}>{state.fileStats.avgBlockSize}B</Col>
+                <Col style={statsTitleStyle}>Time</Col>
+                <Col style={statsValueStyle}>{(getLoadedFrame(index)?.timestamp ?? 0).toFixed(4)}s</Col>
+                <Col style={statsTitleStyle}>Interval</Col>
+                <Col style={statsValueStyle}>{state.fileStats.recordingIntervalMs}ms / {parseFloat(state.interval).toFixed(2)}Hz</Col>
             </Row>
             <Row className="canvas-area">
                 <Col style={{ width: `${width * zoom}px`, height: `${height * zoom}px` }}>
-                    <canvas ref={canvasRef} width={width * zoom} height={height * zoom}></canvas>
+                    <canvas
+                        ref={canvasRef}
+                        width={width * zoom}
+                        height={height * zoom}
+                        title={`Pixel Format: ${state.pixelFormat}\nCodec: ${state.codec}\nSize: ${width}×${height}`}
+                    />
                 </Col>
             </Row>
-            <div className="controls">
-                <Button icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />} type="link" onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</Button>
-                <Button icon={<LeftCircleOutlined />} type="link" onClick={() => { changeIndex(Math.max(0, index - 1)); }}></Button>
-                <Slider
-                    min={0}
-                    max={Math.max(0, totalFrames - 1)}
-                    value={index}
-                    onChange={value => {
-                        setIsDragMode(true);
-                        changeIndex(value);
-                    }}
-                    onChangeComplete={() => {
-                        markNeedsPostDragHighQuality();
-                        setIsDragMode(false);
-                    }}
-                    style={{ flex: 1, margin: 0 }}
-                />
-                <Button icon={<RightCircleOutlined />} type="link" onClick={() => { changeIndex(Math.min(totalFrames - 1, index + 1)); }}></Button>
-            </div>
+            <Row className="controls" gutter={12}>
+                <Col flex="none">
+                    <Button icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />} type="link" onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</Button>
+                    <Button icon={<LeftCircleOutlined />} type="link" onClick={() => { changeIndex(Math.max(0, index - 1)); }}></Button>
+                </Col>
+                <Col flex="auto">
+                    <Slider
+                        min={0}
+                        max={Math.max(0, totalFrames - 1)}
+                        value={index}
+                        onChange={value => {
+                            setIsDragMode(true);
+                            changeIndex(value);
+                        }}
+                        onChangeComplete={() => {
+                            markNeedsPostDragHighQuality();
+                            setIsDragMode(false);
+                        }}
+                        style={sliderStyle}
+                    />
+                </Col>
+                <Col flex="none">
+                    <Button icon={<RightCircleOutlined />} type="link" onClick={() => { changeIndex(Math.min(totalFrames - 1, index + 1)); }}></Button>
+                    <Button icon={<ZoomInOutlined />} type="text" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
+                    <Button icon={<ZoomOutOutlined />} type="text" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
+                    <Button icon={<ExpandOutlined />} type="text" onClick={() => setZoom(1)}></Button>
+                </Col>
+            </Row>
         </div>
     );
 }
