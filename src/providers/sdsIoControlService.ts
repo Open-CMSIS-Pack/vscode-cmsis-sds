@@ -194,7 +194,7 @@ export class SdsIoControlService {
     }
 
     canDisconnect(): boolean {
-        return this.monitorConnected || this.serverLauncher.hasTerminal();
+        return this.monitorConnected;
     }
 
     async disconnectServer(): Promise<void> {
@@ -291,7 +291,7 @@ export class SdsIoControlService {
     }
 
     getConnectionState(): string {
-        return this.monitorConnected ? '🟢 (connected)' : ' ⭕(disconnected)';
+        return '';
     }
 
     getFlagMasks(): SdsFlagMasks {

@@ -307,7 +307,7 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canDisconnect()).toBe(false);
     });
 
-    it('canDisconnect is true when a launcher terminal exists even if monitor is not connected', () => {
+    it('canDisconnect is true only when monitor is connected', () => {
         launcherMock.hasTerminal.mockReset();
         launcherMock.stop.mockReset();
         launcherMock.start.mockReset();
@@ -321,6 +321,6 @@ describe('SdsIoControlService launcher delegation', () => {
             'c:/workspace/ext',
         );
 
-        expect(service.canDisconnect()).toBe(true);
+        expect(service.canDisconnect()).toBe(false);
     });
 });

@@ -189,7 +189,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
 
         const flagItems = this.flagsSource?.getFlagTreeItems() ?? [];
         const flagsNode = new SdsTreeItem(
-            'SDSIO Flags',
+            'SDS Flags',
             'flags',
             '',
             vscode.TreeItemCollapsibleState.Expanded, flagItems);

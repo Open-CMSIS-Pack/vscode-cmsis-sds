@@ -61,7 +61,7 @@
             },
             {
                 "command": "arm-sds.refreshExplorer",
-                "title": "Refresh SDS Explorer",
+                "title": "Refresh",
                 "category": "SDS Tools",
                 "icon": "$(refresh)"
             },
@@ -123,12 +123,6 @@
                 "enablement": "arm-sds.sdsio.canStop"
             },
             {
-                "command": "arm-sds.sdsinterface.rename",
-                "title": "Rename Flag",
-                "category": "SDS Tools",
-                "icon": "$(edit)"
-            },
-            {
                 "command": "arm-sds.sdsinterface.connect",
                 "title": "Connect SDSIO Monitor",
                 "category": "SDS Tools",
@@ -139,12 +133,12 @@
                 "command": "arm-sds.sdsinterface.disconnect",
                 "title": "Disconnect SDSIO Monitor",
                 "category": "SDS Tools",
-                "icon": "$(diff-ignored)",
+                "icon": "$(debug-disconnect)",
                 "enablement": "arm-sds.sdsio.canDisconnect"
             },
             {
                 "command": "arm-sds.sds.newConfig",
-                "title": "New SDS Configuration",
+                "title": "Create Configuration…",
                 "category": "SDS",
                 "icon": "$(add)"
             },
@@ -156,14 +150,19 @@
             },
             {
                 "command": "arm-sds.sds.selectConfig",
-                "title": "Select Configuration File in Workspace",
+                "title": "Open Configuration in Workspace…",
+                "category": "SDS"
+            },
+            {
+                "command": "arm-sds.sds.closeConfig",
+                "title": "Close Configuration",
                 "category": "SDS"
             },
             {
                 "command": "arm-sds.sds.editConfig",
-                "title": "Edit Configuration",
+                "title": "Open sdsio.yml file",
                 "category": "SDS",
-                "icon": "$(file-code)"
+                "icon": "$(go-to-file)"
             }
         ],
         "viewsContainers": {
@@ -194,49 +193,54 @@
         "menus": {
             "view/title": [
                 {
-                    "command": "arm-sds.sdsinterface.connect",
-                    "when": "view == sdsExplorer && arm-sds.sdsio.canConnect",
-                    "group": "navigation@0"
-                },
-                {
-                    "command": "arm-sds.sdsinterface.disconnect",
-                    "when": "view == sdsExplorer && arm-sds.sdsio.canDisconnect",
-                    "group": "navigation@0"
-                },
-                {
                     "command": "arm-sds.sdsinterface.play",
                     "when": "view == sdsExplorer && arm-sds.sdsio.canPlay",
-                    "group": "navigation@1"
+                    "group": "navigation@0"
                 },
                 {
                     "command": "arm-sds.sdsinterface.record",
                     "when": "view == sdsExplorer && arm-sds.sdsio.canRecord",
-                    "group": "navigation@2"
+                    "group": "navigation@1"
                 },
                 {
                     "command": "arm-sds.sdsinterface.stop",
                     "when": "view == sdsExplorer && arm-sds.sdsio.canStop",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "arm-sds.sdsinterface.connect",
+                    "when": "view == sdsExplorer && arm-sds.sdsio.canConnect",
                     "group": "navigation@3"
                 },
                 {
-                    "command": "arm-sds.refreshExplorer",
-                    "when": "view == sdsExplorer",
-                    "group": "navigation@4"
+                    "command": "arm-sds.sdsinterface.disconnect",
+                    "when": "view == sdsExplorer && arm-sds.sdsio.canDisconnect",
+                    "group": "navigation@3"
                 },
                 {
                     "command": "arm-sds.sds.editConfig",
                     "when": "view == sdsExplorer && arm-sds.sdsio.hasConfig",
-                    "group": "navigation@5"
+                    "group": "navigation@4"
                 },
                 {
                     "command": "arm-sds.sds.selectConfig",
                     "when": "view == sdsExplorer",
-                    "group": "1_config"
+                    "group": "1_config1@0"
                 },
                 {
                     "command": "arm-sds.sds.newConfig",
                     "when": "view == sdsExplorer",
-                    "group": "1_config"
+                    "group": "1_config1@1"
+                },
+                {
+                    "command": "arm-sds.sds.closeConfig",
+                    "when": "view == sdsExplorer",
+                    "group": "1_config1@2"
+                },
+                {
+                    "command": "arm-sds.refreshExplorer",
+                    "when": "view == sdsExplorer",
+                    "group": "1_config2@0"
                 }
             ],
             "view/item/context": [
@@ -264,21 +268,6 @@
                     "command": "arm-sds.deleteFile",
                     "when": "view == sdsExplorer && viewItem == sdsFile",
                     "group": "3_danger"
-                },
-                {
-                    "command": "arm-sds.sdsinterface.rename",
-                    "when": "view == sdsExplorer && viewItem == sdsFlag",
-                    "group": "inline"
-                },
-                {
-                    "command": "arm-sds.sdsinterface.connect",
-                    "when": "view == sdsExplorer && viewItem == flags && arm-sds.sdsio.canConnect",
-                    "group": "inline@1"
-                },
-                {
-                    "command": "arm-sds.sdsinterface.disconnect",
-                    "when": "view == sdsExplorer && viewItem == flags && arm-sds.sdsio.canDisconnect",
-                    "group": "inline@2"
                 }
             ],
             "explorer/context": [
