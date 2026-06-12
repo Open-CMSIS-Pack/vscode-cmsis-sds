@@ -32,6 +32,7 @@ import { SdsioMonitorClient } from './recorder/sdsio/sdsIoMonitorClient';
 import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
+import { registerYamlSchemas } from './config/yamlSchemaRegistrar';
 import { parseSdsFile, decodeAllRecords, parseMetadataFile, exportToCsv, SDS_METADATA_EXTENSION, } from './sds';
 import { SDS_FILE_MATCHER } from './webview/utilities';
 
@@ -63,6 +64,9 @@ export function activate(context: vscode.ExtensionContext) {
     diagnostics.writeBanner();
     diagnostics.info(DiagnosticSource.Extension, 'CMSIS SDS extension activating...');
     context.subscriptions.push(diagnostics.outputChannel);
+
+    // ── Register YAML Schemas for SDS Metadata/Control Files ───
+    void registerYamlSchemas(context);
 
     // ── SDSIO Monitor Client ────────────────────────────────────
     const monitor = new SdsioMonitorClient({ port: SDSIO_SERVER_MONITOR_PORT });
