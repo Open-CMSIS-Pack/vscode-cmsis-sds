@@ -165,6 +165,15 @@ export function getImageViewerHtml(): string {
             width,
             height,
             totalFrames: 3,
+            interval: '100',
+            fileStats: {
+                recordingIntervalMs: 100,
+                totalSizeBytes: 4800,
+                totalRecords: 3,
+                avgBlockSize: 1600,
+                minTimestamp: 0,
+                maxTimestamp: 0.2,
+            },
         },
     });
 }
@@ -199,6 +208,14 @@ export function getAudioViewerHtml(): string {
             channels,
             totalSamples,
             totalRecords,
+            fileStats: {
+                recordingIntervalMs: 50,
+                totalSizeBytes: 3200,
+                totalRecords: 2,
+                avgBlockSize: 1600,
+                minTimestamp: 0,
+                maxTimestamp: 0.1,
+            },
         },
     });
 }
@@ -224,6 +241,14 @@ export function getVideoViewerHtml(): string {
             height,
             fps,
             totalFrames: 5,
+            fileStats: {
+                recordingIntervalMs: 100,
+                totalSizeBytes: 2400,
+                totalRecords: 5,
+                avgBlockSize: 480,
+                minTimestamp: 0,
+                maxTimestamp: 0.4,
+            },
         },
     });
 }

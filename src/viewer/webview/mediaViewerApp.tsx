@@ -19,30 +19,17 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getInitialState } from '../../webview/bridge';
 import { ConfigProvider, theme } from 'antd';
-import { AudioViewer } from './components/audioViewer';
-import { ImageViewer } from './components/imageViewer';
-import { VideoViewer } from './components/videoViewer';
-import { ImageFrame, SampleFrame } from '../../webview/protocol';
+import { AudioState, AudioViewer } from './components/audioViewer';
+import { ImageViewer, ImageState } from './components/imageViewer';
+import { VideoState, VideoViewer } from './components/videoViewer';
 import { getIsDarkTheme } from '../../webview/utilities';
 
 
 type InitialState = {
     mediaType?: 'image' | 'audio' | 'video';
-    image?: { frames: ImageFrame[]; rangeStart?: number; width: number; height: number; totalFrames: number };
-    audio?: {
-        samples: SampleFrame[];
-        rangeStart?: number;
-        rangeEnd?: number;
-        domainStart?: number;
-        domainEnd?: number;
-        decimationPreset?: 'accuracy' | 'performance';
-        sampleRate: number;
-        bitDepth: number;
-        channels: number;
-        totalSamples: number;
-        totalRecords: number;
-    };
-    video?: { frames: ImageFrame[]; rangeStart?: number; width: number; height: number; fps: number; totalFrames: number };
+    image?: ImageState;
+    audio?: AudioState;
+    video?: VideoState;
     fileName?: string;
     error?: string;
 };

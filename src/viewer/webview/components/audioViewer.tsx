@@ -21,10 +21,11 @@ import { BroadcastMessage, getIndexedSdsSuffix, Message, SampleFrame } from '../
 import { broadcastMessage } from '../../../webview/vscode-api';
 import { BaseChartViewer, ChartSample } from './baseChartViewer';
 import { decimateExtremaSeries, DecimationPreset } from './decimation';
-import { getIsDarkTheme } from '../../../webview/utilities';
+import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
 import { useViewportRange } from './useViewportRange';
+import { SdsFileStats } from '../../../sds';
 
-type AudioState = {
+export type AudioState = {
     samples: SampleFrame[];
     rangeStart?: number;
     rangeEnd?: number;
@@ -36,6 +37,7 @@ type AudioState = {
     channels: number;
     totalSamples: number;
     totalRecords: number;
+    fileStats: SdsFileStats;
 };
 
 type AudioViewerProps = {
@@ -115,11 +117,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         () => samples.reduce((sum, frame) => sum + frame.samples.length, 0),
         [samples]
     );
-
-    const sliderStyle: React.CSSProperties = {
-        flex: 1,
-        margin: 0,
-    };
 
     const chartData = useMemo<ChartSample[]>(() => {
         const data: ChartSample[] = [];
@@ -269,9 +266,27 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         };
     }, []);
 
+    const sampleBlockFromTime = useCallback((time: number): number | null => {
+        if (sampleRate <= 0 || totalSamples <= 0 || !Number.isFinite(time)) {
+            return null;
+        }
+        const blockIndex = Math.floor(time * sampleRate) + 1;
+        return Math.max(1, Math.min(totalSamples, blockIndex));
+    }, [sampleRate, totalSamples]);
+
     return (
         <div className="media-page">
-            <div className="info-bar">
+            <Row className="info-bar">
+                <Col style={statsTitleStyle}>Block</Col>
+                <Col style={statsValueStyle}>{sampleBlockFromTime(highlightedTime ?? 0)} of {totalSamples}</Col>
+                <Col style={statsTitleStyle}>Size</Col>
+                <Col style={statsValueStyle}>{state.fileStats.avgBlockSize}B</Col>
+                <Col style={statsTitleStyle}>Time</Col>
+                <Col style={statsValueStyle}>{(highlightedTime ?? 0).toFixed(4)}s</Col>
+                <Col style={statsTitleStyle}>Interval</Col>
+                <Col style={statsValueStyle}>{state.fileStats.recordingIntervalMs}ms / {sampleRate.toFixed(2)}Hz</Col>
+            </Row>
+            {/* <div className="info-bar">
                 <span>{sampleRate} Hz</span>
                 <span>{bitDepth}-bit</span>
                 <span>{channels}ch</span>
@@ -279,13 +294,14 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 <span>{loadedSampleCount.toLocaleString()} loaded samples</span>
                 <span>{totalDurationSeconds.toFixed(2)}s</span>
                 <span>{totalRecords} records</span>
-            </div>
+            </div> */}
             <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
                 <BaseChartViewer
                     data={chartData}
                     xField="x"
                     yField="y"
                     seriesField="channel"
+                    totalBlocks={totalSamples}
                     smooth={false}
                     highlightedX={highlightedTime}
                     xRange={viewRange}

@@ -33,6 +33,7 @@ import {
     decodeImageFrameToRGBA,
     decodeAudioBlock,
     SdsMetadata,
+    getSdsFileStats,
     SdsMediaType,
     SDS_METADATA_EXTENSION,
     detectMediaType,
@@ -81,6 +82,7 @@ export class SdsMediaViewerPanel {
     private metadataPath: string | undefined;
     private mediaType: SdsMediaType;
     private parsedFile: SdsParsedFile | undefined;
+    private sdsFileStats: ReturnType<typeof getSdsFileStats> | undefined;
     private recordIndex: Array<{ timestamp: number; dataSize: number; dataOffset: number }> = [];
     private metadata: SdsMetadata | undefined;
     private audioFrames: SampleFrame[] = [];
@@ -230,15 +232,16 @@ export class SdsMediaViewerPanel {
 
             if (this.mediaType === 'image' || this.mediaType === 'video') {
                 this.recordIndex = indexSdsRecords(this.sdsFilePath);
-            } else {
-                this.parsedFile = parseSdsFile(this.sdsFilePath);
             }
+            this.parsedFile = parseSdsFile(this.sdsFilePath);
+            const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
+            this.sdsFileStats = getSdsFileStats(this.parsedFile, tickFreq);
 
             this.audioFrames = [];
             this.audioSampleRate = 0;
             this.audioBitDepth = 0;
             this.audioChannels = 0;
-            this.panel.title = `${this.mediaType === 'image' ? 'SDS Image Viewer' : this.mediaType === 'audio' ? 'SDS Audio Viewer' : 'SDS Video Viewer'}: ${path.basename(this.sdsFilePath)}`;
+            this.panel.title = `${this.mediaType === 'image' ? 'SDS Image' : this.mediaType === 'audio' ? 'SDS Audio' : 'SDS Video'}: ${path.basename(this.sdsFilePath)}`;
 
             const initialState = this.buildInitialState();
             this.panel.webview.html = this.getHtml(initialState);
@@ -269,6 +272,9 @@ export class SdsMediaViewerPanel {
                         width: imgMeta.width,
                         height: imgMeta.height,
                         totalFrames: this.recordIndex.length,
+                        interval: `${metadata.sds.frequency}`,
+                        fileStats: this.sdsFileStats,
+                        pixelFormat: imgMeta.pixel_format,
                     },
                 };
             }
@@ -316,6 +322,7 @@ export class SdsMediaViewerPanel {
                         channels: audioMeta.audio_channels,
                         totalSamples,
                         totalRecords: parsed.records.length,
+                        fileStats: this.sdsFileStats,
                     },
                 };
             }
@@ -334,6 +341,10 @@ export class SdsMediaViewerPanel {
                         height: vidMeta.height,
                         fps: vidMeta.fps,
                         totalFrames: this.recordIndex.length,
+                        interval: `${metadata.sds.frequency}`,
+                        fileStats: this.sdsFileStats,
+                        codec: vidMeta.codec,
+                        pixelFormat: vidMeta.pixel_format,
                     },
                 };
             }
