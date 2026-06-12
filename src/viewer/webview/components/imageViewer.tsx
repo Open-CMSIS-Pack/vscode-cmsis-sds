@@ -16,17 +16,21 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
-import { Button, Col, Row, Slider, Space } from 'antd';
+import { Button, Col, Row, Slider } from 'antd';
 import { ImageFrame } from '../../../webview/protocol';
-import { decodeFrame } from '../../../webview/utilities';
+import { decodeFrame, sliderStyle } from '../../../webview/utilities';
 import { frameWindowViewer } from './frameWindowViewer';
+import { SdsFileStats } from '../../../sds';
 
-type ImageState = {
+export type ImageState = {
     frames: ImageFrame[];
     rangeStart?: number;
     width: number;
     height: number;
     totalFrames: number;
+    interval: string;
+    fileStats: SdsFileStats;
+    pixelFormat: string;
 };
 
 type ImageViewerProps = {
@@ -83,28 +87,24 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
 
     return (
         <div className="media-page">
-            <Row>
-                <Col flex="auto" style={{ textAlign: 'right' }}>
-                    <Space>
-                        <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
-                        <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
-                        <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={() => setZoom(1)}></Button>
-                    </Space>
-                </Col>
-            </Row>
             <Row className="info-bar">
-                <Col style={statsTitleStyle}>Dimensions</Col>
-                <Col style={statsValueStyle}>{width}×{height}</Col>
-                <Col style={statsTitleStyle}>Frame</Col>
+                <Col style={statsTitleStyle}>Block</Col>
                 <Col style={statsValueStyle}>{Math.min(index + 1, totalFrames)} of {totalFrames}</Col>
-                <Col style={statsTitleStyle}>Showing</Col>
-                <Col style={statsValueStyle}>{windowFrames.length} of {totalFrames}</Col>
-                <Col style={statsTitleStyle}>Timestamp</Col>
+                <Col style={statsTitleStyle}>Size</Col>
+                <Col style={statsValueStyle}>{state.fileStats.avgBlockSize}B</Col>
+                <Col style={statsTitleStyle}>Time</Col>
                 <Col style={statsValueStyle}>{(getLoadedFrame(index)?.timestamp ?? 0).toFixed(4)}s</Col>
+                <Col style={statsTitleStyle}>Interval</Col>
+                <Col style={statsValueStyle}>{state.fileStats.recordingIntervalMs}ms / {parseFloat(state.interval).toFixed(2)}Hz</Col>
             </Row>
             <Row className="canvas-area">
                 <Col style={{ width: `${width * zoom}px`, height: `${height * zoom}px` }}>
-                    <canvas ref={canvasRef} width={width * zoom} height={height * zoom}></canvas>
+                    <canvas
+                        ref={canvasRef}
+                        width={width * zoom}
+                        height={height * zoom}
+                        title={`Pixel Format: ${state.pixelFormat}\nSize: ${width}×${height}`}
+                    />
                 </Col>
             </Row>
             <Row className="controls">
@@ -124,11 +124,14 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                             markNeedsPostDragHighQuality();
                             setIsDragMode(false);
                         }}
-                        style={{ flex: 1, margin: 0 }}
+                        style={sliderStyle}
                     />
                 </Col>
                 <Col flex="none" style={{ textAlign: 'center' }}>
                     <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => changeIndex(Math.min(totalFrames - 1, index + 1))} />
+                    <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
+                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
+                    <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={() => setZoom(1)}></Button>
                 </Col>
             </Row>
         </div>
