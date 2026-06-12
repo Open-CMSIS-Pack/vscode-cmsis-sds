@@ -52,7 +52,7 @@ describe('package.json contributions for merged explorer/flags UI', () => {
     });
 
     it('shows connect and disconnect commands in view title menu', () => {
-        const menu = packageJson.contributes.menus['view/title'];
+        const menu = (packageJson.contributes.menus as Record<string, MenuContribution[]>)['view/title'];
         const connect = menu.find((m) => m.command === 'arm-sds.sdsinterface.connect');
         const disconnect = menu.find((m) => m.command === 'arm-sds.sdsinterface.disconnect');
 
