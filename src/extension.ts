@@ -28,6 +28,7 @@ import * as fs from 'fs';
 import { SdsExplorerProvider, SdsTreeItem } from './providers/sdsExplorerProvider';
 import { SdsIoControlService } from './providers/sdsIoControlService';
 import { SdsioConfigManager } from './controller/sdsioConfigManager';
+import { SdsioServerLauncher } from './controller/sdsioServerLauncher';
 import { SdsioMonitorClient } from './recorder/sdsio/sdsIoMonitorClient';
 import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
@@ -63,6 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
     diagnostics.writeBanner();
     diagnostics.info(DiagnosticSource.Extension, 'CMSIS SDS extension activating...');
     context.subscriptions.push(diagnostics.outputChannel);
+
+    configureTerminalPath(context, diagnostics);
 
     // ── SDSIO Monitor Client ────────────────────────────────────
     const monitor = new SdsioMonitorClient({ port: SDSIO_SERVER_MONITOR_PORT });
@@ -730,4 +733,25 @@ function ensureWorkspaceConfigFile(workspaceRoot: string, configRelativePath: st
 
     settings['cmsis-sds.sdsio.configFile'] = configRelativePath.replace(/\\/g, '/');
     fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 4)}\n`, 'utf-8');
+}
+
+function configureTerminalPath(context: vscode.ExtensionContext, diagnostics: SdsDiagnostics): void {
+    const serverBinary = SdsioServerLauncher.resolveServerBinary(context.extensionPath, diagnostics);
+    const collection = context.environmentVariableCollection;
+    const pathVariableName = process.platform === 'win32' ? 'Path' : 'PATH';
+
+    collection.description = 'CMSIS SDS terminal environment';
+    collection.delete('PATH');
+    collection.delete('Path');
+
+    if (!serverBinary) {
+        diagnostics.info(DiagnosticSource.Extension, 'No SDSIO server binary found, skipping terminal PATH contribution.');
+        return;
+    }
+
+    collection.prepend(pathVariableName, `${path.dirname(serverBinary)}${path.delimiter}`);
+    diagnostics.info(
+        DiagnosticSource.Extension,
+        `Prepended ${path.dirname(serverBinary)} to ${pathVariableName} for new integrated terminals.`
+    );
 }
