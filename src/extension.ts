@@ -34,6 +34,8 @@ import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
 import { registerYamlSchemas } from './config/yamlSchemaRegistrar';
 import { setupSdsioConfigLifecycle } from './config/sdsioConfigLifecycle';
+import { registerSdsioConfigCommands } from './commands/sdsioConfigCommands';
+import { registerSdsioInterfaceCommands } from './commands/sdsioInterfaceCommands';
 import { parseSdsFile, decodeAllRecords, parseMetadataFile, exportToCsv, SDS_METADATA_EXTENSION, } from './sds';
 import { SDS_FILE_MATCHER } from './webview/utilities';
 
@@ -103,31 +105,12 @@ export function activate(context: vscode.ExtensionContext) {
         SDSIO_CONFIG_EXTENSION
     );
 
-    const updateSdsIoCommandContext = () => {
-        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canConnect', sdsIoControlService.canConnect());
-        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canDisconnect', sdsIoControlService.canDisconnect());
-        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canPlay', sdsIoControlService.canPlay());
-        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canRecord', sdsIoControlService.canRecord());
-        void vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.canStop', sdsIoControlService.canStop());
-    };
-    updateSdsIoCommandContext();
-
-    context.subscriptions.push(
-        sdsIoControlService.onDidChange(() => {
-            updateSdsIoCommandContext();
-            explorerProvider.refresh();
-        })
-    );
-
-    context.subscriptions.push(
-        explorerTreeView.onDidChangeCheckboxState((changes) => {
-            const flagChanges = changes.items.filter(([item]) => item.itemType === 'sdsFlag');
-            if (flagChanges.length === 0) {
-                return;
-            }
-            sdsIoControlService.setEnabledByTreeItems(flagChanges);
-        })
-    );
+    registerSdsioInterfaceCommands({
+        context,
+        sdsIoControlService,
+        explorerProvider,
+        explorerTreeView,
+    });
 
     // ── Commands ────────────────────────────────────────────────
 
@@ -137,174 +120,15 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sds.newConfig', async () => {
-            const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-            if (!workspaceFolder) {
-                void vscode.window.showErrorMessage('Open a workspace folder before creating an SDS configuration.');
-                return;
-            }
-
-            const baseName = await vscode.window.showInputBox({
-                prompt: 'Enter a name for the SDS configuration file',
-                placeHolder: 'example: target-a',
-                validateInput: (value) => {
-                    const trimmed = value.trim();
-                    if (!trimmed) {
-                        return 'Name cannot be empty.';
-                    }
-                    if (/[\\/:]/.test(trimmed)) {
-                        return 'Do not include path separators or drive notation.';
-                    }
-                    return undefined;
-                },
-            });
-
-            if (!baseName) {
-                return;
-            }
-
-            const targetPath = path.join(workspaceFolder.uri.fsPath, `${baseName.trim()}${SDSIO_CONFIG_EXTENSION}`);
-            if (fs.existsSync(targetPath)) {
-                void vscode.window.showWarningMessage(`Configuration already exists: ${path.basename(targetPath)}`);
-                const existingDoc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
-                await vscode.window.showTextDocument(existingDoc);
-                await setActiveConfig(targetPath, true);
-                return;
-            }
-
-            fs.writeFileSync(targetPath, SDSIO_TEMPLATE, 'utf-8');
-            await setActiveConfig(targetPath, true);
-
-            const createdDoc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
-            await vscode.window.showTextDocument(createdDoc);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sds.openConfig', async () => {
-            const uris = await vscode.window.showOpenDialog({
-                canSelectFiles: true,
-                canSelectFolders: false,
-                canSelectMany: false,
-                filters: { 'SDS Configuration files': ['sdsio.yml'] },
-                openLabel: 'Open SDS Configuration',
-            });
-
-            const selectedUri = uris?.[0];
-            if (!selectedUri) {
-                return;
-            }
-
-            const selectedPath = selectedUri.fsPath;
-            const currentWorkspaceFolder = vscode.workspace.getWorkspaceFolder(selectedUri);
-
-            if (currentWorkspaceFolder) {
-                await setActiveConfig(selectedPath, true);
-                const doc = await vscode.workspace.openTextDocument(selectedUri);
-                await vscode.window.showTextDocument(doc);
-                return;
-            }
-
-            const targetFolder = path.dirname(selectedPath);
-            ensureWorkspaceConfigFile(targetFolder, path.relative(targetFolder, selectedPath));
-            await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(targetFolder), false);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sds.selectConfig', async () => {
-            const configFiles = await vscode.workspace.findFiles('**/*.sdsio.yml', '**/node_modules/**');
-            if (configFiles.length === 0) {
-                void vscode.window.showInformationMessage('No .sdsio.yml files found in the current workspace.');
-                return;
-            }
-
-            const pickItems = configFiles.map((uri) => ({
-                label: path.basename(uri.fsPath),
-                description: vscode.workspace.asRelativePath(uri, false),
-                uri,
-            }));
-
-            const selected = await vscode.window.showQuickPick(pickItems, {
-                placeHolder: 'Select SDS configuration file',
-                matchOnDescription: true,
-            });
-
-            if (!selected) {
-                return;
-            }
-
-            await setActiveConfig(selected.uri.fsPath, true);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sds.editConfig', async () => {
-            const activeConfigPath = configManager.getConfigFile() ?? resolveConfigPathFromSettings();
-            if (!activeConfigPath || !fs.existsSync(activeConfigPath)) {
-                void vscode.window.showInformationMessage('No active SDS configuration file is selected.');
-                return;
-            }
-
-            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(activeConfigPath));
-            await vscode.window.showTextDocument(doc);
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.connect', async () => {
-            await sdsIoControlService.connectServer();
-            updateSdsIoCommandContext();
-            // if (!ok) {
-            //     void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
-            // }
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.disconnect', async () => {
-            await sdsIoControlService.disconnectServer();
-            updateSdsIoCommandContext();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.play', async () => {
-            const connected = await sdsIoControlService.connectServer();
-            if (!connected) {
-                void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
-                return;
-            }
-            sdsIoControlService.play();
-            updateSdsIoCommandContext();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.record', async () => {
-            const connected = await sdsIoControlService.connectServer();
-            if (!connected) {
-                void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
-                return;
-            }
-            sdsIoControlService.record();
-            updateSdsIoCommandContext();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.stop', () => {
-            sdsIoControlService.stop();
-            updateSdsIoCommandContext();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('arm-sds.sdsinterface.rename', async (item: SdsTreeItem) => {
-            await sdsIoControlService.renameFlag(item);
-        })
-    );
+    registerSdsioConfigCommands({
+        context,
+        configManager,
+        configExtension: SDSIO_CONFIG_EXTENSION,
+        configTemplate: SDSIO_TEMPLATE,
+        setActiveConfig,
+        resolveConfigPathFromSettings,
+        ensureWorkspaceConfigFile,
+    });
 
     // Open Viewer
     context.subscriptions.push(
