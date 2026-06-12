@@ -738,6 +738,10 @@ function ensureWorkspaceConfigFile(workspaceRoot: string, configRelativePath: st
 function configureTerminalPath(context: vscode.ExtensionContext, diagnostics: SdsDiagnostics): void {
     const serverBinary = SdsioServerLauncher.resolveServerBinary(context.extensionPath, diagnostics);
     const collection = context.environmentVariableCollection;
+    if (!collection) {
+        diagnostics.error(DiagnosticSource.Extension, 'Terminal environment variable collection is not available. PATH will not be modified for SDSIO server terminal.');
+        return;
+    }
     const pathVariableName = process.platform === 'win32' ? 'Path' : 'PATH';
 
     collection.description = 'CMSIS SDS terminal environment';
