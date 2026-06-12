@@ -19,12 +19,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { WebviewMessenger, getInitialState } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
-import { Button, Col, ConfigProvider, Row, Slider, Space, theme } from 'antd';
-import { ExpandOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { Button, Col, ConfigProvider, Row, Slider, theme } from 'antd';
+import { ExpandOutlined, ExportOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { BroadcastMessage, getIndexedSdsSuffix, Message, WebviewMessage } from '../../webview/protocol';
 import { broadcastMessage } from '../../webview/vscode-api';
 import { decimateExtremaSeries, DecimationPreset } from './components/decimation';
-import { getIsDarkTheme } from '../../webview/utilities';
+import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '../../webview/utilities';
 import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
 import { useViewportRange } from './components/useViewportRange';
 
@@ -227,21 +227,6 @@ function DataViewerApp() {
         });
     };
 
-    const statsTitleStyle: React.CSSProperties = {
-        opacity: 0.5,
-        fontSize: '80%',
-    };
-
-    const statsValueStyle: React.CSSProperties = {
-        paddingRight: 32,
-        fontSize: '80%',
-    };
-
-    const sliderStyle: React.CSSProperties = {
-        flex: 1,
-        margin: 0,
-    };
-
     const colors = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'];
 
     const chartData = useMemo<ChartSample[]>(() => {
@@ -294,11 +279,18 @@ function DataViewerApp() {
         });
     }, [filename]);
 
+    const sampleBlockFromTime = useCallback((time: number): number => {
+        if (stats.dataRate <= 0) {
+            return 0;
+        }
+        return Math.floor(time * stats.dataRate / (stats.avgBlockSize ?? 1));
+    }, [stats.dataRate, stats.avgBlockSize]);
+
     const windowLength = Math.max(0, viewRange[1] - viewRange[0]);
 
     return (
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
-            <Row>
+            {/* <Row>
                 <Col span={14}></Col>
                 <Col span={10} style={{ textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -322,19 +314,32 @@ function DataViewerApp() {
                         <Button type='text' title='Export CSV' onClick={onExport}>Export</Button>
                     </div>
                 </Col>
-            </Row>
+            </Row> */}
             <Row gutter={8} className='info-bar'>
-                <Col style={statsTitleStyle}>Records</Col><Col style={statsValueStyle}>{stats.totalRecords}</Col>
-                <Col style={statsTitleStyle}>Duration</Col><Col style={statsValueStyle}>{(stats.recordingTimeSeconds ?? 0).toFixed(3)} s</Col>
-                <Col style={statsTitleStyle}>Interval</Col><Col style={statsValueStyle}>{(stats.recordingIntervalMs || 0).toFixed(1)} ms</Col>
-                <Col style={statsTitleStyle}>Data Rate</Col><Col style={statsValueStyle}>{stats.dataRate ?? 0} B/s</Col>
-                <Col style={statsTitleStyle}>Avg Block</Col><Col style={statsValueStyle}>{stats.avgBlockSize ?? 0} B</Col>
+                <Col style={statsTitleStyle}>Block</Col>
+                <Col style={statsValueStyle}>{sampleBlockFromTime(highlightedTime ?? 0) + 1} of {stats.totalRecords}</Col>
+                <Col style={statsTitleStyle}>Size</Col>
+                <Col style={statsValueStyle}>{stats.avgBlockSize ?? 0} B</Col>
+                <Col style={statsTitleStyle}>Time</Col>
+                <Col style={statsValueStyle}>{highlightedTime?.toFixed(4) ?? 0} s</Col>
+                <Col style={statsTitleStyle}>Interval</Col>
+                <Col style={statsValueStyle}>{stats.recordingIntervalMs || 0} ms / {metadata?.sds?.frequency}Hz</Col>
+                <Col flex="auto" style={{ textAlign: 'right' }}>
+                    <Button type='text' icon={<ExportOutlined />} size='small' title='Export CSV' onClick={onExport}>Export</Button>
+                </Col>
+
+                {/* <Col style={statsTitleStyle}>Duration</Col>
+                <Col style={statsValueStyle}>{(stats.recordingTimeSeconds ?? 0).toFixed(3)} s</Col>
+                <Col style={statsTitleStyle}>Data Rate</Col>
+                <Col style={statsValueStyle}>{stats.dataRate ?? 0} B/s</Col>
                 {metadata && (
                     <>
-                        <Col style={statsTitleStyle}>Frequency</Col><Col style={statsValueStyle}>{metadata.sds?.frequency} Hz</Col>
-                        <Col style={statsTitleStyle}>Stream</Col><Col style={statsValueStyle}>{metadata.sds?.name}</Col>
+                        <Col style={statsTitleStyle}>Frequency</Col>
+                        <Col style={statsValueStyle}>{metadata.sds?.frequency} Hz</Col>
+                        <Col style={statsTitleStyle}>Stream</Col>
+                        <Col style={statsValueStyle}>{metadata.sds?.name}</Col>
                     </>
-                )}
+                )} */}
             </Row>
             <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
                 <BaseChartViewer
@@ -342,6 +347,7 @@ function DataViewerApp() {
                     xField='x'
                     yField='y'
                     seriesField='channel'
+                    totalBlocks={stats.totalRecords ?? samples.length}
                     color={colors}
                     smooth={false}
                     highlightedX={highlightedTime}
