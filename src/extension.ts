@@ -33,6 +33,7 @@ import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
 import { registerYamlSchemas } from './config/yamlSchemaRegistrar';
+import { setupSdsioConfigLifecycle } from './config/sdsioConfigLifecycle';
 import { parseSdsFile, decodeAllRecords, parseMetadataFile, exportToCsv, SDS_METADATA_EXTENSION, } from './sds';
 import { SDS_FILE_MATCHER } from './webview/utilities';
 
@@ -95,48 +96,11 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(explorerTreeView);
 
-    let isApplyingConfigSetting = false;
-
-    const updateExplorerConfigUi = async (configPath: string | undefined) => {
-        await vscode.commands.executeCommand('setContext', 'arm-sds.sdsio.hasConfig', Boolean(configPath));
-        explorerTreeView.title = configPath
-            ? path.basename(configPath, SDSIO_CONFIG_EXTENSION)
-            : 'Files';
-    };
-
-    const setActiveConfig = async (configPath: string | undefined, persist: boolean) => {
-        const normalizedPath = configPath && fs.existsSync(configPath) ? configPath : undefined;
-        // One call replaces the config and notifies both providers via onDidChangeConfig.
-        configManager.setConfigFile(normalizedPath);
-        await updateExplorerConfigUi(normalizedPath);
-
-        if (!persist) {
-            return;
-        }
-
-        isApplyingConfigSetting = true;
-        try {
-            const relativePath = normalizedPath
-                ? toWorkspaceRelativeConfigPath(vscode.Uri.file(normalizedPath))
-                : '';
-            await vscode.workspace
-                .getConfiguration('cmsis-sds.sdsio')
-                .update('configFile', relativePath, vscode.ConfigurationTarget.Workspace);
-        } finally {
-            isApplyingConfigSetting = false;
-        }
-    };
-
-    void setActiveConfig(resolveConfigPathFromSettings(), false);
-
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration((event) => {
-            if (!event.affectsConfiguration('cmsis-sds.sdsio.configFile') || isApplyingConfigSetting) {
-                return;
-            }
-
-            void setActiveConfig(resolveConfigPathFromSettings(), false);
-        })
+    const { setActiveConfig, resolveConfigPathFromSettings } = setupSdsioConfigLifecycle(
+        context,
+        configManager,
+        explorerTreeView,
+        SDSIO_CONFIG_EXTENSION
     );
 
     const updateSdsIoCommandContext = () => {
@@ -601,47 +565,6 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     diagnostics.info(DiagnosticSource.Extension, 'Extension activated successfully');
-
-    function resolveConfigPathFromSettings(): string | undefined {
-        const configured = vscode.workspace.getConfiguration('cmsis-sds.sdsio').get<string>('configFile');
-        if (!configured) {
-            return undefined;
-        }
-
-        const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-        for (const folder of workspaceFolders) {
-            const direct = path.join(folder.uri.fsPath, configured);
-            if (fs.existsSync(direct)) {
-                return direct;
-            }
-
-            const prefix = `${folder.name}${path.sep}`;
-            if (configured.startsWith(prefix)) {
-                const withoutPrefix = configured.slice(prefix.length);
-                const prefixed = path.join(folder.uri.fsPath, withoutPrefix);
-                if (fs.existsSync(prefixed)) {
-                    return prefixed;
-                }
-            }
-        }
-
-        return undefined;
-    }
-
-    function toWorkspaceRelativeConfigPath(configUri: vscode.Uri): string {
-        const folders = vscode.workspace.workspaceFolders ?? [];
-        const owningFolder = vscode.workspace.getWorkspaceFolder(configUri);
-        if (!owningFolder) {
-            return vscode.workspace.asRelativePath(configUri, true);
-        }
-
-        const relativePath = path.relative(owningFolder.uri.fsPath, configUri.fsPath).replace(/\\/g, '/');
-        if (folders.length <= 1) {
-            return relativePath;
-        }
-
-        return `${owningFolder.name}/${relativePath}`;
-    }
 }
 
 export async function deactivate() {
