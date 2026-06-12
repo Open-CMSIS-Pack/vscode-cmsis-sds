@@ -163,6 +163,12 @@
                 "title": "Open sdsio.yml file",
                 "category": "SDS",
                 "icon": "$(go-to-file)"
+            },
+            {
+                "command": "arm-sds.openGroupMetadata",
+                "title": "Open Stream Metadata",
+                "category": "SDS Tools",
+                "icon": "$(edit)"
             }
         ],
         "viewsContainers": {
@@ -268,6 +274,11 @@
                     "command": "arm-sds.deleteFile",
                     "when": "view == sdsExplorer && viewItem == sdsFile",
                     "group": "3_danger"
+                },
+                {
+                    "command": "arm-sds.openGroupMetadata",
+                    "when": "view == sdsExplorer && viewItem == groupMetadata",
+                    "group": "inline"
                 }
             ],
             "explorer/context": [

@@ -402,6 +402,19 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.openGroupMetadata', async (arg?: SdsTreeItem | vscode.Uri | string) => {
+            const filePath = resolveSdsPath(arg);
+            if (!filePath || !fs.existsSync(filePath)) {
+                vscode.window.showInformationMessage('No metadata file is associated with this stream group.');
+                return;
+            }
+
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+            await vscode.window.showTextDocument(doc);
+        })
+    );
+
     // Export CSV
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.exportCsv', async (arg?: SdsTreeItem | vscode.Uri | string) => {
