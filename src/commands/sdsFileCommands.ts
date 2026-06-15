@@ -96,7 +96,7 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.openGroupMetadata', async (arg?: SdsTreeItem | vscode.Uri | string) => {
             try {
-                const metadataPath = resolveFilePath(arg);
+                const metadataPath = resolveSdsPath(arg);
                 if (!metadataPath) {
                     vscode.window.showErrorMessage('No metadata file found for this SDS group.');
                     return;
@@ -202,10 +202,6 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
 }
 
 function resolveSdsPath(arg?: SdsTreeItem | vscode.Uri | string): string | undefined {
-    return resolveFilePath(arg);
-}
-
-function resolveFilePath(arg?: SdsTreeItem | vscode.Uri | string): string | undefined {
     if (!arg) { return undefined; }
     if (typeof arg === 'string') { return arg; }
     if (arg instanceof vscode.Uri) { return arg.fsPath; }
