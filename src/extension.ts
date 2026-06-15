@@ -134,6 +134,7 @@ export function activate(context: vscode.ExtensionContext) {
     registerSdsFileCommands({
         context,
         explorerProvider,
+        configManager,
     });
 
     registerWorkspaceCommands({

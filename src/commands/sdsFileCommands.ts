@@ -19,6 +19,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { SdsExplorerProvider, SdsTreeItem } from '../providers/sdsExplorerProvider';
+import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
 import { SdsViewerPanel } from '../viewer/sdsViewerPanel';
 import { SdsMediaViewerPanel } from '../viewer/sdsMediaViewerPanel';
 import { decodeAllRecords, exportToCsv, parseMetadataFile, parseSdsFile, SDS_METADATA_EXTENSION } from '../sds';
@@ -27,10 +28,11 @@ import { SDS_FILE_MATCHER } from '../webview/utilities';
 export interface RegisterSdsFileCommandsArgs {
     context: vscode.ExtensionContext;
     explorerProvider: SdsExplorerProvider;
+    configManager: SdsioConfigManager;
 }
 
 export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void {
-    const { context, explorerProvider } = args;
+    const { context, explorerProvider, configManager } = args;
 
     // Open Viewer
     context.subscriptions.push(
@@ -42,7 +44,7 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                     if (!fp) { return; }
                     filePath = fp;
                 }
-                SdsViewerPanel.createOrShow(context.extensionUri, filePath);
+                SdsViewerPanel.createOrShow(context.extensionUri, filePath, configManager);
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open viewer: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -141,7 +143,7 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                     if (!fp) { return; }
                     filePath = fp;
                 }
-                SdsMediaViewerPanel.createOrShow(context.extensionUri, filePath);
+                SdsMediaViewerPanel.createOrShow(context.extensionUri, filePath, configManager);
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open media viewer: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -168,7 +170,7 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                     matchOnDescription: true,
                 });
                 if (pick) {
-                    SdsViewerPanel.createOrShow(context.extensionUri, pick.uri.fsPath);
+                    SdsViewerPanel.createOrShow(context.extensionUri, pick.uri.fsPath, configManager);
                 }
             } catch (err) {
                 vscode.window.showErrorMessage(`Quick open failed: ${err instanceof Error ? err.message : String(err)}`);

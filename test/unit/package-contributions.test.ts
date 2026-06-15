@@ -51,17 +51,17 @@ describe('package.json contributions for merged explorer/flags UI', () => {
         expect(disconnect?.enablement).toBe('arm-sds.sdsio.canDisconnect');
     });
 
-    it('shows connect and disconnect inline actions on flags node in sdsExplorer', () => {
-        const menu = packageJson.contributes.menus['view/item/context'];
+    it('shows connect and disconnect commands in view title menu', () => {
+        const menu = (packageJson.contributes.menus as Record<string, MenuContribution[]>)['view/title'];
         const connect = menu.find((m) => m.command === 'arm-sds.sdsinterface.connect');
         const disconnect = menu.find((m) => m.command === 'arm-sds.sdsinterface.disconnect');
 
+        expect(connect).toBeDefined();
         expect(connect?.when).toContain('view == sdsExplorer');
-        expect(connect?.when).toContain('viewItem == flags');
         expect(connect?.when).toContain('arm-sds.sdsio.canConnect');
 
+        expect(disconnect).toBeDefined();
         expect(disconnect?.when).toContain('view == sdsExplorer');
-        expect(disconnect?.when).toContain('viewItem == flags');
         expect(disconnect?.when).toContain('arm-sds.sdsio.canDisconnect');
     });
 });

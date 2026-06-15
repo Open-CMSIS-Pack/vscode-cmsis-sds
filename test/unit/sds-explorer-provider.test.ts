@@ -124,7 +124,7 @@ describe('SdsExplorerProvider', () => {
 
         expect(rootItems).toHaveLength(2);
         expect(rootItems[0].label).toBe('SDS Files');
-        expect(rootItems[1].label).toBe('SDSIO Flags');
+        expect(rootItems[1].label).toBe('SDS Flags');
         expect(rootItems[1].description).toBe('connected');
         expect(rootItems[1].children).toEqual([flagItem]);
     });

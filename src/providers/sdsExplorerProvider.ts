@@ -164,10 +164,13 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                 const group = new SdsTreeItem(
                     groupName,
                     'group',
-                    '',
+                    items.find(i => i.itemType === 'metadataFile')?.filePath ?? '',
                     vscode.TreeItemCollapsibleState.Expanded,
-                    items
+                    items.filter(i => i.itemType === 'sdsFile')
                 );
+                if (group.filePath) {
+                    group.contextValue = 'groupMetadata';
+                }
                 const sdsCount = items.filter(i => i.itemType === 'sdsFile').length;
                 group.description = `${sdsCount} recordings`;
                 files.push(group);
@@ -189,7 +192,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
 
         const flagItems = this.flagsSource?.getFlagTreeItems() ?? [];
         const flagsNode = new SdsTreeItem(
-            'SDSIO Flags',
+            'SDS Flags',
             'flags',
             '',
             vscode.TreeItemCollapsibleState.Expanded, flagItems);
