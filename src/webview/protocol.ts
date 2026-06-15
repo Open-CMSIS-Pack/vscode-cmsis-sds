@@ -58,7 +58,7 @@ export function getIndexedSdsSuffix(value: unknown) {
         return null;
     }
 
-    return value.match(SDS_FILE_MATCHER)?.[0].toLowerCase() ?? null;
+    return value.match(SDS_FILE_MATCHER)?.[2].toLowerCase() ?? null;
 }
 
 export function isTimestampInFrameRange(timeStamp: number | undefined, frames: MediaFrame[]) {
