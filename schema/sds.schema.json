@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SDS Metadata Schema",
+  "description": "Schema for SDS (Synchronous Data Stream) metadata files (.sds.yml)",
+  "type": "object",
+  "required": ["sds"],
+  "properties": {
+    "sds": {
+      "type": "object",
+      "description": "Describes a synchronous data stream",
+      "required": ["name", "frequency", "content"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the Synchronous Data Stream (required)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Additional descriptive text (optional)"
+        },
+        "frequency": {
+          "type": "number",
+          "description": "Capture frequency of the SDS in Hz (required)",
+          "minimum": 0
+        },
+        "tick-frequency": {
+          "type": "number",
+          "description": "Tick frequency of the timeslot value (optional, default: 1000)",
+          "default": 1000,
+          "minimum": 0
+        },
+        "content": {
+          "type": "array",
+          "description": "List of values captured (required)",
+          "items": {
+            "type": "object",
+            "required": ["value", "type"],
+            "properties": {
+              "value": {
+                "type": "string",
+                "description": "Name of the value (required)"
+              },
+              "type": {
+                "type": "string",
+                "description": "Data type of the value (required)",
+                "enum": [
+                  "int8_t", "uint8_t",
+                  "int16_t", "uint16_t",
+                  "int32_t", "uint32_t",
+                  "int64_t", "uint64_t",
+                  "float", "double"
+                ]
+              },
+              "offset": {
+                "type": "number",
+                "description": "Offset of the value (optional, default: 0)",
+                "default": 0
+              },
+              "scale": {
+                "type": "number",
+                "description": "Scale factor of the value (optional, default: 1.0)",
+                "default": 1.0
+              },
+              "unit": {
+                "type": "string",
+                "description": "Physical unit of the value (optional)"
+              },
+              "image": {
+                "type": "object",
+                "description": "Image stream metadata (optional)",
+                "required": ["pixel_format", "width", "height"],
+                "properties": {
+                  "pixel_format": {
+                    "type": "string",
+                    "description": "Pixel format identifier (required)",
+                    "enum": [
+                      "RAW8", "RAW10",
+                      "RGB565", "RGB888",
+                      "NV12", "NV21", "I420",
+                      "NV16", "NV61",
+                      "YUYV", "UYVY",
+                      "YUV422P", "YUV444", "YUV444P"
+                    ]
+                  },
+                  "width": {
+                    "type": "integer",
+                    "description": "Number of pixels per row (required)",
+                    "minimum": 1
+                  },
+                  "height": {
+                    "type": "integer",
+                    "description": "Number of rows (required)",
+                    "minimum": 1
+                  },
+                  "stride_bytes": {
+                    "type": "integer",
+                    "description": "Bytes per row for single-plane formats (optional)",
+                    "minimum": 1
+                  },
+                  "planes": {
+                    "type": "array",
+                    "description": "Per-plane stride for multi-plane formats (2-3 entries)",
+                    "minItems": 2,
+                    "maxItems": 3,
+                    "items": {
+                      "type": "object",
+                      "required": ["stride_bytes"],
+                      "properties": {
+                        "stride_bytes": {
+                          "type": "integer",
+                          "description": "Bytes per row for this plane (required)",
+                          "minimum": 1
+                        }
+                      }
+                    }
+                  }
+                },
+                "oneOf": [
+                  { "required": ["stride_bytes"] },
+                  { "required": ["planes"] }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -21,6 +21,8 @@ import { describe, expect, it } from 'vitest';
 describe('extension activation wiring contracts', () => {
     const extensionPath = path.join(process.cwd(), 'src', 'extension.ts');
     const source = fs.readFileSync(extensionPath, 'utf-8');
+    const sdsioCommandsPath = path.join(process.cwd(), 'src', 'commands', 'sdsioInterfaceCommands.ts');
+    const sdsioCommandsSource = fs.readFileSync(sdsioCommandsPath, 'utf-8');
 
     it('creates explorer tree view and no separate flags tree view', () => {
         expect(source).toContain("createTreeView('sdsExplorer'");
@@ -29,13 +31,15 @@ describe('extension activation wiring contracts', () => {
     });
 
     it('routes checkbox changes only for sdsFlag items', () => {
-        expect(source).toContain('onDidChangeCheckboxState');
-        expect(source).toContain("item.itemType === 'sdsFlag'");
-        expect(source).toContain('sdsIoControlService.setEnabledByTreeItems(flagChanges)');
+        expect(source).toContain('registerSdsioInterfaceCommands({');
+        expect(sdsioCommandsSource).toContain('onDidChangeCheckboxState');
+        expect(sdsioCommandsSource).toContain("item.itemType === 'sdsFlag'");
+        expect(sdsioCommandsSource).toContain('sdsIoControlService.setEnabledByTreeItems(flagChanges)');
     });
 
     it('registers explicit disconnect command backed by control service', () => {
-        expect(source).toContain("registerCommand('arm-sds.sdsinterface.disconnect'");
-        expect(source).toContain('sdsIoControlService.disconnectServer()');
+        expect(source).toContain('registerSdsioInterfaceCommands({');
+        expect(sdsioCommandsSource).toContain("registerCommand('arm-sds.sdsinterface.disconnect'");
+        expect(sdsioCommandsSource).toContain('sdsIoControlService.disconnectServer()');
     });
 });
