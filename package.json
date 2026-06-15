@@ -308,11 +308,11 @@
         "json.schemas": [
             {
                 "fileMatch": ["**/*.sds.yml", "**/*.sds.yaml"],
-                "url": "./sds.schema.json"
+                "url": "./schema/sds.schema.json"
             },
             {
                 "fileMatch": ["**/*.sdsio.yml", "**/*.sdsio.yaml"],
-                "url": "./sdsio.schema.json"
+                "url": "./schema/sdsio.schema.json"
             }
         ],
         "configuration": {

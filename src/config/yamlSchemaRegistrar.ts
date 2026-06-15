@@ -25,8 +25,8 @@ export async function registerYamlSchemas(context: vscode.ExtensionContext): Pro
             ? { ...(rawSchemas as Record<string, string | string[]>) }
             : {};
 
-        const sdsSchemaUrl = vscode.Uri.file(path.join(context.extensionPath, 'sds.schema.json')).toString();
-        const sdsioSchemaUrl = vscode.Uri.file(path.join(context.extensionPath, 'sdsio.schema.json')).toString();
+        const sdsSchemaUrl = vscode.Uri.file(path.join(context.extensionPath, 'schema', 'sds.schema.json')).toString();
+        const sdsioSchemaUrl = vscode.Uri.file(path.join(context.extensionPath, 'schema', 'sdsio.schema.json')).toString();
         const sdsMatches = ['**/*.sds.yml', '**/*.sds.yaml'];
         const sdsioMatches = ['**/*.sdsio.yml', '**/*.sdsio.yaml'];
 
