@@ -305,17 +305,14 @@
                 }
             ]
         },
-        "languages": [
+        "json.schemas": [
             {
-                "id": "sds-config",
-                "aliases": [
-                    "SDS Configuration"
-                ],
-                "extensions": [
-                    ".sds.yml",
-                    ".sdsio.yml"
-                ],
-                "configuration": "./language-configuration.json"
+                "fileMatch": ["**/*.sds.yml", "**/*.sds.yaml"],
+                "url": "./schema/sds.schema.json"
+            },
+            {
+                "fileMatch": ["**/*.sdsio.yml", "**/*.sdsio.yaml"],
+                "url": "./schema/sdsio.schema.json"
             }
         ],
         "configuration": {
@@ -365,16 +362,6 @@
                 "key": "ctrl+shift+s",
                 "mac": "cmd+shift+s",
                 "when": "workbenchState != empty"
-            }
-        ],
-        "snippets": [
-            {
-                "language": "sds-config",
-                "path": "./snippets/sds-metadata.json"
-            },
-            {
-                "language": "yaml",
-                "path": "./snippets/sds-metadata.json"
             }
         ],
         "icons": {
