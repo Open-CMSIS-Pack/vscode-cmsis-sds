@@ -100,16 +100,20 @@ export class SdsioServerLauncher {
         this.closeListener.dispose();
     }
 
-    private resolveServerBinary(basePath: string): string | undefined {
+    static resolveServerBinary(basePath: string, diagnostics?: SdsDiagnostics): string | undefined {
         const toolsDir = path.join(basePath, 'tools');
         const bin = path.join(toolsDir, 'sdsio-server');
         const binWin32 = `${bin}.exe`;
         const serverBinary = fs.existsSync(binWin32) ? binWin32 : bin;
         if (!fs.existsSync(serverBinary)) {
-            this.diagnostics.error(DiagnosticSource.Server, `SDSIO server binary not found at expected location: ${serverBinary}`);
+            diagnostics?.error(DiagnosticSource.Server, `SDSIO server binary not found at expected location: ${serverBinary}`);
             return undefined;
         }
         return serverBinary;
+    }
+
+    private resolveServerBinary(basePath: string): string | undefined {
+        return SdsioServerLauncher.resolveServerBinary(basePath, this.diagnostics);
     }
 
     private buildLaunchCommand(serverBinary: string, configFile: string, monitorPort: number): string {
