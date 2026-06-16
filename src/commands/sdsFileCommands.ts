@@ -92,6 +92,28 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
         })
     );
 
+    // Open group metadata
+    context.subscriptions.push(
+        vscode.commands.registerCommand('arm-sds.openGroupMetadata', async (arg?: SdsTreeItem | vscode.Uri | string) => {
+            try {
+                const metadataPath = resolveSdsPath(arg);
+                if (!metadataPath) {
+                    vscode.window.showErrorMessage('No metadata file found for this SDS group.');
+                    return;
+                }
+                if (!fs.existsSync(metadataPath)) {
+                    vscode.window.showErrorMessage(`Metadata file not found: ${metadataPath}`);
+                    return;
+                }
+
+                const doc = await vscode.workspace.openTextDocument(metadataPath);
+                await vscode.window.showTextDocument(doc);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open metadata: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        })
+    );
+
     // Export CSV
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.exportCsv', async (arg?: SdsTreeItem | vscode.Uri | string) => {
