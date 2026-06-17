@@ -127,7 +127,7 @@ export class SdsioServerLauncher {
     private isPowerShellProfile(): boolean {
         const terminalConfig = vscode.workspace.getConfiguration('terminal.integrated');
         const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
-        const defaultProfile = terminalConfig.get<string>(`defaultProfile.${platform}`)?.toLowerCase() ?? '';
+        const defaultProfile = terminalConfig.get<string>(`defaultProfile.${platform}`)?.toLowerCase() ?? (platform === 'windows' ? 'powershell' : '');
         return defaultProfile.includes('powershell') || defaultProfile.includes('pwsh');
     }
 }
