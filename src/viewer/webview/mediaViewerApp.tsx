@@ -48,11 +48,8 @@ function MediaViewerApp() {
         );
     }
 
-    let applet: React.ReactNode = null;
-    if (initial.mediaType === 'image' && initial.image) { applet = <ImageViewer state={initial.image} filename={initial.fileName} />; }
-    else if (initial.mediaType === 'audio' && initial.audio) { applet = <AudioViewer state={initial.audio} filename={initial.fileName} />; }
-    else if (initial.mediaType === 'video' && initial.video) { applet = <VideoViewer state={initial.video} filename={initial.fileName} />; }
-    else { applet = <div style={{ padding: 16 }}>No media content available.</div>; }
+    let applet: React.ReactNode;
+    if (initial.mediaType === 'image' && initial.image) { applet = <ImageViewer state={initial.image} filename={initial.fileName} />; } else if (initial.mediaType === 'audio' && initial.audio) { applet = <AudioViewer state={initial.audio} filename={initial.fileName} />; } else if (initial.mediaType === 'video' && initial.video) { applet = <VideoViewer state={initial.video} filename={initial.fileName} />; } else { applet = <div style={{ padding: 16 }}>No media content available.</div>; }
 
     return (
         <div className="page">

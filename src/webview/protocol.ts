@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { SDS_FILE_MATCHER } from "./utilities";
+import { SDS_FILE_MATCHER } from './utilities';
 
 export type Message =
     | BroadcastMessage

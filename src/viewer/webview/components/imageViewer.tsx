@@ -19,7 +19,7 @@ import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined
 import { Button, Col, Row, Slider } from 'antd';
 import { ImageFrame } from '../../../webview/protocol';
 import { decodeFrame, sliderStyle } from '../../../webview/utilities';
-import { frameWindowViewer } from './frameWindowViewer';
+import { useFrameWindowViewer } from './frameWindowViewer';
 import { SdsFileStats } from '../../../sds';
 
 export type ImageState = {
@@ -56,12 +56,11 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         index,
         windowFrames,
         windowStart,
-        isDragMode,
         setIsDragMode,
         getLoadedFrame,
         changeIndex,
         markNeedsPostDragHighQuality,
-    } = frameWindowViewer({
+    } = useFrameWindowViewer({
         state: { frames, rangeStart, totalFrames },
         filename,
         mediaType: 'image',
@@ -83,6 +82,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- getLoadedFrame is recreated each render; redraw is driven by index/window changes
     }, [height, index, width, zoom, windowFrames, windowStart]);
 
     return (

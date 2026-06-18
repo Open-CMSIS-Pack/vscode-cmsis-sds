@@ -32,7 +32,7 @@ function splitGitReference(reference: string, owner: string, repo: string) {
         const parts = reference.split('@');
         reference = parts[1];
         const repoAndOwner = parts[0].split('/');
-        repo = repoAndOwner[1]
+        repo = repoAndOwner[1];
         owner = repoAndOwner[0];
     }
     return { repo, owner, reference };
@@ -64,7 +64,7 @@ const sdsio: Downloadable = new Downloadable(
         const asset = new ArchiveFileAsset(releaseAsset);
         return asset;
     },
-)
+);
 
 
 const sdsioNightly: Downloadable = new Downloadable(
@@ -93,7 +93,7 @@ const sdsioNightly: Downloadable = new Downloadable(
             { token: process.env.GITHUB_TOKEN });
         return asset;
     },
-)
+);
 
 
 // If no arguments are provided to the downloader script, all assets are downloaded

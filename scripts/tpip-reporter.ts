@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
-import fs from "fs";
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import fs from 'fs';
 
 async function main() {
 
@@ -43,13 +43,13 @@ async function main() {
         .strict()
         .parseSync();
 
-    const tpipJson = JSON.parse(fs.readFileSync(json as string, "utf8"));
-    
-    var data: string = '';
+    const tpipJson = JSON.parse(fs.readFileSync(json as string, 'utf8'));
+
+    let data: string = '';
     if (header && fs.existsSync(header as string)) {
-        data += fs.readFileSync(header as string, "utf8");
+        data += fs.readFileSync(header as string, 'utf8');
     } else {
-        data += "# TPIP Report\n\n";
+        data += '# TPIP Report\n\n';
     }
 
     data += '\n';
@@ -57,7 +57,7 @@ async function main() {
     data += '| *Package* | *Version* | *Repository* | *License* |\n';
     data += '|---|---|---|---|\n';
 
-    for(const value of tpipJson) {
+    for (const value of tpipJson) {
         data += `| ${value.name} | ${value.version} | ${value.url} | [${value.spdx}](${value.license}) |\n`;
     }
 

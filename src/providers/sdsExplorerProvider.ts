@@ -92,7 +92,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<SdsTreeItem | undefined | null>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    private fileWatchers: vscode.FileSystemWatcher[] = [];
+    private readonly fileWatchers: vscode.FileSystemWatcher[] = [];
 
     constructor(
         private readonly configManager: SdsioConfigManager,
