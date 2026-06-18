@@ -10,10 +10,12 @@
       "description": "SDSIO control file configuration",
       "properties": {
         "interface": {
+          "title": "interface:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#interface",
           "type": "object",
           "description": "Interface configuration for SDSIO-Server",
           "properties": {
             "usb": {
+              "title": "usb:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#usb",
               "type": ["object", "null"],
               "description": "Configure USB bulk interface",
               "properties": {
@@ -26,6 +28,7 @@
               "additionalProperties": false
             },
             "serial": {
+              "title": "serial:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#serial",
               "type": ["object", "null"],
               "description": "Configure serial (UART) interface",
               "required": ["port"],
@@ -55,6 +58,7 @@
               "additionalProperties": false
             },
             "socket": {
+              "title": "socket:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#socket",
               "type": ["object", "null"],
               "description": "Configure TCP socket interface",
               "properties": {
@@ -103,6 +107,7 @@
           "minimum": 0
         },
         "streams": {
+          "title": "streams:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#streams",
           "type": "array",
           "description": "Data stream information used by the SDS extension for VS Code",
           "items": {
@@ -123,6 +128,7 @@
           }
         },
         "play": {
+          "title": "play:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#play",
           "type": "array",
           "description": "Playback step list that defines how *.sds files are played back",
           "items": {
@@ -155,6 +161,7 @@
           }
         },
         "flag-info": {
+          "title": "flag-info:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#flag-info",
           "type": "array",
           "description": "Human readable labels for user flags 0..7",
           "items": {

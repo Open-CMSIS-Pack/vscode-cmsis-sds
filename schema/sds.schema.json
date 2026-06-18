@@ -6,6 +6,7 @@
   "required": ["sds"],
   "properties": {
     "sds": {
+      "title": "sds:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/theory.html#yaml-metadata-format",
       "type": "object",
       "description": "Describes a synchronous data stream",
       "required": ["name", "frequency", "content"],
