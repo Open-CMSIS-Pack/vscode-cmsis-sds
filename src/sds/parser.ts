@@ -120,40 +120,6 @@ function readValue(buf: Buffer, offset: number, type: SdsDataType): number {
     }
 }
 
-// /**
-//  * Decode a single SDS record into channel values using metadata.
-//  */
-// export function decodeRecord(
-//     record: SdsRecord,
-//     content: SdsContentValue[],
-//     tickFrequency: number = 1000
-// ): SdsDecodedSample {
-//     const values: { [channelName: string]: number } = {};
-//     let byteOffset = 0;
-
-//     for (const ch of content) {
-//         const baseType = ch.type.split(':')[0] as SdsDataType;
-//         const typeSize = sdsDataTypeSize(baseType);
-
-//         if (byteOffset + typeSize <= record.data.length) {
-//             const raw = readValue(record.data, byteOffset, baseType);
-//             const scale = ch.scale ?? 1.0;
-//             const offset = ch.offset ?? 0;
-//             values[ch.value] = raw * scale + offset;
-//         }
-//         byteOffset += typeSize;
-//     }
-
-//     const timeSeconds = record.timestamp / tickFrequency;
-
-//     return {
-//         timestamp: record.timestamp,
-//         timeSeconds,
-//         values,
-//         index: 0,
-//     };
-// }
-
 /**
  * Decode all records in a parsed file, extracting each frame's channel values.
  * When a record contains multiple frames, they are expanded into separate samples.
