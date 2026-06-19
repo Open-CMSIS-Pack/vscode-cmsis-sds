@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { ImageFrame } from "./protocol";
+import { ImageFrame } from './protocol';
 
 // Regex matching:
 //   <stream>.<index>.sds

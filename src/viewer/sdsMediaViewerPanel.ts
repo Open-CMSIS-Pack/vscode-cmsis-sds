@@ -72,15 +72,15 @@ type MediaAudioWindowRequest = {
 
 export class SdsMediaViewerPanel {
     public static readonly viewType = 'arm-sds.mediaViewer';
-    private static panels = new Map<string, SdsMediaViewerPanel>();
+    private static readonly panels = new Map<string, SdsMediaViewerPanel>();
 
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
-    private disposables: vscode.Disposable[] = [];
+    private readonly disposables: vscode.Disposable[] = [];
     private webview: vscode.Webview | undefined;
 
-    private sdsFilePath: string;
-    private metadataPath: string | undefined;
+    private readonly sdsFilePath: string;
+    private readonly metadataPath: string | undefined;
     private mediaType: SdsMediaType;
     private parsedFile: SdsParsedFile | undefined;
     private sdsFileStats: ReturnType<typeof getSdsFileStats> | undefined;
@@ -429,7 +429,7 @@ export class SdsMediaViewerPanel {
         const clampedCenter = Math.max(0, Math.min(total - 1, centerIndex));
         const half = Math.floor(windowSize / 2);
         let start = Math.max(0, clampedCenter - half);
-        let endExclusive = Math.min(total, start + windowSize);
+        const endExclusive = Math.min(total, start + windowSize);
         if (endExclusive - start < windowSize) {
             start = Math.max(0, endExclusive - windowSize);
         }

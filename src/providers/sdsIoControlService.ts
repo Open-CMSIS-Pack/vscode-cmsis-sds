@@ -45,8 +45,8 @@ export class SdsIoControlService {
 
     private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
     private mode: SdsIoMode = 'idle';
-    private monitor?: SdsioMonitorClient;
-    private extensionInstallPath?: string;
+    private readonly monitor?: SdsioMonitorClient;
+    private readonly extensionInstallPath?: string;
     private monitorConnected = false;
     private readonly serverLauncher: SdsioServerLauncher;
     private shutdownPromise?: Promise<void>;

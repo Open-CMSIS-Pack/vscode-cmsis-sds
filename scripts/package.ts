@@ -102,7 +102,7 @@ function sleep(ms: number): void {
 // default target: host OS and architecture
 const defaultTarget = `${os.platform()}-${os.arch()}`;
 const parsedTarget = getOptionValue(argv, '--target', '-t');
-let target = parsedTarget ?? defaultTarget;
+const target = parsedTarget ?? defaultTarget;
 
 if (!parsedTarget) {
     // Ignore malformed/empty --target usage and package for the current host by default.

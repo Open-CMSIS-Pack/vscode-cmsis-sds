@@ -39,7 +39,7 @@ type FrameWindowViewerOptions = {
 
 const DRAG_REQUEST_THROTTLE_MS = 80;
 
-export function frameWindowViewer({
+export function useFrameWindowViewer({
     state,
     filename,
     mediaType,
@@ -253,6 +253,7 @@ export function frameWindowViewer({
                 requestFrameWindowIfNeeded(index, stationaryRequestQuality);
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- request helpers are recreated each render; depending on them would refetch windows excessively
     }, [getNearEdgeMargin, index, isDragMode, stationaryRequestQuality, windowFrames.length, windowStart]);
 
     useEffect(() => {
@@ -279,6 +280,7 @@ export function frameWindowViewer({
         }
 
         requestFrameWindowIfNeeded(index, 'high', true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- request helper is recreated each render; only index/drag transitions should retrigger
     }, [index, isDragMode]);
 
     useEffect(() => {

@@ -19,7 +19,7 @@ import { Button, Col, Row, Slider } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ImageFrame } from '../../../webview/protocol';
 import { decodeFrame, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
-import { frameWindowViewer } from './frameWindowViewer';
+import { useFrameWindowViewer } from './frameWindowViewer';
 import { SdsFileStats } from '../../../sds';
 
 export type VideoState = {
@@ -50,12 +50,11 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
         index,
         windowFrames,
         windowStart,
-        isDragMode,
         setIsDragMode,
         getLoadedFrame,
         changeIndex,
         markNeedsPostDragHighQuality,
-    } = frameWindowViewer({
+    } = useFrameWindowViewer({
         state: { frames, rangeStart, totalFrames },
         filename,
         mediaType: 'video',
@@ -78,6 +77,7 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
                 timerRef.current = null;
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- changeIndex is recreated each render; the interval should only depend on playback inputs
     }, [fps, playing, totalFrames, index, filename, windowFrames]);
 
     useEffect(() => {
@@ -93,6 +93,7 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- getLoadedFrame is recreated each render; redraw is driven by index/window changes
     }, [height, index, width, zoom, windowFrames, windowStart]);
 
     const togglePlay = () => setPlaying(p => !p);

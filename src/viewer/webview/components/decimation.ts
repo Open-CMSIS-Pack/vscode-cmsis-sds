@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { ChartSample } from "./baseChartViewer";
+import { ChartSample } from './baseChartViewer';
 
 export type DecimationPreset = 'accuracy' | 'performance';
 

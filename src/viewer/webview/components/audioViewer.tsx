@@ -49,10 +49,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const {
         samples,
         sampleRate,
-        bitDepth,
-        channels,
         totalSamples,
-        totalRecords,
         domainStart,
         domainEnd,
         decimationPreset: initialDecimationPreset,
@@ -61,12 +58,10 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
-    const [decimationPreset, setDecimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
+    const [decimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
     const [currentBlock, setCurrentBlock] = useState<number | null>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
-
-    const totalDurationSeconds = Math.max(0, (domainEnd ?? 0) - (domainStart ?? 0));
 
     const sampleDomain = useMemo<[number, number]>(() => {
         if (sampleRate <= 0 || samples.length === 0) {
@@ -101,9 +96,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const resolvedDomainEnd = domainEnd ?? sampleDomain[1];
     const {
         viewRange,
-        setViewRange,
         setViewRangeClamped,
-        clampRange,
         domainSpan,
         sliderStep,
         isDragging,
@@ -113,11 +106,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         onSliderChange,
         onSliderAfterChange,
     } = useViewportRange({ domainStart: resolvedDomainStart, domainEnd: resolvedDomainEnd });
-
-    const loadedSampleCount = useMemo(
-        () => samples.reduce((sum, frame) => sum + frame.samples.length, 0),
-        [samples]
-    );
 
     const chartData = useMemo<ChartSample[]>(() => {
         const data: ChartSample[] = [];
@@ -304,12 +292,12 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                                 },
                             },
                         },
-                        formatter: (datum: any) => ({
+                        formatter: (datum: { y?: unknown }) => ({
                             name: 'audio',
                             value: typeof datum?.y === 'number' ? datum.y.toFixed(5) : String(datum?.y ?? ''),
                         }),
-                        title: (value: any) => {
-                            const t = typeof value === 'number' ? value : Number(value.x);
+                        title: (value: unknown) => {
+                            const t = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
                             return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
                         },
                     }}

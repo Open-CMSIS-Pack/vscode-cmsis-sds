@@ -74,14 +74,14 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                 // Create a starter metadata template
                 const streamName = path.basename(filePath).replace(SDS_FILE_MATCHER, '$1');
                 const template = [
-                    `sds:`,
+                    'sds:',
                     `  name: ${streamName}`,
-                    `  description: ''`,
-                    `  frequency: 100`,
-                    `  content:`,
-                    `    - value: channel1`,
-                    `      type: float`,
-                    `      unit: ''`,
+                    '  description: \'\'',
+                    '  frequency: 100',
+                    '  content:',
+                    '    - value: channel1',
+                    '      type: float',
+                    '      unit: \'\'',
                 ].join('\n') + '\n';
                 fs.writeFileSync(metaPath, template, 'utf-8');
                 const doc = await vscode.workspace.openTextDocument(metaPath);

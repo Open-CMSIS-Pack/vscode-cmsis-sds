@@ -18,7 +18,7 @@ import * as vscode from 'vscode';
 import { AppState, Message } from './protocol';
 
 class WebviewBus {
-    private views = new Set<vscode.Webview>();
+    private readonly views = new Set<vscode.Webview>();
 
     register(webview: vscode.Webview) {
         this.views.add(webview);
