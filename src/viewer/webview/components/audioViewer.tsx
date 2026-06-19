@@ -58,7 +58,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
-    const [decimationPreset, setDecimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
+    const [decimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
     const [currentBlock, setCurrentBlock] = useState<number | null>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
