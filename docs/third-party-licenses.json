@@ -180,5 +180,19 @@
         "spdx": "MIT",
         "url": "https://github.com/yargs/yargs",
         "license": "https://github.com/yargs/yargs/blob/main/LICENSE"
+    },
+    {
+        "name": "@ant-design/charts",
+        "version": "2.6.7",
+        "spdx": "MIT",
+        "url": "https://github.com/ant-design/ant-design-charts",
+        "license": "https://github.com/ant-design/ant-design-charts/blob/master/LICENSE"
+    },
+    {
+        "name": "@ant-design/icons",
+        "version": "6.2.5",
+        "spdx": "MIT",
+        "url": "https://github.com/ant-design/ant-design-icons",
+        "license": "https://github.com/ant-design/ant-design-icons/blob/master/LICENSE"
     }
 ]
