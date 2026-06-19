@@ -21,6 +21,7 @@ import { ChartEvent, Line } from '@ant-design/charts';
 export interface ChartSample {
     x: number;
     y: number;
+    index: number;
     [key: string]: any;
 }
 
@@ -64,6 +65,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     const plotRegionRef = useRef<{ left: number; right: number; top: number; bottom: number } | null>(null);
     const [plotRegion, setPlotRegion] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
     const height = 400;
+    const totalDataSeriesLength = 0;
 
     const resolveXRange = useMemo<[number, number] | null>(() => {
         if (xRange && Number.isFinite(xRange[0]) && Number.isFinite(xRange[1]) && xRange[1] > xRange[0]) {
@@ -176,35 +178,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return plotRegion.left + ((plotRegion.right - plotRegion.left) * (cursorPercent / 100));
     }, [cursorPercent, plotRegion]);
 
-    const computeBlockIndexFromX = useCallback((value: unknown): number | null => {
-        const x = typeof value === 'number'
-            ? value
-            : Number((value as any)?.x ?? value);
-        if (!Number.isFinite(x)) {
-            return null;
-        }
-
-        if (typeof blockIndexFromXProp === 'function') {
-            return blockIndexFromXProp(x);
-        }
-
-        if (!resolveXRange) {
-            return null;
-        }
-
-        const effectiveTotalBlocks = Math.max(1, totalBlocks ?? data.length);
-
-        const [minX, maxX] = resolveXRange;
-        if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX) {
-            return 1;
-        }
-
-        const relative = (x - minX) / (maxX - minX);
-        const clamped = Math.max(0, Math.min(1, relative));
-        const blockIndex = Math.round(clamped * Math.max(0, effectiveTotalBlocks - 1)) + 1;
-        return Math.max(1, Math.min(effectiveTotalBlocks, blockIndex));
-    }, [blockIndexFromXProp, data.length, resolveXRange, totalBlocks]);
-
     const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
         if (!onZoomRangeChange || !resolveXRange) {
             return;
@@ -273,9 +246,9 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     };
 
     const userTooltip = restTooltip as { title?: unknown } | undefined;
-    const tooltipTitle = (value: unknown) => {
-        const blockIndex = computeBlockIndexFromX(value);
-        const blockTitle = blockIndex !== null ? `Block: ${blockIndex}` : 'Block';
+    const tooltipTitle = (value: ChartSample) => {
+        const blockIndex = value.index; //computeBlockIndexFromX(value);
+        const blockTitle = blockIndex !== null ? `Block: ${blockIndex + 1}` : 'Block';
 
         if (userTooltip?.title && typeof userTooltip.title === 'function') {
             const userTitle = userTooltip.title(value);
@@ -307,8 +280,14 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             ...(restAxis ?? {}),
             x: {
                 ...(restAxis?.x ?? {}),
-                labelFormatter: (value: string) => {
-                    const blockIndex = computeBlockIndexFromX(value);
+                labelFormatter: (value: string, test: any, test2: any) => {
+                    let blockIndex = null;
+                    for (let index = data.length; index > 0; index--) {
+                        if (data[index - 1].x < Number(value)) {
+                            blockIndex = data[index - 1].index + 1;
+                            break;
+                        }
+                    }
                     return blockIndex !== null ? String(blockIndex) : value;
                 },
             },
@@ -337,30 +316,28 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         setPlotRegion(region);
 
         if (onCursorChange && resolveXRange && canvasEl) {
-            const emitCursor = (event: MouseEvent) => {
-                const time = cursorTimeFromClientPoint(event.clientX, event.clientY);
-                const time2 = cursorTimeFromClientPoint(event.clientX - 20, event.clientY);
+            const emitCursor = (time: number, blockIndex: number) => {
                 if (time === null) {
                     return;
                 }
-                onCursorChangeRef.current?.(time, computeBlockIndexFromX(time2));
+                onCursorChangeRef.current?.(time, blockIndex);
             };
 
-            const pointerMoveEvent = `plot:${ChartEvent.POINTER_MOVE}`;
-            const pointerDownEvent = `plot:${ChartEvent.POINTER_DOWN}`;
+            const pointerClickEvent = `plot:${ChartEvent.CLICK}`;
 
             const handlePointerEvent = (e: any) => {
-                if (e?.target?.attributes?.class === 'plot' && e?.buttons === 1 && e?.nativeEvent) {
-                    emitCursor(e.nativeEvent as MouseEvent);
+                if (!e || !data.length || !totalBlocks) {
+                    return;
                 }
+                const { x, y } = e;
+                const sample = plot.chart.getDataByXY({ x: x, y: y }, { shared: true })?.[0];
+                emitCursor(sample.x, sample.index);
             };
 
-            plot.chart.on(pointerMoveEvent, handlePointerEvent);
-            plot.chart.on(pointerDownEvent, handlePointerEvent);
+            plot.chart.on(pointerClickEvent, handlePointerEvent);
 
             detachCanvasListenersRef.current = () => {
-                plot.chart.off(pointerMoveEvent, handlePointerEvent);
-                plot.chart.off(pointerDownEvent, handlePointerEvent);
+                plot.chart.off(pointerClickEvent, handlePointerEvent);
                 canvasRef.current = null;
                 plotRef.current = null;
             };

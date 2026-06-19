@@ -191,6 +191,7 @@ export class SdsViewerPanel {
                         timestamp: record.timestamp,
                         timeSeconds: record.timestamp / tickFreq,
                         values: { data_size: record.dataSize },
+                        index: parsed.records.indexOf(record),
                     } as SdsDecodedSample);
                 }
             }

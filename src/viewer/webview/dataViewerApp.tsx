@@ -28,7 +28,7 @@ import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '.
 import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
 import { useViewportRange } from './components/useViewportRange';
 
-type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
+type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number>, index: number };
 
 type InitialState = {
     samples?: Sample[];
@@ -250,6 +250,7 @@ function DataViewerApp() {
                     dataByChannel.get(ch)?.push({
                         x: sample.timeSeconds,
                         y: value,
+                        index: sample.index,
                         channel: ch,
                     });
                 }
@@ -287,7 +288,7 @@ function DataViewerApp() {
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Row gutter={8} className='info-bar'>
                 <Col style={statsTitleStyle}>Block</Col>
-                <Col style={statsValueStyle}>{currentBlock ?? 0} of {stats.totalRecords}</Col>
+                <Col style={statsValueStyle}>{currentBlock ? currentBlock + 1 : 0} of {stats.totalRecords}</Col>
                 <Col style={statsTitleStyle}>Size</Col>
                 <Col style={statsValueStyle}>{stats.avgBlockSize ?? 0} B</Col>
                 <Col style={statsTitleStyle}>Time</Col>

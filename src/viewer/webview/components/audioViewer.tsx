@@ -138,6 +138,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     x,
                     y: frame.samples[i],
                     channel: 'audio',
+                    index: i,
                 });
             }
         }
@@ -272,7 +273,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         <div className="media-page">
             <Row className="info-bar">
                 <Col style={statsTitleStyle}>Block</Col>
-                <Col style={statsValueStyle}>{currentBlock ?? 0} of {totalSamples}</Col>
+                <Col style={statsValueStyle}>{currentBlock !== null ? currentBlock + 1 : 0} of {totalSamples}</Col>
                 <Col style={statsTitleStyle}>Size</Col>
                 <Col style={statsValueStyle}>{state.fileStats.avgBlockSize}B</Col>
                 <Col style={statsTitleStyle}>Time</Col>

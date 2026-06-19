@@ -14,6 +14,6 @@
  * limitations under the License.
  */
 
-export { parseSdsFile, parseSdsBuffer, decodeRecord, decodeAllRecords, getSdsFileStats, decodeMediaFrames, decodeImageFrameToRGBA, decodeAudioBlock, parseSdsRecordIterator, indexSdsRecords } from './parser';
+export { parseSdsFile, parseSdsBuffer, decodeAllRecords, getSdsFileStats, decodeMediaFrames, decodeImageFrameToRGBA, decodeAudioBlock, parseSdsRecordIterator, indexSdsRecords } from './parser';
 export { writeSdsFile, encodeRecords, writeMetadataFile, serializeMetadataToYaml, parseMetadataFile, parseMetadataString, exportToCsv, importFromCsv, findNextFileIndex } from './writer';
 export * from './types';

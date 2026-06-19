@@ -31,11 +31,10 @@ import {
     SdsDecodedSample,
     SdsDecodedFrame,
     SdsMetadata,
-    SdsContentValue,
     SdsDataType,
     sdsDataTypeSize,
     sdsFrameSize,
-    detectMediaType,
+    detectMediaType
 } from './types';
 
 /** Record header size: timestamp (4 bytes) + data_size (4 bytes) */
@@ -121,38 +120,39 @@ function readValue(buf: Buffer, offset: number, type: SdsDataType): number {
     }
 }
 
-/**
- * Decode a single SDS record into channel values using metadata.
- */
-export function decodeRecord(
-    record: SdsRecord,
-    content: SdsContentValue[],
-    tickFrequency: number = 1000
-): SdsDecodedSample {
-    const values: { [channelName: string]: number } = {};
-    let byteOffset = 0;
+// /**
+//  * Decode a single SDS record into channel values using metadata.
+//  */
+// export function decodeRecord(
+//     record: SdsRecord,
+//     content: SdsContentValue[],
+//     tickFrequency: number = 1000
+// ): SdsDecodedSample {
+//     const values: { [channelName: string]: number } = {};
+//     let byteOffset = 0;
 
-    for (const ch of content) {
-        const baseType = ch.type.split(':')[0] as SdsDataType;
-        const typeSize = sdsDataTypeSize(baseType);
+//     for (const ch of content) {
+//         const baseType = ch.type.split(':')[0] as SdsDataType;
+//         const typeSize = sdsDataTypeSize(baseType);
 
-        if (byteOffset + typeSize <= record.data.length) {
-            const raw = readValue(record.data, byteOffset, baseType);
-            const scale = ch.scale ?? 1.0;
-            const offset = ch.offset ?? 0;
-            values[ch.value] = raw * scale + offset;
-        }
-        byteOffset += typeSize;
-    }
+//         if (byteOffset + typeSize <= record.data.length) {
+//             const raw = readValue(record.data, byteOffset, baseType);
+//             const scale = ch.scale ?? 1.0;
+//             const offset = ch.offset ?? 0;
+//             values[ch.value] = raw * scale + offset;
+//         }
+//         byteOffset += typeSize;
+//     }
 
-    const timeSeconds = record.timestamp / tickFrequency;
+//     const timeSeconds = record.timestamp / tickFrequency;
 
-    return {
-        timestamp: record.timestamp,
-        timeSeconds,
-        values,
-    };
-}
+//     return {
+//         timestamp: record.timestamp,
+//         timeSeconds,
+//         values,
+//         index: 0,
+//     };
+// }
 
 /**
  * Decode all records in a parsed file, extracting each frame's channel values.
@@ -168,7 +168,7 @@ export function decodeAllRecords(
     const frameBytes = sdsFrameSize(content);
     const samples: SdsDecodedSample[] = [];
 
-    for (const record of parsed.records) {
+    for (const { record, index } of parsed.records.map((r, i) => ({ record: r, index: i }))) {
         // A record may contain multiple frames
         const frameCount = frameBytes > 0 ? Math.floor(record.data.length / frameBytes) : 0;
 
@@ -197,6 +197,7 @@ export function decodeAllRecords(
                 timestamp: record.timestamp,
                 timeSeconds,
                 values,
+                index
             });
         }
     }
