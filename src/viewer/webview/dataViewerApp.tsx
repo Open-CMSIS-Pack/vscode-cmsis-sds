@@ -82,9 +82,7 @@ function DataViewerApp() {
     const domainEnd = initial.domainEnd ?? (samples.length > 0 ? samples[samples.length - 1].timeSeconds : 1);
     const {
         viewRange,
-        setViewRange,
         setViewRangeClamped,
-        clampRange,
         domainSpan,
         sliderStep,
         isDragging,
@@ -97,7 +95,7 @@ function DataViewerApp() {
 
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
-    const [decimationPreset, setDecimationPreset] = useState<DecimationPreset>(() => initial.decimationPreset ?? 'accuracy');
+    const decimationPreset = initial.decimationPreset ?? 'accuracy';
     const requestSeqRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
 
@@ -121,6 +119,36 @@ function DataViewerApp() {
         });
     }, []);
 
+    const blockIndexFromTime = useCallback((time: number) => {
+        if (!Number.isFinite(time)) {
+            return null;
+        }
+
+        let closestBlock: number | null = null;
+        let closestDistance = Number.POSITIVE_INFINITY;
+        let minTime = Number.POSITIVE_INFINITY;
+        let maxTime = Number.NEGATIVE_INFINITY;
+        for (const sample of samples) {
+            if (typeof sample.index !== 'number' || !Number.isFinite(sample.index)) {
+                continue;
+            }
+
+            minTime = Math.min(minTime, sample.timeSeconds);
+            maxTime = Math.max(maxTime, sample.timeSeconds);
+            const distance = Math.abs(sample.timeSeconds - time);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestBlock = sample.index;
+            }
+        }
+
+        if (closestBlock === null || time < minTime || time > maxTime) {
+            return null;
+        }
+
+        return closestBlock;
+    }, [samples]);
+
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
             const msg = event.data as Message;
@@ -136,6 +164,7 @@ function DataViewerApp() {
                 }
 
                 setHighlightedTime(payload.timeStamp);
+                setCurrentBlock(blockIndexFromTime(payload.timeStamp));
                 return;
             }
 
@@ -160,7 +189,7 @@ function DataViewerApp() {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename]);
+    }, [blockIndexFromTime, filename]);
 
     useEffect(() => {
         if (initial.error) {
@@ -288,7 +317,7 @@ function DataViewerApp() {
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Row gutter={8} className='info-bar'>
                 <Col style={statsTitleStyle}>Block</Col>
-                <Col style={statsValueStyle}>{currentBlock ? currentBlock + 1 : 0} of {stats.totalRecords}</Col>
+                <Col style={statsValueStyle}>{currentBlock !== null ? currentBlock + 1 : 0} of {stats.totalRecords}</Col>
                 <Col style={statsTitleStyle}>Size</Col>
                 <Col style={statsValueStyle}>{stats.avgBlockSize ?? 0} B</Col>
                 <Col style={statsTitleStyle}>Time</Col>
@@ -305,7 +334,6 @@ function DataViewerApp() {
                     xField='x'
                     yField='y'
                     seriesField='channel'
-                    totalBlocks={stats.totalRecords ?? samples.length}
                     color={colors}
                     smooth={false}
                     highlightedX={highlightedTime}

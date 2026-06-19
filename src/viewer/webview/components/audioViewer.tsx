@@ -49,10 +49,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const {
         samples,
         sampleRate,
-        bitDepth,
-        channels,
         totalSamples,
-        totalRecords,
         domainStart,
         domainEnd,
         decimationPreset: initialDecimationPreset,
@@ -61,12 +58,10 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
-    const [decimationPreset, setDecimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
+    const decimationPreset = initialDecimationPreset ?? 'accuracy';
     const [currentBlock, setCurrentBlock] = useState<number | null>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
-
-    const totalDurationSeconds = Math.max(0, (domainEnd ?? 0) - (domainStart ?? 0));
 
     const sampleDomain = useMemo<[number, number]>(() => {
         if (sampleRate <= 0 || samples.length === 0) {
@@ -101,9 +96,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const resolvedDomainEnd = domainEnd ?? sampleDomain[1];
     const {
         viewRange,
-        setViewRange,
         setViewRangeClamped,
-        clampRange,
         domainSpan,
         sliderStep,
         isDragging,
@@ -113,11 +106,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         onSliderChange,
         onSliderAfterChange,
     } = useViewportRange({ domainStart: resolvedDomainStart, domainEnd: resolvedDomainEnd });
-
-    const loadedSampleCount = useMemo(
-        () => samples.reduce((sum, frame) => sum + frame.samples.length, 0),
-        [samples]
-    );
 
     const chartData = useMemo<ChartSample[]>(() => {
         const data: ChartSample[] = [];
@@ -134,11 +122,12 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     continue;
                 }
 
+                const sampleIndex = Math.max(0, Math.round((x - resolvedDomainStart) * sampleRate));
                 data.push({
                     x,
                     y: frame.samples[i],
                     channel: 'audio',
-                    index: i,
+                    index: sampleIndex,
                 });
             }
         }
@@ -147,7 +136,20 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         const dragFactor = isDragging ? 0.7 : 1;
         const maxPoints = Math.max(presetFloor, Math.floor(viewWidth * presetFactor * dragFactor));
         return decimateExtremaSeries(data, maxPoints);
-    }, [decimationPreset, isDragging, sampleRate, samples, viewRange, viewWidth]);
+    }, [decimationPreset, isDragging, resolvedDomainStart, sampleRate, samples, viewRange, viewWidth]);
+
+    const blockIndexFromTime = useCallback((time: number) => {
+        if (!Number.isFinite(time) || sampleRate <= 0 || totalSamples <= 0 || time < resolvedDomainStart || time > resolvedDomainEnd) {
+            return null;
+        }
+
+        const blockIndex = Math.round((time - resolvedDomainStart) * sampleRate);
+        if (!Number.isFinite(blockIndex)) {
+            return null;
+        }
+
+        return Math.max(0, Math.min(totalSamples - 1, blockIndex));
+    }, [resolvedDomainEnd, resolvedDomainStart, sampleRate, totalSamples]);
 
     const onCursorChange = useCallback((time: number, block: number | null) => {
         setHighlightedTime(time);
@@ -250,13 +252,14 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             }
 
             setHighlightedTime(payload.timeStamp);
+            setCurrentBlock(blockIndexFromTime(payload.timeStamp));
         };
 
         window.addEventListener('message', onMessage);
         return () => {
             window.removeEventListener('message', onMessage);
         };
-    }, [filename]);
+    }, [blockIndexFromTime, filename]);
 
     useEffect(() => {
         const onResize = () => {
@@ -287,7 +290,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     xField="x"
                     yField="y"
                     seriesField="channel"
-                    totalBlocks={totalSamples}
                     smooth={false}
                     highlightedX={highlightedTime}
                     xRange={viewRange}

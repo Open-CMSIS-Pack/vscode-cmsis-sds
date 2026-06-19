@@ -82,9 +82,7 @@ export function useViewportRange({ domainStart, domainEnd, minSpanDivisor = 1000
 
     return {
         viewRange,
-        setViewRange,
         setViewRangeClamped,
-        clampRange,
         domainSpan,
         sliderStep,
         isDragging,

@@ -16,10 +16,10 @@
 
 import { ExpandOutlined, LeftCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImageFrame } from '../../../webview/protocol';
 import { decodeFrame, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
-import { frameWindowViewer } from './frameWindowViewer';
+import { useFrameWindowViewer } from './frameWindowViewer';
 import { SdsFileStats } from '../../../sds';
 
 export type VideoState = {
@@ -46,27 +46,29 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
     const [zoom, setZoom] = useState(1);
     const [playing, setPlaying] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const getVideoWindowSize = useCallback((quality: 'low' | 'high') => quality === 'low' ? 80 : 220, []);
+    const getVideoNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(6, Math.floor(loadedFrameCount * 0.2)), []);
+    const stopPlaybackOnManualChange = useCallback(() => setPlaying(false), []);
     const {
         index,
         windowFrames,
         windowStart,
-        isDragMode,
         setIsDragMode,
         getLoadedFrame,
         changeIndex,
         markNeedsPostDragHighQuality,
-    } = frameWindowViewer({
+    } = useFrameWindowViewer({
         state: { frames, rangeStart, totalFrames },
         filename,
         mediaType: 'video',
-        getWindowSize: quality => quality === 'low' ? 80 : 220,
-        getNearEdgeMargin: loadedFrameCount => Math.max(6, Math.floor(loadedFrameCount * 0.2)),
+        getWindowSize: getVideoWindowSize,
+        getNearEdgeMargin: getVideoNearEdgeMargin,
         stationaryRequestQuality: playing ? 'low' : 'high',
-        onManualChangeStart: () => setPlaying(false),
+        onManualChangeStart: stopPlaybackOnManualChange,
     });
 
     useEffect(() => {
-        if (!playing) { return; }
+        if (!playing || fps <= 0) { return; }
         timerRef.current = setInterval(() => {
             const nextIndex = (index + 1) % Math.max(1, totalFrames);
             changeIndex(nextIndex, { manual: false });
@@ -78,7 +80,7 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
                 timerRef.current = null;
             }
         };
-    }, [fps, playing, totalFrames, index, filename, windowFrames]);
+    }, [changeIndex, fps, index, playing, totalFrames]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -93,7 +95,7 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
-    }, [height, index, width, zoom, windowFrames, windowStart]);
+    }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
 
     const togglePlay = () => setPlaying(p => !p);
 

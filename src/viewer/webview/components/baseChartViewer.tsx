@@ -30,12 +30,9 @@ export interface BaseChartViewerProps {
     xField?: string;
     yField?: string;
     seriesField?: string;
-    title?: string;
     color?: string[];
     highlightedX?: number | null;
     xRange?: [number, number];
-    totalBlocks?: number;
-    blockIndexFromX?: (x: number) => number | null;
     onCursorChange?: (x: number, block: number | null) => void;
     onZoomRangeChange?: (range: [number, number]) => void;
     [key: string]: any;
@@ -46,26 +43,19 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     xField = 'x',
     yField = 'y',
     seriesField,
-    title,
     color,
     highlightedX,
     xRange,
-    totalBlocks,
-    blockIndexFromX: blockIndexFromXProp,
     onCursorChange,
     onZoomRangeChange,
     ...rest
 }) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const plotRef = useRef<any>(null);
     const detachCanvasListenersRef = useRef<(() => void) | null>(null);
-    const resolveXRangeRef = useRef<[number, number] | null>(null);
     const onCursorChangeRef = useRef<typeof onCursorChange>(onCursorChange);
-    const plotRegionRef = useRef<{ left: number; right: number; top: number; bottom: number } | null>(null);
     const [plotRegion, setPlotRegion] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
-    const height = 400;
-    const totalDataSeriesLength = 0;
+    const [cursorLeftPx, setCursorLeftPx] = useState<number | null>(null);
 
     const resolveXRange = useMemo<[number, number] | null>(() => {
         if (xRange && Number.isFinite(xRange[0]) && Number.isFinite(xRange[1]) && xRange[1] > xRange[0]) {
@@ -98,21 +88,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return [minX, maxX];
     }, [data, xField, xRange]);
 
-    const cursorPercent = useMemo(() => {
-        if (highlightedX === null || highlightedX === undefined || !resolveXRange) {
-            return null;
-        }
-
-        const span = resolveXRange[1] - resolveXRange[0];
-        if (!Number.isFinite(span) || span <= 0) {
-            return null;
-        }
-
-        const relative = (highlightedX - resolveXRange[0]) / span;
-        const clamped = Math.max(0, Math.min(1, relative));
-        return clamped * 100;
-    }, [highlightedX, resolveXRange]);
-
     const resolvePlotRegion = useCallback((plot: any, canvasEl: HTMLCanvasElement | null) => {
         if (!canvasEl) {
             return null;
@@ -134,49 +109,53 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return { left: 0, right: canvasEl.clientWidth, top: 0, bottom: canvasEl.clientHeight };
     }, []);
 
-    const cursorTimeFromClientPoint = useCallback((clientX: number, clientY: number) => {
-        const activeRange = resolveXRangeRef.current;
-        if (!activeRange) {
+    const xValueFromClientPoint = useCallback((clientX: number, clientY: number) => {
+        if (!resolveXRange) {
             return null;
         }
 
         const rect = canvasRef.current?.getBoundingClientRect() ?? containerRef.current?.getBoundingClientRect();
-        const region = plotRegionRef.current;
         if (!rect) {
             return null;
         }
 
-        if (!region) {
+        if (!plotRegion) {
             return null;
         }
 
-        const regionWidth = region.right - region.left;
-        const regionHeight = region.bottom - region.top;
+        const regionWidth = plotRegion.right - plotRegion.left;
+        const regionHeight = plotRegion.bottom - plotRegion.top;
         if (regionWidth <= 0 || regionHeight <= 0) {
             return null;
         }
         const localX = clientX - rect.left;
         const localY = clientY - rect.top;
-        // Ignore clicks above/below the plotted data region (axes, legend, padding).
-        if (localY < region.top || localY > region.bottom) {
+        // Ignore events above/below the plotted data region (axes, legend, padding).
+        if (localY < plotRegion.top || localY > plotRegion.bottom) {
             return null;
         }
 
-        if (localX < region.left || localX > region.right) {
+        if (localX < plotRegion.left || localX > plotRegion.right) {
             return null;
         }
 
-        const relative = (localX - region.left) / regionWidth;
-        return activeRange[0] + (activeRange[1] - activeRange[0]) * relative;
-    }, []);
+        const relative = (localX - plotRegion.left) / regionWidth;
+        return resolveXRange[0] + (resolveXRange[1] - resolveXRange[0]) * relative;
+    }, [plotRegion, resolveXRange]);
 
-    const cursorLeftPx = useMemo(() => {
-        if (cursorPercent === null || !plotRegion) {
+    const cursorLeftFromX = useCallback((x: number | null | undefined) => {
+        if (x === null || x === undefined || !Number.isFinite(x) || !resolveXRange || !plotRegion) {
             return null;
         }
 
-        return plotRegion.left + ((plotRegion.right - plotRegion.left) * (cursorPercent / 100));
-    }, [cursorPercent, plotRegion]);
+        const span = resolveXRange[1] - resolveXRange[0];
+        const plotWidth = plotRegion.right - plotRegion.left;
+        if (span <= 0 || plotWidth <= 0 || x < resolveXRange[0] || x > resolveXRange[1]) {
+            return null;
+        }
+
+        return plotRegion.left + (plotWidth * ((x - resolveXRange[0]) / span));
+    }, [plotRegion, resolveXRange]);
 
     const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
         if (!onZoomRangeChange || !resolveXRange) {
@@ -205,7 +184,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             return;
         }
 
-        const focusTime = cursorTimeFromClientPoint(event.clientX, event.clientY);
+        const focusTime = xValueFromClientPoint(event.clientX, event.clientY);
         const anchorTime = focusTime === null ? (currentRange[0] + currentRange[1]) / 2 : focusTime;
         const relativeAnchor = (anchorTime - currentRange[0]) / currentSpan;
         const zoomFactor = Math.exp(event.deltaY * 0.0015);
@@ -214,15 +193,15 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         const nextStart = anchorTime - (nextSpan * relativeAnchor);
         const nextEnd = nextStart + nextSpan;
         onZoomRangeChange([nextStart, nextEnd]);
-    }, [cursorTimeFromClientPoint, onZoomRangeChange, resolveXRange, xRange]);
-
-    useEffect(() => {
-        resolveXRangeRef.current = resolveXRange;
-    }, [resolveXRange]);
+    }, [onZoomRangeChange, resolveXRange, xRange, xValueFromClientPoint]);
 
     useEffect(() => {
         onCursorChangeRef.current = onCursorChange;
     }, [onCursorChange]);
+
+    useEffect(() => {
+        setCursorLeftPx(cursorLeftFromX(highlightedX));
+    }, [cursorLeftFromX, highlightedX]);
 
     useEffect(() => {
         return () => {
@@ -246,8 +225,31 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     };
 
     const userTooltip = restTooltip as { title?: unknown } | undefined;
+    const blockLabelForX = useCallback((xValue: number) => {
+        if (!Number.isFinite(xValue)) {
+            return null;
+        }
+
+        for (let index = data.length; index > 0; index--) {
+            const point = data[index - 1];
+            const pointX = point?.[xField];
+            if (typeof pointX === 'number' && pointX <= xValue) {
+                return String(point.index + 1);
+            }
+        }
+
+        for (const point of data) {
+            const pointX = point?.[xField];
+            if (typeof pointX === 'number' && pointX >= xValue) {
+                return String(point.index + 1);
+            }
+        }
+
+        return null;
+    }, [data, xField]);
+
     const tooltipTitle = (value: ChartSample) => {
-        const blockIndex = value.index; //computeBlockIndexFromX(value);
+        const blockIndex = typeof value?.index === 'number' ? value.index : null;
         const blockTitle = blockIndex !== null ? `Block: ${blockIndex + 1}` : 'Block';
 
         if (userTooltip?.title && typeof userTooltip.title === 'function') {
@@ -280,15 +282,8 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             ...(restAxis ?? {}),
             x: {
                 ...(restAxis?.x ?? {}),
-                labelFormatter: (value: string, test: any, test2: any) => {
-                    let blockIndex = null;
-                    for (let index = data.length; index > 0; index--) {
-                        if (data[index - 1].x < Number(value)) {
-                            blockIndex = data[index - 1].index + 1;
-                            break;
-                        }
-                    }
-                    return blockIndex !== null ? String(blockIndex) : value;
+                labelFormatter: (value: string) => {
+                    return blockLabelForX(Number(value)) ?? value;
                 },
             },
         },
@@ -303,7 +298,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     };
 
     const mergedOnReady = (plot: any) => {
-        plotRef.current = plot;
         if (detachCanvasListenersRef.current) {
             detachCanvasListenersRef.current();
             detachCanvasListenersRef.current = null;
@@ -312,34 +306,43 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         const canvasEl = containerRef.current?.querySelector<HTMLCanvasElement>('canvas') ?? null;
         canvasRef.current = canvasEl;
         const region = resolvePlotRegion(plot, canvasEl);
-        plotRegionRef.current = region;
         setPlotRegion(region);
 
-        if (onCursorChange && resolveXRange && canvasEl) {
+        if (canvasEl) {
             const emitCursor = (time: number, blockIndex: number) => {
-                if (time === null) {
+                if (!Number.isFinite(time) || !Number.isFinite(blockIndex)) {
                     return;
                 }
                 onCursorChangeRef.current?.(time, blockIndex);
             };
 
             const pointerClickEvent = `plot:${ChartEvent.CLICK}`;
+            const pointerMoveEvent = `plot:${ChartEvent.POINTER_MOVE}`;
 
             const handlePointerEvent = (e: any) => {
-                if (!e || !data.length || !totalBlocks) {
+                if (!e || (e.type === ChartEvent.POINTER_MOVE && e.buttons !== 1) || (e.type === ChartEvent.CLICK && e.buttons !== 0)) {
                     return;
                 }
                 const { x, y } = e;
+                if (typeof x !== 'number' || !Number.isFinite(x)) {
+                    return;
+                }
+
                 const sample = plot.chart.getDataByXY({ x: x, y: y }, { shared: true })?.[0];
-                emitCursor(sample.x, sample.index);
+                const time = sample?.[xField];
+                const blockIndex = sample?.index;
+                if (typeof time === 'number' && typeof blockIndex === 'number') {
+                    setCursorLeftPx(x);
+                    emitCursor(time, blockIndex);
+                }
             };
 
             plot.chart.on(pointerClickEvent, handlePointerEvent);
-
+            plot.chart.on(pointerMoveEvent, handlePointerEvent);
             detachCanvasListenersRef.current = () => {
                 plot.chart.off(pointerClickEvent, handlePointerEvent);
+                plot.chart.off(pointerMoveEvent, handlePointerEvent);
                 canvasRef.current = null;
-                plotRef.current = null;
             };
         }
 
@@ -353,12 +356,12 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             <div id='chart' style={{ height: '100%' }}>
                 <Line {...config} onReady={mergedOnReady} />
             </div>
-            {cursorLeftPx !== null && (
+            {plotRegion && cursorLeftPx !== null && (
                 <div
                     style={{
                         position: 'absolute',
-                        top: plotRegion?.top ?? 0,
-                        height: plotRegion ? Math.max(0, plotRegion.bottom - plotRegion.top) : height,
+                        top: plotRegion.top,
+                        height: Math.max(0, plotRegion.bottom - plotRegion.top),
                         left: `${cursorLeftPx - 0.5}px`,
                         borderLeft: '1px dashed rgba(220, 80, 80, 0.95)',
                         pointerEvents: 'none',
