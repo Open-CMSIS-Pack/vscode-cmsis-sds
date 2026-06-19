@@ -16,9 +16,9 @@
  * limitations under the License.
  */
 
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
-import fs from "fs";
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import fs from 'fs';
 
 async function main() {
 
@@ -43,7 +43,7 @@ async function main() {
         .strict()
         .parseSync();
 
-    const tpipJson = JSON.parse(fs.readFileSync(json as string, "utf8"));
+    const tpipJson = JSON.parse(fs.readFileSync(json as string, 'utf8'));
 
     let release: string | undefined;
     if (fs.existsSync('package.json')) {
@@ -51,11 +51,11 @@ async function main() {
         release = packageJson.version;
     }
 
-    var data: string = '';
+    let data: string = '';
     if (header && fs.existsSync(header as string)) {
-        data += fs.readFileSync(header as string, "utf8");
+        data += fs.readFileSync(header as string, 'utf8');
     } else {
-        data += "# TPIP Report\n\n";
+        data += '# TPIP Report\n\n';
     }
 
     data += '\n';

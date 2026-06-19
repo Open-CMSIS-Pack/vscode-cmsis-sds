@@ -97,7 +97,7 @@ function DataViewerApp() {
 
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
-    const [decimationPreset, setDecimationPreset] = useState<DecimationPreset>(() => initial.decimationPreset ?? 'accuracy');
+    const [decimationPreset] = useState<DecimationPreset>(() => initial.decimationPreset ?? 'accuracy');
     const requestSeqRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
 
