@@ -26,8 +26,8 @@ export type SdsioServerLaunchOptions = {
 };
 
 export class SdsioServerLauncher {
-    private terminal?: vscode.Terminal;
-    private stoppingPromise?: Promise<void>;
+    private terminal?: vscode.Terminal | undefined;
+    private stoppingPromise?: Promise<void> | undefined;
     private readonly closeListener: vscode.Disposable;
 
     constructor(private readonly diagnostics: SdsDiagnostics) {
