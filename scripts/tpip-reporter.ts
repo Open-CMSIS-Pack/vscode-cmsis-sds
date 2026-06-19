@@ -43,9 +43,15 @@ async function main() {
         .strict()
         .parseSync();
 
-    const tpipJson = JSON.parse(fs.readFileSync(json as string, 'utf8'));
+    const tpipJson = JSON.parse(fs.readFileSync(json as string, "utf8"));
 
-    let data: string = '';
+    let release: string | undefined;
+    if (fs.existsSync('package.json')) {
+        const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+        release = packageJson.version;
+    }
+
+    var data: string = '';
     if (header && fs.existsSync(header as string)) {
         data += fs.readFileSync(header as string, 'utf8');
     } else {
@@ -53,7 +59,11 @@ async function main() {
     }
 
     data += '\n';
-    data += `Report prepared at: ${new Date().toLocaleString('en-GB')}\n\n`;
+    if (release) {
+        data += `Generated for release: ${release}\n\n`;
+    } else {
+        data += `Report prepared at: ${new Date().toLocaleString('en-GB')}\n\n`;
+    }
     data += '| *Package* | *Version* | *Repository* | *License* |\n';
     data += '|---|---|---|---|\n';
 
