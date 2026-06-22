@@ -10,7 +10,7 @@
 - Added support for SDS stream labels
 - Added validation and completion support for `sdsio.yml` and `sds.yml`
 - Added SDS Check action for `.sds` files
-- Added actions to open group metadata and close the active SDS configuration
+- Added actions to ellipsis menu to open and close an SDS configuration
 - Improved SDSIO terminal startup, shutdown, and PowerShell handling
 - Improved SDSIO terminal handling/shutdown behavior, if users launch/stop SDSIO from VS Code.
 - Updated SDS Framework / SDSIO tooling support, if this changes compatibility or bundled tool behavior.
