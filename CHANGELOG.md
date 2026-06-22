@@ -11,7 +11,7 @@
 - Added SDS Check action for `.sds` files.
 - Enhanced data and audio viewers with new line chart interactions.
 - Improved cursor synchronization between media and data views.
-- Improved SDSIO terminal startup, shutdown, and PowerShell handling
+- Improved SDSIO terminal startup, shutdown, and PowerShell handling.
 - Improved SDSIO terminal handling/shutdown behavior, if users launch or stop SDSIO from VS Code.
 - Updated SDS Framework / SDSIO tooling support, if this changes compatibility or bundled tool behavior.
 - Improved diagnostic output formatting, if users see validation/check results.
