@@ -516,7 +516,7 @@ export function importFromCsv(
             values[channelNames[j]] = parseFloat(parts[j + 1]) || 0;
         }
 
-        samples.push({ timestamp, timeSeconds, values });
+        samples.push({ timestamp, timeSeconds, values, index: i - 1 });
     }
 
     const records = encodeRecords(samples, content, tickFrequency);

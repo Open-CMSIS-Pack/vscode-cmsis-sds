@@ -191,6 +191,7 @@ export class SdsViewerPanel {
                         timestamp: record.timestamp,
                         timeSeconds: record.timestamp / tickFreq,
                         values: { data_size: record.dataSize },
+                        index: parsed.records.indexOf(record),
                     } as SdsDecodedSample);
                 }
             }
@@ -296,12 +297,14 @@ export class SdsViewerPanel {
                 timestamp: first.timestamp,
                 timeSeconds: first.timeSeconds,
                 values: minSampleValues,
+                index: first.index,
             } as SdsDecodedSample);
 
             reduced.push({
                 timestamp: last.timestamp,
                 timeSeconds: last.timeSeconds,
                 values: maxSampleValues,
+                index: last.index,
             } as SdsDecodedSample);
         }
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BroadcastMessage, ImageFrame, getIndexedSdsSuffix, getNearestFrameIndexAtTimestamp, isTimestampInFrameRange, Message } from '../../../webview/protocol';
 import { broadcastMessage } from '../../../webview/vscode-api';
 
@@ -62,15 +62,15 @@ export function useFrameWindowViewer({
     const lastAppliedWindowRef = useRef<{ rangeStart: number; rangeEnd: number; quality: Quality } | null>(null);
     const needsPostDragHighRef = useRef(false);
 
-    const getLoadedFrame = (absoluteIndex: number) => {
+    const getLoadedFrame = useCallback((absoluteIndex: number) => {
         const localIndex = absoluteIndex - windowStart;
         if (localIndex < 0 || localIndex >= windowFrames.length) {
             return null;
         }
         return windowFrames[localIndex];
-    };
+    }, [windowFrames, windowStart]);
 
-    const requestFrameWindow = (centerIndex: number, quality: Quality) => {
+    const requestFrameWindow = useCallback((centerIndex: number, quality: Quality) => {
         const requestId = ++requestSeqRef.current;
         broadcastMessage({
             command: 'requestMediaFrameWindow',
@@ -82,18 +82,18 @@ export function useFrameWindowViewer({
                 quality,
             },
         });
-    };
+    }, [getWindowSize, mediaType]);
 
-    const buildRequestKey = (centerIndex: number, quality: Quality) => {
+    const buildRequestKey = useCallback((centerIndex: number, quality: Quality) => {
         const windowSize = getWindowSize(quality);
         const maxIndex = Math.max(0, totalFrames - 1);
         const clampedCenter = Math.max(0, Math.min(maxIndex, Math.floor(centerIndex)));
         const requestRangeStart = Math.max(0, Math.min(clampedCenter - Math.floor(windowSize / 2), Math.max(0, totalFrames - windowSize)));
         const requestRangeEnd = Math.min(totalFrames, requestRangeStart + windowSize);
         return `${mediaType}|${quality}|${windowSize}|${requestRangeStart}|${requestRangeEnd}`;
-    };
+    }, [getWindowSize, mediaType, totalFrames]);
 
-    const requestFrameWindowIfNeeded = (centerIndex: number, quality: Quality, force = false) => {
+    const requestFrameWindowIfNeeded = useCallback((centerIndex: number, quality: Quality, force = false) => {
         if (totalFrames <= 0) {
             return false;
         }
@@ -120,9 +120,9 @@ export function useFrameWindowViewer({
         lastRequestAtRef.current = Date.now();
         requestFrameWindow(centerIndex, quality);
         return true;
-    };
+    }, [buildRequestKey, getLoadedFrame, getNearEdgeMargin, requestFrameWindow, totalFrames, windowFrames.length, windowStart]);
 
-    const scheduleDragFrameWindowRequest = (centerIndex: number, quality: Quality) => {
+    const scheduleDragFrameWindowRequest = useCallback((centerIndex: number, quality: Quality) => {
         pendingDragRequestRef.current = { centerIndex, quality };
 
         const elapsed = Date.now() - lastRequestAtRef.current;
@@ -150,7 +150,7 @@ export function useFrameWindowViewer({
                 requestFrameWindowIfNeeded(pending.centerIndex, pending.quality);
             }
         }, delay);
-    };
+    }, [requestFrameWindowIfNeeded]);
 
     useEffect(() => {
         setWindowFrames(frames);
@@ -168,15 +168,16 @@ export function useFrameWindowViewer({
 
             switch (messageType) {
                 case 'broadcast': {
-                    if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix((msg as BroadcastMessage).fileName)) {
+                    const broadcast = msg as BroadcastMessage;
+                    if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix(broadcast.fileName)) {
                         break;
                     }
 
-                    if (!isTimestampInFrameRange((msg as BroadcastMessage).timeStamp, windowFrames)) {
+                    if (typeof broadcast.timeStamp !== 'number' || !isTimestampInFrameRange(broadcast.timeStamp, windowFrames)) {
                         break;
                     }
 
-                    const nextIndex = getNearestFrameIndexAtTimestamp((msg as BroadcastMessage).timeStamp as number, windowFrames);
+                    const nextIndex = getNearestFrameIndexAtTimestamp(broadcast.timeStamp, windowFrames);
                     if (nextIndex === null) {
                         break;
                     }
@@ -292,7 +293,7 @@ export function useFrameWindowViewer({
         };
     }, []);
 
-    const changeIndex = (nextIndex: number, { manual = true }: { manual?: boolean } = {}) => {
+    const changeIndex = useCallback((nextIndex: number, { manual = true }: { manual?: boolean } = {}) => {
         if (manual) {
             onManualChangeStart?.();
         }
@@ -300,18 +301,19 @@ export function useFrameWindowViewer({
         const clamped = Math.max(0, Math.min(totalFrames - 1, nextIndex));
         setIndex(clamped);
         const frame = getLoadedFrame(clamped);
-        broadcastMessage({
-            type: 'broadcast',
-            timeStamp: frame?.timestamp,
-            fileName: filename,
-        });
-    };
+        if (typeof frame?.timestamp === 'number') {
+            broadcastMessage({
+                type: 'broadcast',
+                timeStamp: frame.timestamp,
+                fileName: filename,
+            });
+        }
+    }, [filename, getLoadedFrame, onManualChangeStart, totalFrames]);
 
     return {
         index,
         windowFrames,
         windowStart,
-        isDragMode,
         setIsDragMode,
         getLoadedFrame,
         changeIndex,

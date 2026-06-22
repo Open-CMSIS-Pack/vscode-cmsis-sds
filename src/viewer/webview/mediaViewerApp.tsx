@@ -15,7 +15,7 @@
  */
 
 import './components/viewer.css';
-import React, { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getInitialState } from '../../webview/bridge';
 import { ConfigProvider, theme } from 'antd';
@@ -34,6 +34,19 @@ type InitialState = {
     error?: string;
 };
 
+function renderMediaViewer(initial: InitialState): ReactNode {
+    switch (initial.mediaType) {
+        case 'image':
+            return initial.image ? <ImageViewer state={initial.image} filename={initial.fileName} /> : null;
+        case 'audio':
+            return initial.audio ? <AudioViewer state={initial.audio} filename={initial.fileName} /> : null;
+        case 'video':
+            return initial.video ? <VideoViewer state={initial.video} filename={initial.fileName} /> : null;
+        default:
+            return null;
+    }
+}
+
 function MediaViewerApp() {
     const initial = getInitialState<InitialState>({});
 
@@ -48,8 +61,7 @@ function MediaViewerApp() {
         );
     }
 
-    let applet: React.ReactNode;
-    if (initial.mediaType === 'image' && initial.image) { applet = <ImageViewer state={initial.image} filename={initial.fileName} />; } else if (initial.mediaType === 'audio' && initial.audio) { applet = <AudioViewer state={initial.audio} filename={initial.fileName} />; } else if (initial.mediaType === 'video' && initial.video) { applet = <VideoViewer state={initial.video} filename={initial.fileName} />; } else { applet = <div style={{ padding: 16 }}>No media content available.</div>; }
+    const applet = renderMediaViewer(initial) ?? <div style={{ padding: 16 }}>No media content available.</div>;
 
     return (
         <div className="page">

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider } from 'antd';
 import { ImageFrame } from '../../../webview/protocol';
-import { decodeFrame, sliderStyle } from '../../../webview/utilities';
+import { decodeFrame, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
 import { useFrameWindowViewer } from './frameWindowViewer';
 import { SdsFileStats } from '../../../sds';
 
@@ -38,20 +38,12 @@ type ImageViewerProps = {
     filename?: string | undefined;
 };
 
-const statsTitleStyle: React.CSSProperties = {
-    opacity: 0.5,
-    fontSize: '80%'
-};
-
-const statsValueStyle: React.CSSProperties = {
-    paddingRight: 32,
-    fontSize: '80%'
-};
-
 export function ImageViewer({ state, filename }: ImageViewerProps) {
     const { frames, rangeStart = 0, width, height, totalFrames } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [zoom, setZoom] = useState(1);
+    const getImageWindowSize = useCallback((quality: 'low' | 'high') => quality === 'low' ? 32 : 160, []);
+    const getImageNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(8, Math.floor(loadedFrameCount * 0.2)), []);
     const {
         index,
         windowFrames,
@@ -64,8 +56,8 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         state: { frames, rangeStart, totalFrames },
         filename,
         mediaType: 'image',
-        getWindowSize: quality => quality === 'low' ? 32 : 160,
-        getNearEdgeMargin: loadedFrameCount => Math.max(8, Math.floor(loadedFrameCount * 0.2)),
+        getWindowSize: getImageWindowSize,
+        getNearEdgeMargin: getImageNearEdgeMargin,
         stationaryRequestQuality: 'high',
     });
 
@@ -82,8 +74,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- getLoadedFrame is recreated each render; redraw is driven by index/window changes
-    }, [height, index, width, zoom, windowFrames, windowStart]);
+    }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
 
     return (
         <div className="media-page">

@@ -145,6 +145,7 @@ export interface SdsDecodedSample {
     timestamp: number;
     timeSeconds: number;
     values: { [channelName: string]: number };
+    index: number;
 }
 
 /**

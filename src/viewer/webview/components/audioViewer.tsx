@@ -122,10 +122,12 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     continue;
                 }
 
+                const sampleIndex = Math.max(0, Math.round((x - resolvedDomainStart) * sampleRate));
                 data.push({
                     x,
                     y: frame.samples[i],
                     channel: 'audio',
+                    index: sampleIndex,
                 });
             }
         }
@@ -134,7 +136,20 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         const dragFactor = isDragging ? 0.7 : 1;
         const maxPoints = Math.max(presetFloor, Math.floor(viewWidth * presetFactor * dragFactor));
         return decimateExtremaSeries(data, maxPoints);
-    }, [decimationPreset, isDragging, sampleRate, samples, viewRange, viewWidth]);
+    }, [decimationPreset, isDragging, resolvedDomainStart, sampleRate, samples, viewRange, viewWidth]);
+
+    const blockIndexFromTime = useCallback((time: number) => {
+        if (!Number.isFinite(time) || sampleRate <= 0 || totalSamples <= 0 || time < resolvedDomainStart || time > resolvedDomainEnd) {
+            return null;
+        }
+
+        const blockIndex = Math.round((time - resolvedDomainStart) * sampleRate);
+        if (!Number.isFinite(blockIndex)) {
+            return null;
+        }
+
+        return Math.max(0, Math.min(totalSamples - 1, blockIndex));
+    }, [resolvedDomainEnd, resolvedDomainStart, sampleRate, totalSamples]);
 
     const onCursorChange = useCallback((time: number, block: number | null) => {
         setHighlightedTime(time);
@@ -237,13 +252,14 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             }
 
             setHighlightedTime(payload.timeStamp);
+            setCurrentBlock(blockIndexFromTime(payload.timeStamp));
         };
 
         window.addEventListener('message', onMessage);
         return () => {
             window.removeEventListener('message', onMessage);
         };
-    }, [filename]);
+    }, [blockIndexFromTime, filename]);
 
     useEffect(() => {
         const onResize = () => {
@@ -260,7 +276,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         <div className="media-page">
             <Row className="info-bar">
                 <Col style={statsTitleStyle}>Block</Col>
-                <Col style={statsValueStyle}>{currentBlock ?? 0} of {totalSamples}</Col>
+                <Col style={statsValueStyle}>{currentBlock !== null ? currentBlock + 1 : 0} of {totalSamples}</Col>
                 <Col style={statsTitleStyle}>Size</Col>
                 <Col style={statsValueStyle}>{state.fileStats.avgBlockSize}B</Col>
                 <Col style={statsTitleStyle}>Time</Col>
@@ -274,7 +290,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     xField="x"
                     yField="y"
                     seriesField="channel"
-                    totalBlocks={totalSamples}
                     smooth={false}
                     highlightedX={highlightedTime}
                     xRange={viewRange}

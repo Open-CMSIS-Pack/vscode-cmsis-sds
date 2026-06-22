@@ -28,7 +28,7 @@ import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '.
 import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
 import { useViewportRange } from './components/useViewportRange';
 
-type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number> };
+type Sample = { timestamp: number; timeSeconds: number; values: Record<string, number>, index: number };
 
 type InitialState = {
     samples?: Sample[];
@@ -119,6 +119,36 @@ function DataViewerApp() {
         });
     }, []);
 
+    const blockIndexFromTime = useCallback((time: number) => {
+        if (!Number.isFinite(time)) {
+            return null;
+        }
+
+        let closestBlock: number | null = null;
+        let closestDistance = Number.POSITIVE_INFINITY;
+        let minTime = Number.POSITIVE_INFINITY;
+        let maxTime = Number.NEGATIVE_INFINITY;
+        for (const sample of samples) {
+            if (typeof sample.index !== 'number' || !Number.isFinite(sample.index)) {
+                continue;
+            }
+
+            minTime = Math.min(minTime, sample.timeSeconds);
+            maxTime = Math.max(maxTime, sample.timeSeconds);
+            const distance = Math.abs(sample.timeSeconds - time);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestBlock = sample.index;
+            }
+        }
+
+        if (closestBlock === null || time < minTime || time > maxTime) {
+            return null;
+        }
+
+        return closestBlock;
+    }, [samples]);
+
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
             const msg = event.data as Message;
@@ -134,6 +164,7 @@ function DataViewerApp() {
                 }
 
                 setHighlightedTime(payload.timeStamp);
+                setCurrentBlock(blockIndexFromTime(payload.timeStamp));
                 return;
             }
 
@@ -158,7 +189,7 @@ function DataViewerApp() {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename]);
+    }, [blockIndexFromTime, filename]);
 
     useEffect(() => {
         if (initial.error) {
@@ -238,6 +269,7 @@ function DataViewerApp() {
                     dataByChannel.get(ch)?.push({
                         x: sample.timeSeconds,
                         y: value,
+                        index: sample.index,
                         channel: ch,
                     });
                 }
@@ -286,7 +318,7 @@ function DataViewerApp() {
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Row gutter={8} className='info-bar'>
                 <Col style={statsTitleStyle}>Block</Col>
-                <Col style={statsValueStyle}>{currentBlock ?? 0} of {stats.totalRecords}</Col>
+                <Col style={statsValueStyle}>{currentBlock !== null ? currentBlock + 1 : 0} of {stats.totalRecords}</Col>
                 <Col style={statsTitleStyle}>Size</Col>
                 <Col style={statsValueStyle}>{stats.avgBlockSize ?? 0} B</Col>
                 <Col style={statsTitleStyle}>Time</Col>
@@ -303,7 +335,6 @@ function DataViewerApp() {
                     xField='x'
                     yField='y'
                     seriesField='channel'
-                    totalBlocks={stats.totalRecords ?? samples.length}
                     color={colors}
                     smooth={false}
                     highlightedX={highlightedTime}
