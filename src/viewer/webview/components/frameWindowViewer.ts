@@ -254,7 +254,8 @@ export function useFrameWindowViewer({
                 requestFrameWindowIfNeeded(index, stationaryRequestQuality);
             }
         }
-    }, [getNearEdgeMargin, index, isDragMode, requestFrameWindowIfNeeded, scheduleDragFrameWindowRequest, stationaryRequestQuality, windowFrames.length, windowStart]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- request helpers are recreated each render; depending on them would refetch windows excessively
+    }, [getNearEdgeMargin, index, isDragMode, stationaryRequestQuality, windowFrames.length, windowStart]);
 
     useEffect(() => {
         if (isDragMode || !needsPostDragHighRef.current) {
@@ -280,7 +281,8 @@ export function useFrameWindowViewer({
         }
 
         requestFrameWindowIfNeeded(index, 'high', true);
-    }, [index, isDragMode, requestFrameWindowIfNeeded]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- request helper is recreated each render; only index/drag transitions should retrigger
+    }, [index, isDragMode]);
 
     useEffect(() => {
         return () => {

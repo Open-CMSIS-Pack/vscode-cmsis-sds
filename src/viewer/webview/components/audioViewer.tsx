@@ -58,7 +58,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
-    const decimationPreset = initialDecimationPreset ?? 'accuracy';
+    const [decimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
     const [currentBlock, setCurrentBlock] = useState<number | null>(null);
     const audioCtxRef = useRef<AudioContext | null>(null);
     const sourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -307,12 +307,12 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                                 },
                             },
                         },
-                        formatter: (datum: any) => ({
+                        formatter: (datum: { y?: unknown }) => ({
                             name: 'audio',
                             value: typeof datum?.y === 'number' ? datum.y.toFixed(5) : String(datum?.y ?? ''),
                         }),
-                        title: (value: any) => {
-                            const t = typeof value === 'number' ? value : Number(value.x);
+                        title: (value: unknown) => {
+                            const t = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
                             return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
                         },
                     }}

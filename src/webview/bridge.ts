@@ -20,11 +20,11 @@
  * so each webview app can register handlers consistently.
  */
 
-import { WebviewMessage } from "./protocol";
-import { broadcastMessage } from "./vscode-api";
+import { WebviewMessage } from './protocol';
+import { broadcastMessage } from './vscode-api';
 
 export class WebviewMessenger<Inbound extends WebviewMessage, Outbound extends WebviewMessage> {
-    private handlers = new Map<string, Set<(message: Inbound) => void>>();
+    private readonly handlers = new Map<string, Set<(message: Inbound) => void>>();
 
     constructor() {
         this.handleMessage = this.handleMessage.bind(this);

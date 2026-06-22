@@ -95,7 +95,7 @@ function DataViewerApp() {
 
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
-    const decimationPreset = initial.decimationPreset ?? 'accuracy';
+    const [decimationPreset] = useState<DecimationPreset>(() => initial.decimationPreset ?? 'accuracy');
     const requestSeqRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
 
@@ -234,18 +234,8 @@ function DataViewerApp() {
         };
     }, []);
 
-    if (initial.error) {
-        return (
-            <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-                <div style={{ textAlign: 'center' }}>
-                    <h2 style={{ color: 'var(--vscode-errorForeground)', marginBottom: 16 }}>Failed to load SDS Viewer</h2>
-                    <p>{initial.error}</p>
-                </div>
-            </div>
-        );
-    }
-
-    const toggleChannel = (name: string) => {
+    // Retained for the channel-legend UI that is currently disabled below.
+    const _toggleChannel = (name: string) => {
         setActiveChannels((prev) => {
             const next = new Set(prev);
             if (next.has(name)) {
@@ -313,6 +303,17 @@ function DataViewerApp() {
 
     const windowLength = Math.max(0, viewRange[1] - viewRange[0]);
 
+    if (initial.error) {
+        return (
+            <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <h2 style={{ color: 'var(--vscode-errorForeground)', marginBottom: 16 }}>Failed to load SDS Viewer</h2>
+                    <p>{initial.error}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', fontSize: 13, overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <Row gutter={8} className='info-bar'>
@@ -352,12 +353,12 @@ function DataViewerApp() {
                                 },
                             },
                         },
-                        formatter: (datum: any) => ({
+                        formatter: (datum: { channel?: unknown; y?: unknown }) => ({
                             name: datum?.channel ?? 'value',
                             value: typeof datum?.y === 'number' ? datum.y.toFixed(4) : String(datum?.y ?? ''),
                         }),
-                        title: (value: any) => {
-                            const t = typeof value === 'number' ? value : Number(value.x);
+                        title: (value: unknown) => {
+                            const t = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
                             return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
                         },
                     }}

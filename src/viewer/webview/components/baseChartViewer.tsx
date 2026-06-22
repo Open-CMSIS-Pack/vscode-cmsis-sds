@@ -18,11 +18,30 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChartEvent, Line } from '@ant-design/charts';
 
+interface ChartCoordinate {
+    start?: { x: number; y: number };
+    end?: { x: number; y: number };
+}
+
+interface ChartPlotLike {
+    chart?: {
+        getCoordinate?: () => ChartCoordinate | undefined;
+        on?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
+        off?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
+    };
+}
+
+interface ChartPointerEvent {
+    target?: { attributes?: { class?: string } };
+    buttons?: number;
+    nativeEvent?: MouseEvent;
+}
+
 export interface ChartSample {
     x: number;
     y: number;
     index: number;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export interface BaseChartViewerProps {
@@ -35,7 +54,7 @@ export interface BaseChartViewerProps {
     xRange?: [number, number];
     onCursorChange?: (x: number, block: number | null) => void;
     onZoomRangeChange?: (range: [number, number]) => void;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
@@ -43,6 +62,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     xField = 'x',
     yField = 'y',
     seriesField,
+    title: _title,
     color,
     highlightedX,
     xRange,
@@ -220,7 +240,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     } = rest as {
         tooltip?: { title?: unknown;[key: string]: unknown };
         axis?: { x?: { labelFormatter?: unknown;[key: string]: unknown };[key: string]: unknown };
-        onReady?: (plot: any) => void;
+        onReady?: (plot: ChartPlotLike) => void;
         [key: string]: unknown;
     };
 
@@ -337,11 +357,11 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 }
             };
 
-            plot.chart.on(pointerClickEvent, handlePointerEvent);
-            plot.chart.on(pointerMoveEvent, handlePointerEvent);
+            plot.chart?.on?.(pointerClickEvent, handlePointerEvent);
+            plot.chart?.on?.(pointerMoveEvent, handlePointerEvent);
             detachCanvasListenersRef.current = () => {
-                plot.chart.off(pointerClickEvent, handlePointerEvent);
-                plot.chart.off(pointerMoveEvent, handlePointerEvent);
+                plot.chart?.off?.(pointerClickEvent, handlePointerEvent);
+                plot.chart?.off?.(pointerMoveEvent, handlePointerEvent);
                 canvasRef.current = null;
             };
         }

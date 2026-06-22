@@ -56,15 +56,15 @@ type VisibleRangeRequest = {
 
 export class SdsViewerPanel {
     public static readonly viewType = 'arm-sds.viewer';
-    private static panels = new Map<string, SdsViewerPanel>();
+    private static readonly panels = new Map<string, SdsViewerPanel>();
 
     private readonly panel: vscode.WebviewPanel;
     private readonly extensionUri: vscode.Uri;
-    private disposables: vscode.Disposable[] = [];
+    private readonly disposables: vscode.Disposable[] = [];
     private webview: vscode.Webview | undefined;
 
-    private sdsFilePath: string;
-    private metadataPath: string | undefined;
+    private readonly sdsFilePath: string;
+    private readonly metadataPath: string | undefined;
     private decodedSamples: SdsDecodedSample[] = [];
     private channelNames: string[] = [];
     private stats: ReturnType<typeof getSdsFileStats> | undefined;

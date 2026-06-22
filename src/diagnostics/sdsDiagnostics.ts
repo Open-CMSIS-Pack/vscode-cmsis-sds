@@ -54,9 +54,9 @@ interface DiagnosticEntry {
 export class SdsDiagnostics {
     private static _instance: SdsDiagnostics | undefined;
 
-    private _outputChannel: vscode.OutputChannel;
+    private readonly _outputChannel: vscode.OutputChannel;
     private _logHistory: DiagnosticEntry[] = [];
-    private _maxHistory: number = 5000;
+    private readonly _maxHistory: number = 5000;
     private _minLevel: DiagnosticLevel = DiagnosticLevel.Info;
 
     private readonly _levelPriority: Record<DiagnosticLevel, number> = {

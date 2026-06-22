@@ -144,11 +144,11 @@ class MonitorFrameAccumulator {
  *   'error'        (message: string)
  */
 export class SdsioMonitorClient extends EventEmitter {
-    private host: string;
-    private port: number;
-    private reconnectDelayMs: number;
+    private readonly host: string;
+    private readonly port: number;
+    private readonly reconnectDelayMs: number;
     private socket: net.Socket | undefined;
-    private accumulator = new MonitorFrameAccumulator();
+    private readonly accumulator = new MonitorFrameAccumulator();
     private running = false;
     private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
