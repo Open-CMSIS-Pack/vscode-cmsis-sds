@@ -35,7 +35,7 @@ export type ImageState = {
 
 type ImageViewerProps = {
     state: ImageState;
-    filename?: string;
+    filename?: string | undefined;
 };
 
 export function ImageViewer({ state, filename }: ImageViewerProps) {

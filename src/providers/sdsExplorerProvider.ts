@@ -196,7 +196,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
             'flags',
             '',
             vscode.TreeItemCollapsibleState.Expanded, flagItems);
-        flagsNode.description = this.flagsSource?.getConnectionState();
+        flagsNode.description = this.flagsSource?.getConnectionState() ?? '';
         root.push(flagsNode);
 
         return root;

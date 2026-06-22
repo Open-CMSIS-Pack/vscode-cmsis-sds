@@ -37,7 +37,7 @@ export type VideoState = {
 
 type VideoViewerProps = {
     state: VideoState;
-    filename?: string;
+    filename?: string | undefined;
 };
 
 export function VideoViewer({ state, filename }: VideoViewerProps) {
