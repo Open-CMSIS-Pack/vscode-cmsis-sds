@@ -137,9 +137,10 @@ jobs:
         run: npm run lint
 
       - name: Compile TypeScript
+        if: runner.os == 'Linux'
         run: npm run compile
 
-      - name: Bundle extension (esbuild)
+      - name: Build code
         run: npm run build
 
       - name: Check copyright

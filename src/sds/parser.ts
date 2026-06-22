@@ -362,7 +362,7 @@ export function decodeImageFrameToRGBA(
  */
 export function decodeAudioBlock(
     data: Buffer,
-    sampleRate: number,
+    _sampleRate: number,
     bitDepth: number,
     audioChannels: number
 ): Float32Array[] {

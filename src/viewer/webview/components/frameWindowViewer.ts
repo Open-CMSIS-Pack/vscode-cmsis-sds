@@ -29,7 +29,7 @@ type FrameWindowState = {
 
 type FrameWindowViewerOptions = {
     state: FrameWindowState;
-    filename?: string;
+    filename?: string | undefined;
     mediaType: MediaType;
     getWindowSize: (quality: Quality) => number;
     getNearEdgeMargin: (loadedFrameCount: number) => number;

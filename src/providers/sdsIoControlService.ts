@@ -45,11 +45,11 @@ export class SdsIoControlService {
 
     private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
     private mode: SdsIoMode = 'idle';
-    private readonly monitor?: SdsioMonitorClient;
-    private readonly extensionInstallPath?: string;
+    private readonly monitor?: SdsioMonitorClient | undefined;
+    private readonly extensionInstallPath?: string | undefined;
     private monitorConnected = false;
     private readonly serverLauncher: SdsioServerLauncher;
-    private shutdownPromise?: Promise<void>;
+    private shutdownPromise?: Promise<void> | undefined;
 
     constructor(private readonly configManager: SdsioConfigManager, monitor?: SdsioMonitorClient, extensionInstallPath?: string) {
         this.monitor = monitor;

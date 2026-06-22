@@ -42,7 +42,7 @@ export type AudioState = {
 
 type AudioViewerProps = {
     state: AudioState;
-    filename?: string;
+    filename?: string | undefined;
 };
 
 export function AudioViewer({ state, filename }: AudioViewerProps) {
