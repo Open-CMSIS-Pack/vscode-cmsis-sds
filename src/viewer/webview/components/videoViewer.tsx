@@ -80,7 +80,6 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
                 timerRef.current = null;
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- changeIndex is recreated each render; the interval should only depend on playback inputs
     }, [changeIndex, fps, index, playing, totalFrames]);
 
     useEffect(() => {
@@ -96,7 +95,6 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- getLoadedFrame is recreated each render; redraw is driven by index/window changes
     }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
 
     const togglePlay = () => setPlaying(p => !p);

@@ -74,7 +74,6 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- getLoadedFrame is recreated each render; redraw is driven by index/window changes
     }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
 
     return (

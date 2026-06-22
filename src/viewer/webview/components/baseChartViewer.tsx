@@ -18,14 +18,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChartEvent, Line } from '@ant-design/charts';
 
+interface ChartCoordinateLike {
+    x: number;
+    y: number;
+}
 interface ChartCoordinate {
-    start?: { x: number; y: number };
-    end?: { x: number; y: number };
+    start?: ChartCoordinateLike;
+    end?: ChartCoordinateLike;
 }
 
 interface ChartPlotLike {
     chart?: {
-        getCoordinate?: () => ChartCoordinate | undefined;
+        getCoordinate: () => ChartCoordinate | undefined;
+        getDataByXY: (point: ChartCoordinateLike, options?: { shared: boolean }) => Record<string, ChartSample> | undefined;
         on?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
         off?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
     };
@@ -35,6 +40,9 @@ interface ChartPointerEvent {
     target?: { attributes?: { class?: string } };
     buttons?: number;
     nativeEvent?: MouseEvent;
+    type: (typeof ChartEvent)[keyof typeof ChartEvent];
+    x: number;
+    y: number;
 }
 
 export interface ChartSample {
@@ -108,7 +116,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return [minX, maxX];
     }, [data, xField, xRange]);
 
-    const resolvePlotRegion = useCallback((plot: any, canvasEl: HTMLCanvasElement | null) => {
+    const resolvePlotRegion = useCallback((plot: ChartPlotLike, canvasEl: HTMLCanvasElement | null) => {
         if (!canvasEl) {
             return null;
         }
@@ -317,7 +325,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         slider: { x: false, y: false },
     };
 
-    const mergedOnReady = (plot: any) => {
+    const mergedOnReady = (plot: ChartPlotLike) => {
         if (detachCanvasListenersRef.current) {
             detachCanvasListenersRef.current();
             detachCanvasListenersRef.current = null;
@@ -339,7 +347,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             const pointerClickEvent = `plot:${ChartEvent.CLICK}`;
             const pointerMoveEvent = `plot:${ChartEvent.POINTER_MOVE}`;
 
-            const handlePointerEvent = (e: any) => {
+            const handlePointerEvent = (e: ChartPointerEvent) => {
                 if (!e || (e.type === ChartEvent.POINTER_MOVE && e.buttons !== 1) || (e.type === ChartEvent.CLICK && e.buttons !== 0)) {
                     return;
                 }
@@ -348,7 +356,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                     return;
                 }
 
-                const sample = plot.chart.getDataByXY({ x: x, y: y }, { shared: true })?.[0];
+                const sample = plot.chart?.getDataByXY({ x: x, y: y }, { shared: true })?.[0];
                 const time = sample?.[xField];
                 const blockIndex = sample?.index;
                 if (typeof time === 'number' && typeof blockIndex === 'number') {
