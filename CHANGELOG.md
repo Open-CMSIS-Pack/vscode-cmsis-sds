@@ -2,23 +2,19 @@
 
 ## 0.11.0
 
-- Enhance SdsioServerLauncher and SdsIOInterfaceProvider for graceful shutdown and terminal management
-- Update SDS-Framework version and fix formatting in download-tools script
-- Refactor SDS interface: combine explorer and flags functionality, update
-- Update extension display name and improve diagnostic output formatting
-- Improve/handle sds filename labels by
-- Switch to antd charts for dataViewer and audioViewer
-- Enhance media viewers with file statistics and improve UI elements
-- Fix/load sds with labels
-- Feature/add sds schema validation completion
-- Refactor SdsioServerLauncher to static method and update terminal
-- Refactor SDS commands and UI for improved consistency and clarity
-- Fix getIndexedSdsSuffix to return correct match group for SDS file suffix
-- Feature/sds check command action on sds files
-- Fix default terminal profile resolution for PowerShell in SdsioServerLauncher
-- Add commands to open group metadata and close config in SDS
-- Enhance AudioViewer and DataViewerApp to track current block index
-- Fix/time to cursor resolution
+- Combined SDSIO Flags and SDS Explorer into one streamlined control
+- Improved file and SDS group handling in Explorer
+- Streamlined SDS actions, menus, and context commands
+- Enhanced data and audio viewers with new line chart interactions
+- Improved cursor synchronization between media and data views
+- Added support for SDS stream labels
+- Added validation and completion support for `sdsio.yml` and `sds.yml`
+- Added SDS Check action for `.sds` files
+- Added actions to open group metadata and close the active SDS configuration
+- Improved SDSIO terminal startup, shutdown, and PowerShell handling
+- Improved SDSIO terminal handling/shutdown behavior, if users launch/stop SDSIO from VS Code.
+- Updated SDS Framework / SDSIO tooling support, if this changes compatibility or bundled tool behavior.
+- Improved diagnostic output formatting, if users see validation/check results.
 
 ## 0.9.0
 
