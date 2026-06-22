@@ -1,10 +1,10 @@
 # TPIP Report for vscode-cmsis-sds
 
-Generated for release: 0.9.0
+Generated for release: 0.11.0
 
 | *Package* | *Version* | *Repository* | *License* |
 |---|---|---|---|
-| sdsio | 3.0.0-rc0 | https://github.com/ARM-software/SDS-Framework | [Apache-2.0](https://github.com/ARM-software/SDS-Framework/blob/v3.0.0-rc0/LICENSE) |
+| sdsio | 3.0.0 | https://github.com/ARM-software/SDS-Framework | [Apache-2.0](https://github.com/ARM-software/SDS-Framework/blob/v3.0.0/LICENSE) |
 | xml2js | 0.5.0 | https://github.com/Leonidas-from-XIV/node-xml2js | [MIT](https://github.com/Leonidas-from-XIV/node-xml2js/blob/master/LICENSE) |
 | yaml | 2.4.2 | https://github.com/eemeli/yaml | [ISC](https://github.com/eemeli/yaml/blob/main/LICENSE) |
 | @serialport/binding-mock | 10.2.2 | https://github.com/serialport/binding-mock | [MIT](https://github.com/serialport/binding-mock/blob/main/LICENSE) |

@@ -83,7 +83,8 @@ jobs:
             exit 1
           fi
           BASE_VERSION="${BASE_TAG#v}"
-          PR_QUALIFIER=$(printf '%s\n' "${DESCRIBE}" | grep -Eo '\-g[0-9a-f]+$' || true)
+          # For non-release builds, increment the patch version by 1 (e.g. 1.64.1 -> 1.64.2)
+          NEXT_VERSION="$(printf '%s\n' "${BASE_VERSION}" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }')"
           BRANCH_QUALIFIER=$(printf '%s\n' "${DESCRIBE}" | grep -Eo '[0-9]+\-g[0-9a-f]+$' || true)
           SAFE_REF_NAME="${{ github.ref_name }}"
           SAFE_REF_NAME="${SAFE_REF_NAME//[^0-9A-Za-z-]/-}"
@@ -94,14 +95,14 @@ jobs:
               npm version --allow-same-version --no-git-tag-version --new-version "${TAG#v}"
               ;;
             pull_request)
-              npm version -s --allow-same-version --no-git-tag-version --new-version "${BASE_VERSION}"
-              PR_VERSION="${BASE_VERSION}-${{ github.event.number }}${PR_QUALIFIER}"
+              npm version -s --allow-same-version --no-git-tag-version --new-version "${NEXT_VERSION}"
+              PR_VERSION="${NEXT_VERSION}-${BRANCH_QUALIFIER}"
               npm version --allow-same-version --no-git-tag-version --new-version "${PR_VERSION}"
               echo "Prerelease version set succeeded"
               ;;
             *)
-              npm version -s --allow-same-version --no-git-tag-version --new-version "${BASE_VERSION}"
-              PR_VERSION="${BASE_VERSION}-${SAFE_REF_NAME}${BRANCH_QUALIFIER}"
+              npm version -s --allow-same-version --no-git-tag-version --new-version "${NEXT_VERSION}"
+              PR_VERSION="${NEXT_VERSION}-${SAFE_REF_NAME}${BRANCH_QUALIFIER}"
               npm version --allow-same-version --no-git-tag-version --new-version "${PR_VERSION}"
               echo "Prerelease version set succeeded"
               ;;
