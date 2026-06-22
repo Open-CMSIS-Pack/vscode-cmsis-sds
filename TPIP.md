@@ -1,6 +1,6 @@
 # TPIP Report for vscode-cmsis-sds
 
-Generated for release: 0.9.0
+Generated for release: 0.11.0
 
 | *Package* | *Version* | *Repository* | *License* |
 |---|---|---|---|
