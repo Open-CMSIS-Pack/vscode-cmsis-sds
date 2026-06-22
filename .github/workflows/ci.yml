@@ -113,6 +113,7 @@ jobs:
       - name: Remove badges
         if: runner.os == 'Linux'
         run: |
+          sed -i "/https:\/\/qlty\.sh\/gh/d" README.md
           sed -i "/https:\/\/securityscorecards\.dev\/viewer/d" README.md
           sed -i "/https:\/\/img.shields.io\//d" README.md
 
@@ -172,6 +173,13 @@ jobs:
         with:
           name: e2e-report-${{ matrix.vsce_target }}
           path: e2e-report
+
+      - name: Publish coverage report to QLTY
+        if: github.repository_owner == 'Open-CMSIS-Pack' && runner.os == 'Linux'
+        uses: qltysh/qlty-action/coverage@a19242102d17e497f437d7466aa01b528537e899 # v2.2.0
+        with:
+          token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
+          files: coverage/lcov.info
 
   package:
     needs: build-and-test

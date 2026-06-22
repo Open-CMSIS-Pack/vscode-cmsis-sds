@@ -22,5 +22,12 @@ export default defineConfig({
         globals: true,
         testTimeout: 10000,
         reporters: ['default'],
+        coverage: {
+            provider: 'v8',
+            reportsDirectory: './coverage',
+            reporter: ['text', 'lcov'],
+            include: ['src/**/*.{ts,tsx}'],
+            exclude: ['src/**/*.d.ts', 'src/webview/**', 'src/viewer/webview/**'],
+        },
     },
 });
