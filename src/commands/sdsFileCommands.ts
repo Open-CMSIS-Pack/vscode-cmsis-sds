@@ -67,11 +67,6 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                     vscode.window.showErrorMessage('Could not determine metadata file path.');
                     return;
                 }
-                if (fs.existsSync(metaPath)) {
-                    const doc = await vscode.workspace.openTextDocument(metaPath);
-                    await vscode.window.showTextDocument(doc);
-                    return;
-                }
                 // Create a starter metadata template
                 const streamName = path.basename(filePath).replace(SDS_FILE_MATCHER, '$1');
                 const template = [
@@ -84,7 +79,13 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                     '      type: float',
                     '      unit: \'\'',
                 ].join('\n') + '\n';
-                fs.writeFileSync(metaPath, template, 'utf-8');
+                try {
+                    fs.writeFileSync(metaPath, template, { encoding: 'utf-8', flag: 'wx' });
+                } catch (err) {
+                    if (!isFileExistsError(err)) {
+                        throw err;
+                    }
+                }
                 const doc = await vscode.workspace.openTextDocument(metaPath);
                 await vscode.window.showTextDocument(doc);
             } catch (err) {
@@ -270,6 +271,10 @@ function metadataPathFor(sdsPath: string): string | undefined {
         return path.join(dir, `${match[1]}${SDS_METADATA_EXTENSION}`);
     }
     return undefined;
+}
+
+function isFileExistsError(err: unknown): boolean {
+    return typeof err === 'object' && err !== null && 'code' in err && (err as NodeJS.ErrnoException).code === 'EEXIST';
 }
 
 async function doExportCsv(sdsPath: string): Promise<void> {

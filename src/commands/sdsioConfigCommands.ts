@@ -71,7 +71,12 @@ export function registerSdsioConfigCommands(args: RegisterSdsioConfigCommandsArg
             }
 
             const targetPath = path.join(workspaceFolder.uri.fsPath, `${baseName.trim()}${configExtension}`);
-            if (fs.existsSync(targetPath)) {
+            try {
+                fs.writeFileSync(targetPath, configTemplate, { encoding: 'utf-8', flag: 'wx' });
+            } catch (err) {
+                if (!isFileExistsError(err)) {
+                    throw err;
+                }
                 void vscode.window.showWarningMessage(`Configuration already exists: ${path.basename(targetPath)}`);
                 const existingDoc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
                 await vscode.window.showTextDocument(existingDoc);
@@ -79,7 +84,6 @@ export function registerSdsioConfigCommands(args: RegisterSdsioConfigCommandsArg
                 return;
             }
 
-            fs.writeFileSync(targetPath, configTemplate, 'utf-8');
             await setActiveConfig(targetPath, true);
 
             const createdDoc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
@@ -164,4 +168,8 @@ export function registerSdsioConfigCommands(args: RegisterSdsioConfigCommandsArg
         })
     );
 
+}
+
+function isFileExistsError(err: unknown): boolean {
+    return typeof err === 'object' && err !== null && 'code' in err && (err as NodeJS.ErrnoException).code === 'EEXIST';
 }
