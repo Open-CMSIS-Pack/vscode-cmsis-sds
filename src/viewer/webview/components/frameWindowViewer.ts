@@ -163,6 +163,10 @@ export function useFrameWindowViewer({
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+
             const msg = event.data as Message;
             const messageType = (msg.type ?? msg.command) as string | undefined;
 

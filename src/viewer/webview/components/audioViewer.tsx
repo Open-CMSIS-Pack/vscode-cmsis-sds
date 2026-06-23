@@ -237,6 +237,10 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+
             const msg = event.data as Message;
             if (msg.type !== 'broadcast') {
                 return;
