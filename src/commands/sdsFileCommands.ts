@@ -16,6 +16,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import * as vscode from 'vscode';
 
 import { SdsExplorerProvider, SdsTreeItem } from '../providers/sdsExplorerProvider';
@@ -211,9 +212,9 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                 void vscode.window.showErrorMessage(`Selected SDS file does not exist: ${filePath}`);
                 return;
             }
-            const cmsisPackRoot = process.env.CMSIS_PACK_ROOT;
+            const cmsisPackRoot = getCmsisPackRoot(process.env);
             if (!cmsisPackRoot) {
-                void vscode.window.showErrorMessage('CMSIS_PACK_ROOT environment variable is not set. Please set it to the CMSIS Pack root directory.');
+                void vscode.window.showErrorMessage('Default pack root doesn\'t exist or CMSIS_PACK_ROOT environment variable is not set. Please set it to the CMSIS Pack root directory.');
                 return;
             }
 
@@ -237,7 +238,6 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
             terminal.sendText(`python "${sdsCheck}" -i "${filePath}"`);
         })
     );
-
 }
 
 function resolveSdsPath(arg?: SdsTreeItem | vscode.Uri | string): string | undefined {
@@ -299,3 +299,15 @@ async function doExportCsv(sdsPath: string): Promise<void> {
         vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
+
+export function getCmsisPackRoot(environment = process.env): string {
+    const environmentValue = environment['CMSIS_PACK_ROOT'];
+    if (environmentValue) {
+        return environmentValue;
+    }
+
+    // Default to standard cache location
+    return os.platform() === 'win32'
+        ? path.join(environment['LOCALAPPDATA'] ?? os.homedir(), 'arm', 'packs')
+        : path.join(os.homedir(), '.cache', 'arm', 'packs');
+};
