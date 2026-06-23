@@ -23,7 +23,6 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
 
 import { SdsExplorerProvider } from './providers/sdsExplorerProvider';
 import { SdsIoControlService } from './providers/sdsIoControlService';
@@ -156,24 +155,11 @@ export async function deactivate() {
 }
 
 function ensureWorkspaceConfigFile(workspaceRoot: string, configRelativePath: string): void {
-    const vscodeDir = path.join(workspaceRoot, '.vscode');
-    const settingsPath = path.join(vscodeDir, 'settings.json');
-
-    if (!fs.existsSync(vscodeDir)) {
-        fs.mkdirSync(vscodeDir, { recursive: true });
-    }
-
-    let settings: Record<string, unknown> = {};
-    if (fs.existsSync(settingsPath)) {
-        try {
-            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as Record<string, unknown>;
-        } catch {
-            settings = {};
-        }
-    }
-
-    settings['cmsis-sds.sdsio.configFile'] = configRelativePath.replace(/\\/g, '/');
-    fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 4)}\n`, 'utf-8');
+    vscode.workspace.getConfiguration('cmsis-sds', vscode.Uri.file(workspaceRoot)).update(
+        'sdsio.configFile',
+        configRelativePath.replace(/\\/g, '/'),
+        vscode.ConfigurationTarget.Workspace
+    );
 }
 
 function configureTerminalPath(context: vscode.ExtensionContext, diagnostics: SdsDiagnostics): void {
