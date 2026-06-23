@@ -19,8 +19,7 @@ The **SDS Explorer** shows the active SDS configuration, SDSIO controls, stream 
 If no configuration is selected, the view offers actions to create or open an `*.sdsio.yml` file.
 
 ![SDS Explorer context menu](media/screenshots/sds-context-menu.png "SDS Explorer context menu")
-
-Toolbar actions:
+### Toolbar actions:
 
 ![Toolbar](media/screenshots/toolbar.png)
 
@@ -30,7 +29,7 @@ Toolbar actions:
 - **Stop** stops the current recording or playback session.
 - **Open Configuration**, **Create Configuration**, and **Close Configuration** manage the active SDS configuration.
 
-Context menu actions for SDS files include:
+### Context menu actions for SDS files include:
 
 <img src="media/screenshots/sds-file-context-menu.png" align="left" style="padding-right:20px"/>
 
@@ -44,11 +43,11 @@ Context menu actions for SDS files include:
 When an SDS data file is opened, the corresponding [metadata file](https://arm-software.github.io/SDS-Framework/main/theory.html#yaml-metadata-format) provides stream names, data types, scaling, units, and media information.
 The data, audio, image, and video viewers synchronize their cursors so related streams can be inspected together.
 
-Example Video Stream:
+### Example Video Stream:
 
 ![SDS video telemetry view](./media/screenshots/data-video-telemtry.png)
 
-Example Audio Stream:
+### Example Audio Stream:
 
 ![SDS audio data view](./media/screenshots/data-audio.png)
 
