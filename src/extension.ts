@@ -159,17 +159,16 @@ function ensureWorkspaceConfigFile(workspaceRoot: string, configRelativePath: st
     const vscodeDir = path.join(workspaceRoot, '.vscode');
     const settingsPath = path.join(vscodeDir, 'settings.json');
 
-    if (!fs.existsSync(vscodeDir)) {
-        fs.mkdirSync(vscodeDir, { recursive: true });
-    }
+    fs.mkdirSync(vscodeDir, { recursive: true });
 
     let settings: Record<string, unknown> = {};
-    if (fs.existsSync(settingsPath)) {
-        try {
-            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as Record<string, unknown>;
-        } catch {
-            settings = {};
+    try {
+        const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            settings = parsed as Record<string, unknown>;
         }
+    } catch {
+        settings = {};
     }
 
     settings['cmsis-sds.sdsio.configFile'] = configRelativePath.replace(/\\/g, '/');

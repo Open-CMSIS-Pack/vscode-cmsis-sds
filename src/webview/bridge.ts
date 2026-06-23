@@ -51,6 +51,10 @@ export class WebviewMessenger<Inbound extends WebviewMessage, Outbound extends W
     }
 
     private handleMessage(event: MessageEvent<Inbound>): void {
+        if (event.origin !== window.location.origin) {
+            return;
+        }
+
         const message = event.data;
         const msgType = message?.type ?? message?.command;
         if (!message || typeof msgType !== 'string') {
