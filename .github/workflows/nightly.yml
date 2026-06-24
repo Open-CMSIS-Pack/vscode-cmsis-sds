@@ -49,6 +49,8 @@ jobs:
           - os: macos-15
             vsce_target: darwin-arm64
     runs-on: ${{ matrix.os }}
+    outputs:
+      nightly_version: ${{ steps.set_version.outputs.nightly_version }}
     permissions:
       packages: read
     name: Build and Test (${{ matrix.os }})
@@ -96,6 +98,7 @@ jobs:
         run: npm run build
 
       - name: Update current version
+        id: set_version
         if: runner.os == 'Linux' && github.repository_owner == 'Open-CMSIS-Pack'
         run: |
           # Increment patch version by 1 (e.g. 1.64.1 -> 1.64.2)
@@ -130,6 +133,7 @@ jobs:
           npm version "${NIGHTLY_VERSION}" --no-git-tag-version
           sed -i "s/## Unreleased/## ${VERSION}/" CHANGELOG.md
           echo "Version is ${NIGHTLY_VERSION}"
+          echo "nightly_version=${NIGHTLY_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Remove badges
         if: runner.os == 'Linux'
@@ -177,6 +181,8 @@ jobs:
 
   package:
     needs: build-and-test
+    env:
+      NIGHTLY_VERSION: ${{ needs.build-and-test.outputs.nightly_version }}
     strategy:
       fail-fast: true
       matrix:
@@ -222,11 +228,11 @@ jobs:
           npm run download-tools:nightly -- --target ${{ matrix.target }} --no-cache
 
       - name: Package VSIX
-        run: npm run package -- --target ${{ matrix.target }}
+        run: npm run package -- --target ${{ matrix.target }} --out "cmsis-sds-nightly-${{ matrix.target }}-${NIGHTLY_VERSION}.vsix"
 
       - name: Upload VSIX package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vscode-cmsis-sds-${{ matrix.target }}
-          path: ./*.vsix
+          path: ./*${{ matrix.target }}*.vsix
+          archive: false
           retention-days: 1
