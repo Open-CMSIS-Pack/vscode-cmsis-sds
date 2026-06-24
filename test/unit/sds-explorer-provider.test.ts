@@ -214,10 +214,10 @@ describe('SdsExplorerProvider', () => {
         const parent = new SdsTreeItem('parent', 'folder', '', 2, [child]);
         const provider = new SdsExplorerProvider(configManager as never);
 
-        (vscode.workspace as unknown as { workspaceFolders?: Array<{ uri: { fsPath: string } }> }).workspaceFolders = undefined;
+        (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> | undefined }).workspaceFolders = undefined;
         await expect(provider.getChildren()).resolves.toEqual([]);
 
-        (vscode.workspace as unknown as { workspaceFolders?: Array<{ uri: { fsPath: string } }> }).workspaceFolders = [{ uri: { fsPath: 'c:/workspace' } }];
+        (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> | undefined }).workspaceFolders = [{ uri: { fsPath: 'c:/workspace' } }];
         await expect(provider.getChildren(parent)).resolves.toEqual([child]);
     });
 

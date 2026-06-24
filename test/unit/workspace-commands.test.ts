@@ -121,7 +121,7 @@ describe('registerWorkspaceCommands', () => {
         vi.clearAllMocks();
         commandMockState.registeredDisposables.length = 0;
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-commands-'));
-        (vscode.workspace as unknown as { workspaceFolders?: Array<{ uri: { fsPath: string } }> }).workspaceFolders = undefined;
+        (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> | undefined }).workspaceFolders = undefined;
     });
 
     afterEach(() => {
