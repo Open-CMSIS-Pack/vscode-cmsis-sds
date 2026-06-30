@@ -178,15 +178,15 @@ export class SdsIoControlService {
     }
 
     canPlay(): boolean {
-        return this.mode === 'idle';
+        return this.monitorConnected && this.mode === 'idle';
     }
 
     canRecord(): boolean {
-        return this.mode === 'idle';
+        return this.monitorConnected && this.mode === 'idle';
     }
 
     canStop(): boolean {
-        return this.mode !== 'idle';
+        return this.monitorConnected && this.mode !== 'idle';
     }
 
     canConnect(): boolean {
