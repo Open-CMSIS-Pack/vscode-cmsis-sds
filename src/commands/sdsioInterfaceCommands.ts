@@ -16,7 +16,7 @@
 
 import * as vscode from 'vscode';
 
-import { SdsIoControlService } from '../providers/sdsIoControlService';
+import { SdsIoControlService, SdsIoNotifyEvent } from '../providers/sdsIoControlService';
 import { SdsExplorerProvider, SdsTreeItem } from '../providers/sdsExplorerProvider';
 
 export interface RegisterSdsioInterfaceCommandsArgs {
@@ -40,9 +40,11 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
     updateSdsIoCommandContext();
 
     context.subscriptions.push(
-        sdsIoControlService.onDidChange(() => {
+        sdsIoControlService.onDidChange((data) => {
             updateSdsIoCommandContext();
-            explorerProvider.refresh();
+            if (data.event === SdsIoNotifyEvent.Fileupdate) {
+                explorerProvider.refresh();
+            }
         })
     );
 

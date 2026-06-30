@@ -38,11 +38,20 @@ export type SdsFlagMasks = {
 
 type SdsIoMode = 'idle' | 'play' | 'record';
 
+export enum SdsIoNotifyEvent {
+    Play,
+    Record,
+    Flags,
+    Fileupdate,
+    Connected,
+}
+
 export class SdsIoControlService {
     private readonly diagnostics = SdsDiagnostics.getInstance();
-    private readonly _onDidChange = new vscode.EventEmitter<void>();
+    private readonly _onDidChange = new vscode.EventEmitter<{ event: SdsIoNotifyEvent; state: boolean }>();
     readonly onDidChange = this._onDidChange.event;
 
+    private readonly notifyEventStates = new Map<SdsIoNotifyEvent, boolean>();
     private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
     private mode: SdsIoMode = 'idle';
     private readonly monitor?: SdsioMonitorClient | undefined;
@@ -63,7 +72,7 @@ export class SdsIoControlService {
 
         configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
         configManager.onDidChangeConfig(() => this.syncFlagNamesFromManager());
-        this.syncFlagNamesFromManager();
+        this.syncFlagNamesFromManager(false);
     }
 
     getFlagTreeItems(): SdsTreeItem[] {
@@ -106,7 +115,7 @@ export class SdsIoControlService {
             this.configManager.setFlagName(index, newName);
             this.diagnostics.info(DiagnosticSource.Server, `Flag ${index} renamed to "${newName}" and saved to config`);
         } else {
-            this.notifyChanged();
+            this.notifyChanged(SdsIoNotifyEvent.Flags, true);
         }
     }
 
@@ -136,7 +145,7 @@ export class SdsIoControlService {
         }
 
         if (changed.length === 0) {
-            this.notifyChanged();
+            this.notifyChanged(SdsIoNotifyEvent.Flags, true);
             return;
         }
 
@@ -153,28 +162,30 @@ export class SdsIoControlService {
             this.sendFlagsToMonitor();
         }
 
-        this.notifyChanged();
+        this.notifyChanged(SdsIoNotifyEvent.Flags, true);
     }
 
     play(): void {
         this.mode = 'play';
         const modeSent = this.monitorConnected ? this.monitor?.startPlayback() === true : false;
         this.diagnostics.info(DiagnosticSource.Server, `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyChanged();
+        this.notifyChanged(SdsIoNotifyEvent.Play, true);
     }
 
     record(): void {
         this.mode = 'record';
         const modeSent = this.monitorConnected ? this.monitor?.startRecording() === true : false;
         this.diagnostics.info(DiagnosticSource.Server, `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyChanged();
+        this.notifyChanged(SdsIoNotifyEvent.Record, true);
     }
 
     stop(): void {
         this.mode = 'idle';
         const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
         this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyChanged();
+        this.notifyChanged(SdsIoNotifyEvent.Play, false);
+        this.notifyChanged(SdsIoNotifyEvent.Record, false);
+        this.notifyChanged(SdsIoNotifyEvent.Fileupdate, false);
     }
 
     canPlay(): boolean {
@@ -206,7 +217,7 @@ export class SdsIoControlService {
             this.monitor.stop();
         }
 
-        this.notifyChanged();
+        this.notifyChanged(SdsIoNotifyEvent.Connected, false);
     }
 
     async connectServer(): Promise<boolean> {
@@ -277,7 +288,7 @@ export class SdsIoControlService {
             if (this.monitorConnected && this.monitor) {
                 this.monitorConnected = false;
                 this.monitor.stop();
-                this.notifyChanged();
+                this.notifyChanged(SdsIoNotifyEvent.Connected, false);
             }
 
             this.serverLauncher.dispose();
@@ -368,19 +379,21 @@ export class SdsIoControlService {
         return '0';
     }
 
-    private syncFlagNamesFromManager(): void {
+    private syncFlagNamesFromManager(notify = true): void {
         const { flagNames } = this.configManager.getConfig();
         for (let i = 0; i < this.flags.length; i++) {
             this.flags[i].name = flagNames.get(i) ?? `${i}`;
         }
-        this.notifyChanged();
+        if (notify) {
+            this.notifyChanged(SdsIoNotifyEvent.Flags, notify);
+        }
     }
 
     private onMonitorConnected(): void {
         if (!this.monitorConnected) {
             this.monitorConnected = true;
             this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
-            this.notifyChanged();
+            this.notifyChanged(SdsIoNotifyEvent.Connected, true);
         }
     }
 
@@ -388,7 +401,7 @@ export class SdsIoControlService {
         if (this.monitorConnected) {
             this.monitorConnected = false;
             this.diagnostics.info(DiagnosticSource.Server, 'Disconnected from SDSIO monitor');
-            this.notifyChanged();
+            this.notifyChanged(SdsIoNotifyEvent.Connected, false);
         }
     }
 
@@ -398,12 +411,19 @@ export class SdsIoControlService {
             this.flags[i].enabled = bit !== 0;
         }
 
-        this.notifyChanged();
+        this.notifyChanged(SdsIoNotifyEvent.Flags, true);
         this.diagnostics.info(DiagnosticSource.Server, `Received monitor info: sdsFlags=0x${info.sdsFlags.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
-    private notifyChanged(): void {
-        this._onDidChange.fire();
+    private notifyChanged(eventType: SdsIoNotifyEvent, state: boolean): void {
+        const previousState = this.notifyEventStates.get(eventType) === true;
+        this.notifyEventStates.set(eventType, state);
+
+        if (previousState && state) {
+            return;
+        }
+
+        this._onDidChange.fire({ event: eventType, state });
     }
 
     private computeSetMask(): number {

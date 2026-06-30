@@ -291,6 +291,9 @@ export class SdsioMonitorClient extends EventEmitter {
                 case MON_CLOSE:
                     this._handleClose(payload);
                     break;
+                case MON_FLAGS:
+                    console.log(payload);
+                    break;
                 case MON_INFO:
                     this._handleInfo(header);
                     break;
