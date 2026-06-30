@@ -214,7 +214,7 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                 return;
             }
             const cmsisPackRoot = getCmsisPackRoot(process.env);
-            if (!cmsisPackRoot) {
+            if (!cmsisPackRoot || !fs.existsSync(cmsisPackRoot)) {
                 void vscode.window.showErrorMessage('Default pack root doesn\'t exist or CMSIS_PACK_ROOT environment variable is not set. Please set it to the CMSIS Pack root directory.');
                 return;
             }

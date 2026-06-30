@@ -14,8 +14,22 @@
  * limitations under the License.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+// Created using AI
+
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
+
+const watcherMockState = vi.hoisted(() => ({
+    watchers: [] as Array<{
+        onDidCreate: ReturnType<typeof vi.fn>;
+        onDidDelete: ReturnType<typeof vi.fn>;
+        onDidChange: ReturnType<typeof vi.fn>;
+        dispose: ReturnType<typeof vi.fn>;
+        triggerCreate: () => void;
+        triggerDelete: () => void;
+        triggerChange: () => void;
+    }>,
+}));
 
 vi.mock('vscode', () => {
     class EventEmitter<T> {
@@ -39,6 +53,7 @@ vi.mock('vscode', () => {
         iconPath?: unknown;
         command?: unknown;
         description?: string;
+        resourceUri?: unknown;
 
         constructor(public label: string, public collapsibleState?: number) { }
     }
@@ -47,12 +62,31 @@ vi.mock('vscode', () => {
         constructor(public id: string) { }
     }
 
-    const createFileSystemWatcher = () => ({
-        onDidCreate: vi.fn(),
-        onDidDelete: vi.fn(),
-        onDidChange: vi.fn(),
-        dispose: vi.fn(),
-    });
+    const createFileSystemWatcher = () => {
+        let onCreate: (() => void) | undefined;
+        let onDelete: (() => void) | undefined;
+        let onChange: (() => void) | undefined;
+        const watcher = {
+            onDidCreate: vi.fn((listener: () => void) => {
+                onCreate = listener;
+                return { dispose: vi.fn() };
+            }),
+            onDidDelete: vi.fn((listener: () => void) => {
+                onDelete = listener;
+                return { dispose: vi.fn() };
+            }),
+            onDidChange: vi.fn((listener: () => void) => {
+                onChange = listener;
+                return { dispose: vi.fn() };
+            }),
+            dispose: vi.fn(),
+            triggerCreate: () => onCreate?.(),
+            triggerDelete: () => onDelete?.(),
+            triggerChange: () => onChange?.(),
+        };
+        watcherMockState.watchers.push(watcher);
+        return watcher;
+    };
 
     return {
         EventEmitter,
@@ -60,7 +94,7 @@ vi.mock('vscode', () => {
         ThemeIcon,
         TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
         workspace: {
-            workspaceFolders: [{ uri: { fsPath: 'c:/workspace' } }],
+            workspaceFolders: [{ name: 'workspace', uri: { fsPath: 'c:/workspace' } }],
             createFileSystemWatcher,
         },
         Uri: { file: (filePath: string) => ({ fsPath: filePath }) },
@@ -95,6 +129,9 @@ vi.mock('../../src/sds/types', async () => {
 });
 
 import { SdsExplorerProvider, SdsTreeItem } from '../../src/providers/sdsExplorerProvider';
+import * as vscode from 'vscode';
+import { parseMetadataFile } from '../../src/sds/writer';
+import { detectMediaType } from '../../src/sds/types';
 
 function createDirent(name: string, kind: 'file' | 'directory') {
     return {
@@ -105,6 +142,85 @@ function createDirent(name: string, kind: 'file' | 'directory') {
 }
 
 describe('SdsExplorerProvider', () => {
+    beforeEach(() => {
+        watcherMockState.watchers.length = 0;
+        vi.mocked(fs.existsSync).mockReset();
+        vi.mocked(fs.existsSync).mockImplementation(() => false);
+        vi.mocked(fs.readdirSync).mockReset();
+        vi.mocked(fs.readdirSync).mockImplementation(() => [] as never);
+        vi.mocked(fs.statSync).mockReset();
+        vi.mocked(fs.statSync).mockImplementation(() => ({ size: 0 }) as never);
+        vi.mocked(parseMetadataFile).mockReset();
+        vi.mocked(detectMediaType).mockReset();
+        vi.mocked(detectMediaType).mockReturnValue('sensor');
+        (vscode.workspace as unknown as { workspaceFolders?: Array<{ name?: string; uri: { fsPath: string } }> }).workspaceFolders = [
+            { name: 'workspace', uri: { fsPath: 'c:/workspace' } },
+        ];
+    });
+
+    it('sets icons, commands, and collapsible state for special tree item types', () => {
+        const group = new SdsTreeItem('stream', 'group', 'stream.sds.yml', 2);
+        const info = new SdsTreeItem('No files', 'info', '', 0);
+        const metadata = new SdsTreeItem('stream.sds.yml', 'metadataFile', 'c:/workspace/stream.sds.yml', 0);
+
+        expect((group.iconPath as { id: string }).id).toBe('library');
+        expect(group.collapsibleState).toBe(1);
+        expect((info.iconPath as { id: string }).id).toBe('info');
+        expect((metadata.iconPath as { id: string }).id).toBe('file-code');
+        expect(metadata.command).toEqual({
+            command: 'vscode.open',
+            title: 'Open Metadata',
+            arguments: [{ fsPath: 'c:/workspace/stream.sds.yml' }],
+        });
+    });
+
+    it('fires refresh events from public refresh and file/config watcher callbacks, and disposes watchers', () => {
+        let configChangeHandler: (() => void) | undefined;
+        const configManager = {
+            onDidChangeConfig: vi.fn((handler: () => void) => {
+                configChangeHandler = handler;
+            }),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: undefined, metadir: undefined })),
+        };
+        const provider = new SdsExplorerProvider(configManager as never);
+        let refreshEvents = 0;
+        provider.onDidChangeTreeData(() => {
+            refreshEvents += 1;
+        });
+        const item = new SdsTreeItem('stream', 'sdsFile', 'stream.0.sds', 0);
+
+        provider.refresh();
+        watcherMockState.watchers[0].triggerCreate();
+        watcherMockState.watchers[1].triggerDelete();
+        watcherMockState.watchers[2].triggerChange();
+        configChangeHandler?.();
+
+        expect(provider.getTreeItem(item)).toBe(item);
+        expect(refreshEvents).toBe(5);
+
+        provider.dispose();
+
+        expect(watcherMockState.watchers.every((watcher) => watcher.dispose.mock.calls.length === 1)).toBe(true);
+    });
+
+    it('returns no children without workspace folders and returns element children directly', async () => {
+        const configManager = {
+            onDidChangeConfig: vi.fn(),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: undefined, metadir: undefined })),
+        };
+        const child = new SdsTreeItem('child.0.sds', 'sdsFile', 'child.0.sds', 0);
+        const parent = new SdsTreeItem('parent', 'folder', '', 2, [child]);
+        const provider = new SdsExplorerProvider(configManager as never);
+
+        (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> | undefined }).workspaceFolders = undefined;
+        await expect(provider.getChildren()).resolves.toEqual([]);
+
+        (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> | undefined }).workspaceFolders = [{ uri: { fsPath: 'c:/workspace' } }];
+        await expect(provider.getChildren(parent)).resolves.toEqual([child]);
+    });
+
     it('returns two root nodes and includes flags node with description from flags source', async () => {
         const configManager = {
             onDidChangeConfig: vi.fn(),
@@ -211,5 +327,116 @@ describe('SdsExplorerProvider', () => {
             ['acc', ['acc.0']],
             ['ml_in', ['ml_in.0', 'ml_in.1.p', 'ml_in.rock.2', 'ml_in.rock.3.p']],
         ]));
+    });
+
+    it('scans configured metadata and SDS directories, adds metadata-only groups, and routes media files', async () => {
+        vi.mocked(fs.readdirSync).mockImplementation((dirPath: fs.PathLike) => {
+            const normalized = String(dirPath).replace(/\\/g, '/');
+            switch (normalized) {
+                case 'c:/meta':
+                    return [
+                        createDirent('sensor.sds.yml', 'file'),
+                        createDirent('unused.sds.yml', 'file'),
+                        createDirent('nested', 'directory'),
+                        createDirent('.hidden', 'directory'),
+                        createDirent('node_modules', 'directory'),
+                        createDirent('notes.txt', 'file'),
+                    ] as never;
+                case 'c:/meta/nested':
+                    return [
+                        createDirent('image.sds.yml', 'file'),
+                    ] as never;
+                case 'c:/data':
+                    return [
+                        createDirent('sensor.0.sds', 'file'),
+                        createDirent('sub', 'directory'),
+                    ] as never;
+                case 'c:/data/sub':
+                    return [
+                        createDirent('image.0.sds', 'file'),
+                    ] as never;
+                default:
+                    return [] as never;
+            }
+        });
+        vi.mocked(fs.existsSync).mockImplementation((targetPath: fs.PathLike) => {
+            const normalized = String(targetPath).replace(/\\/g, '/');
+            return [
+                'c:/meta',
+                'c:/meta/sensor.sds.yml',
+                'c:/meta/unused.sds.yml',
+                'c:/meta/nested/image.sds.yml',
+            ].includes(normalized);
+        });
+        vi.mocked(fs.statSync).mockImplementation((targetPath: fs.PathLike) => {
+            const normalized = String(targetPath).replace(/\\/g, '/');
+            return { size: normalized.endsWith('image.0.sds') ? 2 * 1024 * 1024 : 512 } as never;
+        });
+        vi.mocked(parseMetadataFile).mockImplementation((metadataPath: string) => ({ metadataPath }) as never);
+        vi.mocked(detectMediaType).mockImplementation((metadata: unknown) => {
+            return String((metadata as { metadataPath: string }).metadataPath).includes('image') ? 'image' : 'sensor';
+        });
+        const configManager = {
+            onDidChangeConfig: vi.fn(),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: 'c:/data', metadir: 'c:/meta' })),
+        };
+        const provider = new SdsExplorerProvider(configManager as never);
+
+        const rootItems = await provider.getChildren();
+        const filesRoot = rootItems[0];
+        const groups = filesRoot.children ?? [];
+        const imageGroup = groups.find((item) => item.label === 'image');
+        const sensorGroup = groups.find((item) => item.label === 'sensor');
+        const unusedGroup = groups.find((item) => item.label === 'unused');
+        const imageFile = imageGroup?.children?.[0];
+        const sensorFile = sensorGroup?.children?.[0];
+
+        expect(imageGroup?.contextValue).toBe('groupMetadata');
+        expect(imageGroup?.filePath.replace(/\\/g, '/')).toBe('c:/meta/nested/image.sds.yml');
+        expect(imageFile?.command).toEqual({
+            command: 'arm-sds.openMediaViewer',
+            title: 'Open in Media Viewer',
+            arguments: [imageFile],
+        });
+        expect((imageFile?.iconPath as { id: string }).id).toBe('paintcan');
+        expect(imageFile?.description).toBe('2.0 MB');
+        expect(sensorFile?.description).toBe('512 B');
+        expect(unusedGroup?.contextValue).toBe('groupMetadata');
+        expect(unusedGroup?.description).toBe('0 recordings');
+        expect(unusedGroup?.children).toEqual([]);
+    });
+
+    it('scans workdir-only configs and sorts groups before standalone SDS files', async () => {
+        vi.mocked(fs.readdirSync).mockImplementation((dirPath: fs.PathLike) => {
+            const normalized = String(dirPath).replace(/\\/g, '/');
+            if (normalized === 'c:/work') {
+                return [
+                    createDirent('beta.0.sds', 'file'),
+                    createDirent('alpha.sds.yml', 'file'),
+                    createDirent('alpha.0.sds', 'file'),
+                ] as never;
+            }
+            return [] as never;
+        });
+        vi.mocked(fs.existsSync).mockImplementation((targetPath: fs.PathLike) => String(targetPath).replace(/\\/g, '/').endsWith('alpha.sds.yml'));
+        vi.mocked(fs.statSync).mockImplementation((targetPath: fs.PathLike) => {
+            const normalized = String(targetPath).replace(/\\/g, '/');
+            return { size: normalized.endsWith('beta.0.sds') ? 1536 : 1024 } as never;
+        });
+        const configManager = {
+            onDidChangeConfig: vi.fn(),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: 'c:/work', metadir: undefined })),
+        };
+        const provider = new SdsExplorerProvider(configManager as never);
+
+        const rootItems = await provider.getChildren();
+        const files = rootItems[0].children ?? [];
+
+        expect(files.map((item) => item.label)).toEqual(['alpha', 'beta.0.sds']);
+        expect(files[0].itemType).toBe('group');
+        expect(files[1].itemType).toBe('sdsFile');
+        expect(files[1].description).toBe('1.5 KB');
     });
 });
