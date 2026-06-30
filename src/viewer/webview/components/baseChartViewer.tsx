@@ -25,11 +25,20 @@ interface ChartCoordinateLike {
 interface ChartCoordinate {
     start?: ChartCoordinateLike;
     end?: ChartCoordinateLike;
+    options?: {
+        paddingLeft: number;
+        paddingRight: number;
+        marginLeft: number;
+        marginRight: number;
+        width: number;
+        height: number;
+    };
 }
 
 interface ChartPlotLike {
     chart?: {
         getCoordinate: () => ChartCoordinate | undefined;
+        getContext: () => { views: { layout: { width: number; height: number; marginLeft: number; marginRight: number; marginTop: number; marginBottom: number; paddingLeft: number; paddingRight: number; paddingTop: number; paddingBottom: number; innerWidth: number; innerHeight: number } }[] };
         getDataByXY: (point: ChartCoordinateLike, options?: { shared: boolean }) => Record<string, ChartSample> | undefined;
         on?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
         off?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
@@ -78,12 +87,14 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     onZoomRangeChange,
     ...rest
 }) => {
+    type PlotRegion = { left: number; right: number; top: number; bottom: number };
+
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const plotRef = useRef<ChartPlotLike | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const detachCanvasListenersRef = useRef<(() => void) | null>(null);
     const onCursorChangeRef = useRef<typeof onCursorChange>(onCursorChange);
-    const [plotRegion, setPlotRegion] = useState<{ left: number; right: number; top: number; bottom: number } | null>(null);
-    const [cursorLeftPx, setCursorLeftPx] = useState<number | null>(null);
+    const [plotRegion, setPlotRegion] = useState<PlotRegion | null>(null);
 
     const resolveXRange = useMemo<[number, number] | null>(() => {
         if (xRange && Number.isFinite(xRange[0]) && Number.isFinite(xRange[1]) && xRange[1] > xRange[0]) {
@@ -121,20 +132,37 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             return null;
         }
 
-        const coordinate = plot?.chart?.getCoordinate?.();
+        const layout = plot?.chart?.getContext().views[0].layout;
 
-        const start = coordinate?.start;
-        const end = coordinate?.end;
-
-        if (start && end) {
+        if (layout && Number.isFinite(layout.width) && Number.isFinite(layout.height)) {
             return {
-                left: Math.min(start.x, end.x),
-                right: Math.max(start.x, end.x),
-                top: Math.min(start.y, end.y),
-                bottom: Math.max(start.y, end.y),
+                left: layout.marginLeft + layout.paddingLeft,
+                right: layout.innerWidth + layout.marginLeft + layout.paddingLeft,
+                top: layout.marginTop + layout.paddingTop,
+                bottom: layout.innerHeight + layout.marginTop + layout.paddingTop,
             };
         }
+
         return { left: 0, right: canvasEl.clientWidth, top: 0, bottom: canvasEl.clientHeight };
+    }, []);
+
+    const setPlotRegionIfChanged = useCallback((nextRegion: PlotRegion | null) => {
+        setPlotRegion((prevRegion) => {
+            if (prevRegion === null || nextRegion === null) {
+                return prevRegion === nextRegion ? prevRegion : nextRegion;
+            }
+
+            if (
+                prevRegion.left === nextRegion.left &&
+                prevRegion.right === nextRegion.right &&
+                prevRegion.top === nextRegion.top &&
+                prevRegion.bottom === nextRegion.bottom
+            ) {
+                return prevRegion;
+            }
+
+            return nextRegion;
+        });
     }, []);
 
     const xValueFromClientPoint = useCallback((clientX: number, clientY: number) => {
@@ -226,10 +254,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     useEffect(() => {
         onCursorChangeRef.current = onCursorChange;
     }, [onCursorChange]);
-
-    useEffect(() => {
-        setCursorLeftPx(cursorLeftFromX(highlightedX));
-    }, [cursorLeftFromX, highlightedX]);
 
     useEffect(() => {
         return () => {
@@ -333,8 +357,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
 
         const canvasEl = containerRef.current?.querySelector<HTMLCanvasElement>('canvas') ?? null;
         canvasRef.current = canvasEl;
-        const region = resolvePlotRegion(plot, canvasEl);
-        setPlotRegion(region);
 
         if (canvasEl) {
             const emitCursor = (time: number, blockIndex: number) => {
@@ -346,6 +368,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
 
             const pointerClickEvent = `plot:${ChartEvent.CLICK}`;
             const pointerMoveEvent = `plot:${ChartEvent.POINTER_MOVE}`;
+            const sizeChangeEvent = `${ChartEvent.AFTER_RENDER}`;
 
             const handlePointerEvent = (e: ChartPointerEvent) => {
                 if (!e || (e.type === ChartEvent.POINTER_MOVE && e.buttons !== 1) || (e.type === ChartEvent.CLICK && e.buttons !== 0)) {
@@ -360,16 +383,21 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 const time = sample?.[xField];
                 const blockIndex = sample?.index;
                 if (typeof time === 'number' && typeof blockIndex === 'number') {
-                    setCursorLeftPx(x);
                     emitCursor(time, blockIndex);
                 }
             };
 
+            const handleSizeChange = () => {
+                setPlotRegionIfChanged(resolvePlotRegion(plot, canvasEl));
+            };
+
             plot.chart?.on?.(pointerClickEvent, handlePointerEvent);
             plot.chart?.on?.(pointerMoveEvent, handlePointerEvent);
+            plot.chart?.on?.(sizeChangeEvent, handleSizeChange);
             detachCanvasListenersRef.current = () => {
                 plot.chart?.off?.(pointerClickEvent, handlePointerEvent);
                 plot.chart?.off?.(pointerMoveEvent, handlePointerEvent);
+                plot.chart?.off?.(sizeChangeEvent, handleSizeChange);
                 canvasRef.current = null;
             };
         }
@@ -379,10 +407,12 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         }
     };
 
+    const cursorLeftPx = cursorLeftFromX(highlightedX);
+
     return (
         <div ref={containerRef} style={{ position: 'relative', height: '100%' }} onWheel={handleWheel}>
             <div id='chart' style={{ height: '100%' }}>
-                <Line {...config} onReady={mergedOnReady} />
+                <Line {...config} onReady={mergedOnReady} ref={plotRef} />
             </div>
             {plotRegion && cursorLeftPx !== null && (
                 <div
