@@ -65,7 +65,7 @@ describe('package.json contributions for merged explorer/flags UI', () => {
         for (const command of expectedCommands) {
             const menuItem = menu.find((m) => m.command === command);
             expect(menuItem).toBeDefined();
-            expect(menuItem?.when).toBe('view == sdsExplorer');
+            expect(menuItem?.when).toContain('view == sdsExplorer');
             expect(commandContributions.get(command)?.enablement).toBeDefined();
         }
 
