@@ -126,7 +126,31 @@ describe('SdsExplorerProvider', () => {
         expect(rootItems[0].label).toBe('SDS Files');
         expect(rootItems[1].label).toBe('SDS Flags');
         expect(rootItems[1].description).toBe('connected');
-        expect(rootItems[1].children).toEqual([flagItem]);
+
+        const flagItems = await provider.getChildren(rootItems[1]);
+
+        expect(flagItems).toEqual([flagItem]);
+    });
+
+    it('fires targeted refresh events for stable files and flags root nodes', async () => {
+        const configManager = {
+            onDidChangeConfig: vi.fn(),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: undefined, metadir: undefined })),
+        };
+
+        const provider = new SdsExplorerProvider(configManager as never);
+        const rootItems = await provider.getChildren();
+        const refreshedItems: Array<SdsTreeItem | undefined | null> = [];
+        provider.onDidChangeTreeData((item) => {
+            refreshedItems.push(item);
+        });
+
+        provider.refreshFiles();
+        provider.refreshFlags();
+        provider.refresh();
+
+        expect(refreshedItems).toEqual([rootItems[0], rootItems[1], undefined]);
     });
 
     it('returns empty list when no active config file is selected', async () => {

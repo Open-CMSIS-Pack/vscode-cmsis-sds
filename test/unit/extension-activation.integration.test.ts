@@ -42,6 +42,8 @@ const sdsIoServiceMethods = {
 
 const explorerProviderMethods = {
     refresh: vi.fn(),
+    refreshFiles: vi.fn(),
+    refreshFlags: vi.fn(),
 };
 
 const configManagerMethods = {
@@ -169,6 +171,8 @@ vi.mock('../../src/providers/sdsExplorerProvider', () => {
 
     class SdsExplorerProvider {
         refresh = explorerProviderMethods.refresh;
+        refreshFiles = explorerProviderMethods.refreshFiles;
+        refreshFlags = explorerProviderMethods.refreshFlags;
     }
 
     return {

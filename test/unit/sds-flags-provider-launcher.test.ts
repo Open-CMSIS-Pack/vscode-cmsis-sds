@@ -86,7 +86,7 @@ vi.mock('../../src/controller/sdsioServerLauncher', () => {
     };
 });
 
-import { SdsIoControlService } from '../../src/providers/sdsIoControlService';
+import { SdsIoControlService, SdsIoNotifyEvent } from '../../src/providers/sdsIoControlService';
 import * as vscode from 'vscode';
 
 class FakeMonitor extends EventEmitter {
@@ -438,7 +438,7 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.getFlagTreeItems()[1].label).toBe('1: One');
     });
 
-    it('notifies without monitor traffic when checkbox updates do not change managed flags', () => {
+    it('does not notify or send monitor traffic when checkbox updates do not change managed flags', () => {
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');
         const service = new SdsIoControlService(
@@ -457,10 +457,33 @@ describe('SdsIoControlService launcher delegation', () => {
             [service.getFlagTreeItems()[0], 0] as never,
         ]);
 
-        expect(changes).toBe(1);
+        expect(changes).toBe(0);
         expect(monitor.setFlag).not.toHaveBeenCalled();
         expect(monitor.clearFlag).not.toHaveBeenCalled();
         expect(monitor.sendFlags).not.toHaveBeenCalled();
+    });
+
+    it('emits flag changes only when flag values actually change', () => {
+        const monitor = new FakeMonitor();
+        const configManager = createConfigManager('active.sdsio.yml');
+        const service = new SdsIoControlService(
+            configManager as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+        const events: SdsIoNotifyEvent[] = [];
+        service.onDidChange((event) => {
+            events.push(event.event);
+        });
+
+        service.setEnabledByTreeItems([[service.getFlagTreeItems()[0], 1] as never]);
+        service.setEnabledByTreeItems([[service.getFlagTreeItems()[0], 1] as never]);
+        service.setEnabledByTreeItems([[service.getFlagTreeItems()[0], 0] as never]);
+
+        expect(events).toEqual([
+            SdsIoNotifyEvent.Flags,
+            SdsIoNotifyEvent.Flags,
+        ]);
     });
 
     it('changes checkbox state while disconnected without sending flags', () => {
@@ -533,6 +556,42 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(monitor.startRecording).toHaveBeenCalledTimes(1);
         expect(monitor.stopRecordingOrPlayback).toHaveBeenCalled();
         expect(service.canStop()).toBe(false);
+    });
+
+    it('emits one mode event per mode transition and file update only after recording stops', async () => {
+        const monitor = new FakeMonitor();
+        const configManager = createConfigManager('active.sdsio.yml');
+        const service = new SdsIoControlService(
+            configManager as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+
+        await service.connectServer();
+
+        const events: SdsIoNotifyEvent[] = [];
+        service.onDidChange((event) => {
+            events.push(event.event);
+        });
+
+        service.play();
+        service.play();
+        service.stop();
+        service.stop();
+        service.record();
+        service.record();
+        service.stop();
+
+        expect(events).toEqual([
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.FileUpdate,
+        ]);
+        expect(monitor.startPlayback).toHaveBeenCalledTimes(1);
+        expect(monitor.startRecording).toHaveBeenCalledTimes(1);
+        expect(monitor.stopRecordingOrPlayback).toHaveBeenCalledTimes(2);
     });
 
     it('covers connectServer failure and already-connected branches', async () => {
@@ -673,5 +732,34 @@ describe('SdsIoControlService launcher delegation', () => {
 
         monitor.emit('disconnected');
         expect(service.canConnect()).toBe(true);
+    });
+
+    it('deduplicates repeated monitor connection and flag info events', () => {
+        const monitor = new FakeMonitor();
+        const configManager = createConfigManager('active.sdsio.yml');
+        const service = new SdsIoControlService(
+            configManager as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+        const events: SdsIoNotifyEvent[] = [];
+        service.onDidChange((event) => {
+            events.push(event.event);
+        });
+
+        monitor.emit('connected');
+        monitor.emit('connected');
+        monitor.emit('info', { sdsFlags: 0b00000101 });
+        monitor.emit('info', { sdsFlags: 0b00000101 });
+        monitor.emit('info', { sdsFlags: 0b00000100 });
+        monitor.emit('disconnected');
+        monitor.emit('disconnected');
+
+        expect(events).toEqual([
+            SdsIoNotifyEvent.Connected,
+            SdsIoNotifyEvent.Flags,
+            SdsIoNotifyEvent.Flags,
+            SdsIoNotifyEvent.Connected,
+        ]);
     });
 });
