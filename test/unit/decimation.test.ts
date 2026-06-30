@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
+// Created using AI
+
 import { describe, expect, it } from 'vitest';
 import { ChartSample } from '../../src/viewer/webview/components/baseChartViewer';
 import { decimateExtremaSeries } from '../../src/viewer/webview/components/decimation';
 
 function createSeries(values: number[]): ChartSample[] {
-    return values.map((y, x) => ({ x, y }));
+    return values.map((y, x) => ({ x: x, y: y, index: x }));
 }
 
 describe('decimateExtremaSeries', () => {

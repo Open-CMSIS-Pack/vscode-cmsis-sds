@@ -21,6 +21,8 @@
  * and message sending (export, etc).
  */
 
+// Created using AI
+
 import { test, expect, Page } from '@playwright/test';
 import { startServer } from './helpers/webview-server';
 import * as http from 'http';
@@ -43,8 +45,8 @@ async function openViewer(page: Page): Promise<void> {
     await page.waitForSelector('#chart');
 }
 
-async function getMessages(page: Page): Promise<any[]> {
-    return page.evaluate(() => (window as any).__messages);
+async function getMessages(page: Page): Promise<{ command?: string }[]> {
+    return page.evaluate(() => (window as { __messages?: { command?: string }[] }).__messages || []);
 }
 
 // ── Structure ───────────────────────────────────────────────
@@ -91,12 +93,12 @@ test.describe('Viewer Panel — Structure', () => {
 test.describe('Viewer Panel — Interactions', () => {
     test('Export button sends exportCsv message', async ({ page }) => {
         await openViewer(page);
-        await page.evaluate(() => { (window as any).__messages = []; });
+        await page.evaluate(() => { (window as { __messages?: { command?: string }[] }).__messages = []; });
 
         await page.locator('button[title="Export CSV"]').click();
 
         const msgs = await getMessages(page);
-        expect(msgs.some((m: any) => m.command === 'exportCsv')).toBe(true);
+        expect(msgs.some((m: { command?: string }) => m.command === 'exportCsv')).toBe(true);
     });
 
     test('channel toggle buttons can be clicked', async ({ page }) => {

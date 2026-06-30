@@ -84,7 +84,7 @@ module.exports = [
             ecmaVersion: 2022,
             sourceType: 'module',
             parserOptions: {
-                project: ['./tsconfig.json', './scripts/tsconfig.json'],
+                project: ['./tsconfig.eslint.json', './scripts/tsconfig.json'],
                 tsconfigRootDir: __dirname,
             },
             globals: {
