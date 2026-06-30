@@ -156,12 +156,12 @@ describe('SdsIoControlService launcher delegation', () => {
     beforeEach(() => {
         launcherState.hasTerminal = false;
         launcherMock.hasTerminal.mockReset();
-        launcherMock.stop.mockReset();
-        launcherMock.start.mockReset();
-        launcherMock.dispose.mockReset();
         launcherMock.hasTerminal.mockImplementation(() => launcherState.hasTerminal);
+        launcherMock.stop.mockReset();
         launcherMock.stop.mockResolvedValue(undefined);
+        launcherMock.start.mockReset();
         launcherMock.start.mockResolvedValue(true);
+        launcherMock.dispose.mockReset();
         vi.mocked(vscode.window.showInputBox).mockReset();
     });
 
@@ -512,19 +512,23 @@ describe('SdsIoControlService launcher delegation', () => {
             'c:/workspace/ext',
         );
 
+        expect(service.canPlay()).toBe(false);
+        expect(service.canRecord()).toBe(false);
+        expect(service.canStop()).toBe(false);
+
+        await service.connectServer();
+
         expect(service.canPlay()).toBe(true);
         expect(service.canRecord()).toBe(true);
         expect(service.canStop()).toBe(false);
 
         service.play();
-
         expect(service.canPlay()).toBe(false);
         expect(service.canRecord()).toBe(false);
         expect(service.canStop()).toBe(true);
-        expect(monitor.startPlayback).not.toHaveBeenCalled();
+        expect(monitor.startPlayback).toHaveBeenCalledTimes(1);
 
         service.stop();
-        await service.connectServer();
         service.record();
         service.stop();
 

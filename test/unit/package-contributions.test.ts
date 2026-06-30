@@ -51,17 +51,28 @@ describe('package.json contributions for merged explorer/flags UI', () => {
         expect(disconnect?.enablement).toBe('arm-sds.sdsio.canDisconnect');
     });
 
-    it('shows connect and disconnect commands in view title menu', () => {
+    it('shows SDSIO commands in the view title menu and relies on command enablement', () => {
         const menu = (packageJson.contributes.menus as Record<string, MenuContribution[]>)['view/title'];
-        const connect = menu.find((m) => m.command === 'arm-sds.sdsinterface.connect');
-        const disconnect = menu.find((m) => m.command === 'arm-sds.sdsinterface.disconnect');
+        const commandContributions = new Map(packageJson.contributes.commands.map((command) => [command.command, command]));
+        const expectedCommands = [
+            'arm-sds.sdsinterface.play',
+            'arm-sds.sdsinterface.record',
+            'arm-sds.sdsinterface.stop',
+            'arm-sds.sdsinterface.connect',
+            'arm-sds.sdsinterface.disconnect',
+        ];
 
-        expect(connect).toBeDefined();
-        expect(connect?.when).toContain('view == sdsExplorer');
-        expect(connect?.when).toContain('arm-sds.sdsio.canConnect');
+        for (const command of expectedCommands) {
+            const menuItem = menu.find((m) => m.command === command);
+            expect(menuItem).toBeDefined();
+            expect(menuItem?.when).toContain('view == sdsExplorer');
+            expect(commandContributions.get(command)?.enablement).toBeDefined();
+        }
 
-        expect(disconnect).toBeDefined();
-        expect(disconnect?.when).toContain('view == sdsExplorer');
-        expect(disconnect?.when).toContain('arm-sds.sdsio.canDisconnect');
+        expect(commandContributions.get('arm-sds.sdsinterface.play')?.enablement).toBe('arm-sds.sdsio.canPlay');
+        expect(commandContributions.get('arm-sds.sdsinterface.record')?.enablement).toBe('arm-sds.sdsio.canRecord');
+        expect(commandContributions.get('arm-sds.sdsinterface.stop')?.enablement).toBe('arm-sds.sdsio.canStop');
+        expect(commandContributions.get('arm-sds.sdsinterface.connect')?.enablement).toBe('arm-sds.sdsio.canConnect');
+        expect(commandContributions.get('arm-sds.sdsinterface.disconnect')?.enablement).toBe('arm-sds.sdsio.canDisconnect');
     });
 });
