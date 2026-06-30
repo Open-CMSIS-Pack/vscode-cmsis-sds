@@ -206,17 +206,17 @@
             "view/title": [
                 {
                     "command": "arm-sds.sdsinterface.play",
-                    "when": "view == sdsExplorer && arm-sds.sdsio.canPlay",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@0"
                 },
                 {
                     "command": "arm-sds.sdsinterface.record",
-                    "when": "view == sdsExplorer && arm-sds.sdsio.canRecord",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@1"
                 },
                 {
                     "command": "arm-sds.sdsinterface.stop",
-                    "when": "view == sdsExplorer && arm-sds.sdsio.canStop",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@2"
                 },
                 {
