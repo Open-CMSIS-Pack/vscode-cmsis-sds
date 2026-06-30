@@ -221,12 +221,12 @@
                 },
                 {
                     "command": "arm-sds.sdsinterface.connect",
-                    "when": "view == sdsExplorer",
+                    "when": "view == sdsExplorer && arm-sds.sdsio.canConnect",
                     "group": "navigation@3"
                 },
                 {
                     "command": "arm-sds.sdsinterface.disconnect",
-                    "when": "view == sdsExplorer",
+                    "when": "view == sdsExplorer && arm-sds.sdsio.canDisconnect",
                     "group": "navigation@3"
                 },
                 {
