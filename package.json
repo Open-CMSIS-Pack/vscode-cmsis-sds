@@ -216,17 +216,17 @@
                 },
                 {
                     "command": "arm-sds.sdsinterface.stop",
-                    "when": "view == sdsExplorer && arm-sds.sdsio.canStop",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@2"
                 },
                 {
                     "command": "arm-sds.sdsinterface.connect",
-                    "when": "view == sdsExplorer  && arm-sds.sdsio.canConnect",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@3"
                 },
                 {
                     "command": "arm-sds.sdsinterface.disconnect",
-                    "when": "view == sdsExplorer && arm-sds.sdsio.canDisconnect",
+                    "when": "view == sdsExplorer",
                     "group": "navigation@3"
                 },
                 {

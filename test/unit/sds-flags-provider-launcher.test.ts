@@ -15,7 +15,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const launcherState = {
     hasTerminal: false,
@@ -25,6 +25,7 @@ const launcherMock = {
     hasTerminal: vi.fn(() => launcherState.hasTerminal),
     stop: vi.fn(async () => undefined),
     start: vi.fn(async () => true),
+    dispose: vi.fn(),
 };
 
 vi.mock('vscode', () => {
@@ -86,6 +87,7 @@ vi.mock('../../src/controller/sdsioServerLauncher', () => {
 });
 
 import { SdsIoControlService } from '../../src/providers/sdsIoControlService';
+import * as vscode from 'vscode';
 
 class FakeMonitor extends EventEmitter {
     start = vi.fn(async () => {
@@ -108,6 +110,7 @@ class FakeMonitor extends EventEmitter {
 }
 
 type ConfigFileChangedHandler = () => Promise<void>;
+type ConfigChangedHandler = () => void;
 
 type FakeConfigManager = {
     onDidChangeConfigFile: ReturnType<typeof vi.fn>;
@@ -116,17 +119,21 @@ type FakeConfigManager = {
     getConfigFile: ReturnType<typeof vi.fn>;
     setFlagName: ReturnType<typeof vi.fn>;
     triggerConfigFileChange: () => Promise<void>;
+    triggerConfigChange: () => void;
 };
 
 function createConfigManager(...args: [string?]): FakeConfigManager {
     const configFile = args.length === 0 ? 'sample.sdsio.yml' : args[0];
     let onConfigFileChange: ConfigFileChangedHandler | undefined;
+    let onConfigChange: ConfigChangedHandler | undefined;
 
     return {
         onDidChangeConfigFile: vi.fn((handler: ConfigFileChangedHandler) => {
             onConfigFileChange = handler;
         }),
-        onDidChangeConfig: vi.fn(),
+        onDidChangeConfig: vi.fn((handler: ConfigChangedHandler) => {
+            onConfigChange = handler;
+        }),
         getConfig: vi.fn(() => ({
             flagNames: new Map<number, string>(),
         })),
@@ -137,10 +144,25 @@ function createConfigManager(...args: [string?]): FakeConfigManager {
                 await onConfigFileChange();
             }
         },
+        triggerConfigChange: () => {
+            onConfigChange?.();
+        },
     };
 }
 
 describe('SdsIoControlService launcher delegation', () => {
+    beforeEach(() => {
+        launcherState.hasTerminal = false;
+        launcherMock.hasTerminal.mockReset();
+        launcherMock.hasTerminal.mockImplementation(() => launcherState.hasTerminal);
+        launcherMock.stop.mockReset();
+        launcherMock.stop.mockResolvedValue(undefined);
+        launcherMock.start.mockReset();
+        launcherMock.start.mockResolvedValue(true);
+        launcherMock.dispose.mockReset();
+        vi.mocked(vscode.window.showInputBox).mockReset();
+    });
+
     it('connectServer delegates server startup to launcher', async () => {
         launcherMock.hasTerminal.mockReset();
         launcherMock.stop.mockReset();
