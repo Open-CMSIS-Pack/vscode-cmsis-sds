@@ -99,7 +99,7 @@ jobs:
 
       - name: Update current version
         id: set_version
-        if: runner.os == 'Linux' && github.repository_owner == 'Open-CMSIS-Pack'
+        if: matrix.vsce_target == 'linux-x64' && github.repository_owner == 'Open-CMSIS-Pack'
         run: |
           # Increment patch version by 1 (e.g. 1.64.1 -> 1.64.2)
           BASE_VERSION=$(node -p "require('./package.json').version.split('-')[0]")
@@ -136,13 +136,13 @@ jobs:
           echo "nightly_version=${NIGHTLY_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Remove badges
-        if: runner.os == 'Linux'
+        if: matrix.vsce_target == 'linux-x64'
         run: |
           sed -i "/https:\/\/securityscorecards\.dev\/viewer/d" README.md
           sed -i "/https:\/\/img.shields.io\//d" README.md
 
       - name: Upload dist
-        if: runner.os == 'Linux'
+        if: matrix.vsce_target == 'linux-x64'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: dist
