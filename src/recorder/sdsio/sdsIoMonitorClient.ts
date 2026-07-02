@@ -66,8 +66,8 @@ export type SdsioMonitorFlagsMessage = {
 
 interface SdsioMonitorHeader {
     cmd: number;
-    arg1: number;
-    arg2: number;
+    setMask: number;
+    clearMask: number;
     arg3: number;
 }
 
@@ -112,8 +112,8 @@ class MonitorFrameAccumulator {
     private _parseHeader(offset: number): SdsioMonitorHeader {
         return {
             cmd: this.buf.readUInt32LE(offset),
-            arg1: this.buf.readUInt32LE(offset + 4),
-            arg2: this.buf.readUInt32LE(offset + 8),
+            setMask: this.buf.readUInt32LE(offset + 4),
+            clearMask: this.buf.readUInt32LE(offset + 8),
             arg3: this.buf.readUInt32LE(offset + 12),
         };
     }
@@ -325,7 +325,7 @@ export class SdsioMonitorClient extends EventEmitter {
         }
 
         const fileName = payload.subarray(4, 4 + filenameLen).toString('utf-8');
-        const mode = header.arg2 === 0 ? 0 : 1;
+        const mode = header.clearMask === 0 ? 0 : 1;
         this._safeEmit('open', { mode, fileName } as SdsioMonitorOpenMessage);
     }
 
@@ -344,8 +344,8 @@ export class SdsioMonitorClient extends EventEmitter {
     }
 
     private _handleInfo(header: SdsioMonitorHeader): void {
-        const sdsFlags = header.arg1;
-        const sdsIdleRate = header.arg2;
+        const sdsFlags = header.setMask;
+        const sdsIdleRate = header.clearMask;
         //const errorLen = header.arg3;
 
         const info: SdsioMonitorInfo = {
@@ -361,8 +361,8 @@ export class SdsioMonitorClient extends EventEmitter {
 
     private _handleFlags(header: SdsioMonitorHeader): void {
         this._safeEmit('flags', {
-            setMask: header.arg1,
-            clearMask: header.arg2,
+            setMask: header.setMask,
+            clearMask: header.clearMask,
             arg3: header.arg3,
         } as SdsioMonitorFlagsMessage);
     }
