@@ -409,7 +409,7 @@ describe('SdsExplorerProvider', () => {
 
         const rootItems = await provider.getChildren();
         const filesRoot = rootItems[0];
-        const groups = filesRoot.children ?? [];
+        const groups = await provider.getChildren(filesRoot);
         const imageGroup = groups.find((item) => item.label === 'image');
         const sensorGroup = groups.find((item) => item.label === 'sensor');
         const unusedGroup = groups.find((item) => item.label === 'unused');
@@ -456,7 +456,7 @@ describe('SdsExplorerProvider', () => {
         const provider = new SdsExplorerProvider(configManager as never);
 
         const rootItems = await provider.getChildren();
-        const files = rootItems[0].children ?? [];
+        const files = await provider.getChildren(rootItems[0]);
 
         expect(files.map((item) => item.label)).toEqual(['alpha', 'beta.0.sds']);
         expect(files[0].itemType).toBe('group');

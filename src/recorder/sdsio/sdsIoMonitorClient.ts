@@ -58,6 +58,12 @@ export type SdsioMonitorOpenMessage = {
     fileName: string;
 };
 
+export type SdsioMonitorFlagsMessage = {
+    setMask: number;
+    clearMask: number;
+    arg3: number;
+};
+
 interface SdsioMonitorHeader {
     cmd: number;
     arg1: number;
@@ -86,6 +92,10 @@ class MonitorFrameAccumulator {
             const header = this._parseHeader(0);
             const payloadSize = this._getPayloadSize(header);
 
+            if (payloadSize === undefined) {
+                break; // Wait for enough payload metadata
+            }
+
             if (this.buf.length < HEADER_SIZE + payloadSize) {
                 break; // Wait for more data
             }
@@ -108,7 +118,7 @@ class MonitorFrameAccumulator {
         };
     }
 
-    private _getPayloadSize(header: SdsioMonitorHeader): number {
+    private _getPayloadSize(header: SdsioMonitorHeader): number | undefined {
         switch (header.cmd) {
             case MON_FLAGS:
                 return 0; // No payload for FLAGS command
@@ -118,7 +128,7 @@ class MonitorFrameAccumulator {
             case MON_CLOSE: {
                 // Payload is: filenameLen (u32) + filename
                 if (this.buf.length < HEADER_SIZE + 4) {
-                    return 0; // Can't determine yet
+                    return undefined; // Can't determine yet
                 }
                 const filenameLen = this.buf.readUInt32LE(HEADER_SIZE);
                 return 4 + filenameLen;
@@ -140,6 +150,7 @@ class MonitorFrameAccumulator {
  *   'info'         (info: SdsioMonitorInfo)
  *   'open'         (msg: SdsioMonitorOpenMessage)
  *   'close'        (fileName: string)
+ *   'flags'        (msg: SdsioMonitorFlagsMessage)
  *   'log'          (message: string)
  *   'error'        (message: string)
  */
@@ -292,7 +303,7 @@ export class SdsioMonitorClient extends EventEmitter {
                     this._handleClose(payload);
                     break;
                 case MON_FLAGS:
-                    console.log(payload);
+                    this._handleFlags(header);
                     break;
                 case MON_INFO:
                     this._handleInfo(header);
@@ -346,6 +357,14 @@ export class SdsioMonitorClient extends EventEmitter {
         // For now, just emit the basic info
 
         this._safeEmit('info', info);
+    }
+
+    private _handleFlags(header: SdsioMonitorHeader): void {
+        this._safeEmit('flags', {
+            setMask: header.arg1,
+            clearMask: header.arg2,
+            arg3: header.arg3,
+        } as SdsioMonitorFlagsMessage);
     }
 
     private _scheduleReconnect(): void {
