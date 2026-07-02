@@ -93,20 +93,16 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private readonly fileWatchers: vscode.FileSystemWatcher[] = [];
+    private readonly filesRoot = new SdsTreeItem('SDS Files', 'folder', '', vscode.TreeItemCollapsibleState.Expanded);
+    private readonly flagsRoot = new SdsTreeItem('SDS Flags', 'flags', '', vscode.TreeItemCollapsibleState.Expanded);
 
     constructor(
         private readonly configManager: SdsioConfigManager,
         private readonly flagsSource?: SdsFlagsTreeSource,
     ) {
-        this.fileWatchers.push(vscode.workspace.createFileSystemWatcher('**/*.sds'));
-        this.fileWatchers.push(vscode.workspace.createFileSystemWatcher('**/*.sds.yml'));
-        this.fileWatchers.push(vscode.workspace.createFileSystemWatcher('**/*.sdsio.yml'));
-
-        for (const watcher of this.fileWatchers) {
-            watcher.onDidCreate(() => { try { this.refresh(); } catch { /* ignore */ } });
-            watcher.onDidDelete(() => { try { this.refresh(); } catch { /* ignore */ } });
-            watcher.onDidChange(() => { try { this.refresh(); } catch { /* ignore */ } });
-        }
+        this.watchFiles('**/*.sds', () => this.refreshFiles());
+        this.watchFiles('**/*.sds.yml', () => this.refreshFiles());
+        this.watchFiles('**/*.sdsio.yml', () => this.refresh());
 
         configManager.onDidChangeConfig(() => { try { this.refresh(); } catch { /* ignore */ } });
     }
@@ -116,7 +112,21 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
         this._onDidChangeTreeData.fire(undefined);
     }
 
+    refreshFiles(): void {
+        this.diagnostics.info(DiagnosticSource.Extension, 'Refreshing SDS files in Explorer view');
+        this._onDidChangeTreeData.fire(this.filesRoot);
+    }
+
+    refreshFlags(): void {
+        this.diagnostics.info(DiagnosticSource.Extension, 'Refreshing SDS flags in Explorer view');
+        this.updateFlagsRoot();
+        this._onDidChangeTreeData.fire(this.flagsRoot);
+    }
+
     getTreeItem(element: SdsTreeItem): vscode.TreeItem {
+        if (element === this.flagsRoot) {
+            this.updateFlagsRoot();
+        }
         return element;
     }
 
@@ -130,14 +140,32 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
             return this.getRootItems();
         }
 
+        if (element === this.filesRoot) {
+            return this.getFileItems();
+        }
+
+        if (element === this.flagsRoot) {
+            return this.getFlagItems();
+        }
+
         this.diagnostics.debug(DiagnosticSource.Extension, `Returning ${element.children?.length ?? 0} children for ${element.label}`);
 
         return element.children ?? [];
     }
 
-    private async getRootItems(): Promise<SdsTreeItem[]> {
+    private getRootItems(): SdsTreeItem[] {
+        if (!this.configManager.getConfigFile()) {
+            return [];
+        }
+
+        this.updateFlagsRoot();
+        return [this.filesRoot, this.flagsRoot];
+    }
+
+    private async getFileItems(): Promise<SdsTreeItem[]> {
         this.diagnostics.debug(DiagnosticSource.Extension, 'Scanning workspace for SDS files');
         if (!this.configManager.getConfigFile()) {
+            this.filesRoot.children = [];
             return [];
         }
 
@@ -178,28 +206,30 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
         }
         this.diagnostics.debug(DiagnosticSource.Extension, `Found ${files.length} top-level groups in SDS Explorer`);
 
-        const root: SdsTreeItem[] = [];
-        root.push(
-            new SdsTreeItem(
-                'SDS Files',
-                'folder',
-                '',
-                vscode.TreeItemCollapsibleState.Expanded,
-                files
-                    .sort((a, b) => a.label.localeCompare(b.label as string))
-                    .sort((a, b) => a.itemType === 'group' && b.itemType !== 'group' ? -1 : 1)
-            ));
+        this.filesRoot.children = files
+            .sort((a, b) => a.label.localeCompare(b.label as string))
+            .sort((a, b) => a.itemType === 'group' && b.itemType !== 'group' ? -1 : 1);
 
-        const flagItems = this.flagsSource?.getFlagTreeItems() ?? [];
-        const flagsNode = new SdsTreeItem(
-            'SDS Flags',
-            'flags',
-            '',
-            vscode.TreeItemCollapsibleState.Expanded, flagItems);
-        flagsNode.description = this.flagsSource?.getConnectionState() ?? '';
-        root.push(flagsNode);
+        return this.filesRoot.children;
+    }
 
-        return root;
+    private getFlagItems(): SdsTreeItem[] {
+        this.updateFlagsRoot();
+        return this.flagsRoot.children ?? [];
+    }
+
+    private updateFlagsRoot(): void {
+        this.flagsRoot.children = this.flagsSource?.getFlagTreeItems() ?? [];
+        this.flagsRoot.description = this.flagsSource?.getConnectionState() ?? '';
+    }
+
+    private watchFiles(pattern: string, refresh: () => void): void {
+        const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+        this.fileWatchers.push(watcher);
+
+        watcher.onDidCreate(() => { try { refresh(); } catch { /* ignore */ } });
+        watcher.onDidDelete(() => { try { refresh(); } catch { /* ignore */ } });
+        watcher.onDidChange(() => { try { refresh(); } catch { /* ignore */ } });
     }
 
     private async scanConfiguredDirectories(

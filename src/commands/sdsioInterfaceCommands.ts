@@ -16,7 +16,7 @@
 
 import * as vscode from 'vscode';
 
-import { SdsIoControlService } from '../providers/sdsIoControlService';
+import { SdsIoControlService, SdsIoNotifyEvent } from '../providers/sdsIoControlService';
 import { SdsExplorerProvider, SdsTreeItem } from '../providers/sdsExplorerProvider';
 
 export interface RegisterSdsioInterfaceCommandsArgs {
@@ -40,9 +40,18 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
     updateSdsIoCommandContext();
 
     context.subscriptions.push(
-        sdsIoControlService.onDidChange(() => {
-            updateSdsIoCommandContext();
-            explorerProvider.refresh();
+        sdsIoControlService.onDidChange((data) => {
+            if (data.event === SdsIoNotifyEvent.Mode || data.event === SdsIoNotifyEvent.Connected) {
+                updateSdsIoCommandContext();
+            }
+
+            if (data.event === SdsIoNotifyEvent.Flags || data.event === SdsIoNotifyEvent.Connected) {
+                explorerProvider.refreshFlags();
+            }
+
+            if (data.event === SdsIoNotifyEvent.FileUpdate) {
+                explorerProvider.refreshFiles();
+            }
         })
     );
 
@@ -59,14 +68,12 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.connect', async () => {
             await sdsIoControlService.connectServer();
-            updateSdsIoCommandContext();
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.disconnect', async () => {
             await sdsIoControlService.disconnectServer();
-            updateSdsIoCommandContext();
         })
     );
 
@@ -78,7 +85,6 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
                 return;
             }
             sdsIoControlService.play();
-            updateSdsIoCommandContext();
         })
     );
 
@@ -90,14 +96,12 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
                 return;
             }
             sdsIoControlService.record();
-            updateSdsIoCommandContext();
         })
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.stop', () => {
             sdsIoControlService.stop();
-            updateSdsIoCommandContext();
         })
     );
 

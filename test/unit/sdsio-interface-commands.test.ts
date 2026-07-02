@@ -58,6 +58,7 @@ vi.mock('../../src/providers/sdsExplorerProvider', () => ({
 
 import * as vscode from 'vscode';
 import { registerSdsioInterfaceCommands } from '../../src/commands/sdsioInterfaceCommands';
+import { SdsIoNotifyEvent, type SdsIoChangeEvent } from '../../src/providers/sdsIoControlService';
 
 function createContext() {
     return {
@@ -66,7 +67,7 @@ function createContext() {
 }
 
 function createService() {
-    let changeListener: (() => void) | undefined;
+    let changeListener: ((event: SdsIoChangeEvent) => void) | undefined;
 
     const service = {
         canConnect: vi.fn(() => true),
@@ -76,7 +77,7 @@ function createService() {
         canStop: vi.fn(() => true),
         connectServer: vi.fn(async () => true),
         disconnectServer: vi.fn(async () => undefined),
-        onDidChange: vi.fn((listener: () => void) => {
+        onDidChange: vi.fn((listener: (event: SdsIoChangeEvent) => void) => {
             changeListener = listener;
             return { dispose: vi.fn() };
         }),
@@ -85,7 +86,7 @@ function createService() {
         renameFlag: vi.fn(async () => undefined),
         setEnabledByTreeItems: vi.fn(),
         stop: vi.fn(),
-        triggerChange: () => changeListener?.(),
+        triggerChange: (event: SdsIoChangeEvent) => changeListener?.(event),
     };
 
     return service;
@@ -110,7 +111,11 @@ function createTreeView() {
 function registerCommands() {
     const context = createContext();
     const service = createService();
-    const explorerProvider = { refresh: vi.fn() };
+    const explorerProvider = {
+        refresh: vi.fn(),
+        refreshFiles: vi.fn(),
+        refreshFlags: vi.fn(),
+    };
     const { treeView, triggerCheckboxChange } = createTreeView();
 
     registerSdsioInterfaceCommands({
@@ -156,17 +161,26 @@ describe('registerSdsioInterfaceCommands', () => {
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', 'arm-sds.sdsio.canStop', true);
     });
 
-    it('refreshes command contexts and the explorer when service state changes', () => {
+    it('refreshes command contexts and targeted explorer nodes when service state changes', () => {
         const { service, explorerProvider } = registerCommands();
         vi.mocked(vscode.commands.executeCommand).mockClear();
 
         service.canConnect.mockReturnValue(false);
         service.canDisconnect.mockReturnValue(true);
-        service.triggerChange();
+        service.triggerChange({ event: SdsIoNotifyEvent.Mode, mode: 'play', state: true });
 
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', 'arm-sds.sdsio.canConnect', false);
         expect(vscode.commands.executeCommand).toHaveBeenCalledWith('setContext', 'arm-sds.sdsio.canDisconnect', true);
-        expect(explorerProvider.refresh).toHaveBeenCalled();
+        expect(explorerProvider.refreshFiles).not.toHaveBeenCalled();
+        expect(explorerProvider.refreshFlags).not.toHaveBeenCalled();
+
+        service.triggerChange({ event: SdsIoNotifyEvent.Flags });
+        service.triggerChange({ event: SdsIoNotifyEvent.FileUpdate });
+        service.triggerChange({ event: SdsIoNotifyEvent.Connected, state: true });
+
+        expect(explorerProvider.refreshFlags).toHaveBeenCalledTimes(2);
+        expect(explorerProvider.refreshFiles).toHaveBeenCalledTimes(1);
+        expect(explorerProvider.refresh).not.toHaveBeenCalled();
     });
 
     it('forwards checkbox changes only for SDS flag tree items', () => {
@@ -190,7 +204,7 @@ describe('registerSdsioInterfaceCommands', () => {
 
         expect(service.connectServer).toHaveBeenCalledTimes(1);
         expect(service.disconnectServer).toHaveBeenCalledTimes(1);
-        expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(10);
+        expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
     });
 
     it('plays and records after connecting, or warns when connection fails', async () => {

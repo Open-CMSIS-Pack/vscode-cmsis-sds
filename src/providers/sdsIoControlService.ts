@@ -36,14 +36,28 @@ export type SdsFlagMasks = {
     unsetMask: number;
 };
 
-type SdsIoMode = 'idle' | 'play' | 'record';
+export type SdsIoMode = 'idle' | 'play' | 'record';
+
+export enum SdsIoNotifyEvent {
+    Mode = 'mode',
+    Flags = 'flags',
+    FileUpdate = 'fileUpdate',
+    Connected = 'connected',
+}
+
+export type SdsIoChangeEvent =
+    | { event: SdsIoNotifyEvent.Mode; mode: SdsIoMode; state: boolean }
+    | { event: SdsIoNotifyEvent.Flags }
+    | { event: SdsIoNotifyEvent.FileUpdate }
+    | { event: SdsIoNotifyEvent.Connected; state: boolean };
 
 export class SdsIoControlService {
     private readonly diagnostics = SdsDiagnostics.getInstance();
-    private readonly _onDidChange = new vscode.EventEmitter<void>();
+    private readonly _onDidChange = new vscode.EventEmitter<SdsIoChangeEvent>();
     readonly onDidChange = this._onDidChange.event;
 
     private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
+    private lastFlagSignature = '';
     private mode: SdsIoMode = 'idle';
     private readonly monitor?: SdsioMonitorClient | undefined;
     private readonly extensionInstallPath?: string | undefined;
@@ -103,10 +117,14 @@ export class SdsIoControlService {
         flag.name = newName;
 
         if (index >= 0) {
+            const configFile = this.configManager.getConfigFile();
             this.configManager.setFlagName(index, newName);
+            if (!configFile) {
+                this.notifyFlagsChanged();
+            }
             this.diagnostics.info(DiagnosticSource.Server, `Flag ${index} renamed to "${newName}" and saved to config`);
         } else {
-            this.notifyChanged();
+            this.notifyFlagsChanged();
         }
     }
 
@@ -136,7 +154,6 @@ export class SdsIoControlService {
         }
 
         if (changed.length === 0) {
-            this.notifyChanged();
             return;
         }
 
@@ -153,28 +170,45 @@ export class SdsIoControlService {
             this.sendFlagsToMonitor();
         }
 
-        this.notifyChanged();
+        this.notifyFlagsChanged();
     }
 
     play(): void {
+        if (this.mode === 'play') {
+            return;
+        }
+
         this.mode = 'play';
         const modeSent = this.monitorConnected ? this.monitor?.startPlayback() === true : false;
         this.diagnostics.info(DiagnosticSource.Server, `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyChanged();
+        this.notifyModeChanged();
     }
 
     record(): void {
+        if (this.mode === 'record') {
+            return;
+        }
+
         this.mode = 'record';
         const modeSent = this.monitorConnected ? this.monitor?.startRecording() === true : false;
         this.diagnostics.info(DiagnosticSource.Server, `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyChanged();
+        this.notifyModeChanged();
     }
 
     stop(): void {
+        if (this.mode === 'idle') {
+            return;
+        }
+
+        const previousMode = this.mode;
         this.mode = 'idle';
         const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
         this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyChanged();
+        this.notifyModeChanged();
+
+        if (previousMode === 'record') {
+            this.notifyFileUpdate();
+        }
     }
 
     canPlay(): boolean {
@@ -202,11 +236,10 @@ export class SdsIoControlService {
         await this.serverLauncher.stop('Disconnecting SDSIO server terminal on user request');
 
         if (this.monitorConnected && this.monitor) {
-            this.monitorConnected = false;
             this.monitor.stop();
         }
 
-        this.notifyChanged();
+        this.setMonitorConnected(false);
     }
 
     async connectServer(): Promise<boolean> {
@@ -275,9 +308,8 @@ export class SdsIoControlService {
             await this.serverLauncher.stop(reason);
 
             if (this.monitorConnected && this.monitor) {
-                this.monitorConnected = false;
                 this.monitor.stop();
-                this.notifyChanged();
+                this.setMonitorConnected(false);
             }
 
             this.serverLauncher.dispose();
@@ -306,8 +338,8 @@ export class SdsIoControlService {
             await this.serverLauncher.stop('Terminating existing SDSIO server terminal due to config file change');
 
             if (this.monitorConnected && this.monitor) {
-                this.monitorConnected = false;
                 this.monitor.stop();
+                this.setMonitorConnected(false);
             }
 
             await this.connectServer();
@@ -373,22 +405,18 @@ export class SdsIoControlService {
         for (let i = 0; i < this.flags.length; i++) {
             this.flags[i].name = flagNames.get(i) ?? `${i}`;
         }
-        this.notifyChanged();
+        this.lastFlagSignature = this.getFlagSignature();
     }
 
     private onMonitorConnected(): void {
-        if (!this.monitorConnected) {
-            this.monitorConnected = true;
+        if (this.setMonitorConnected(true)) {
             this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
-            this.notifyChanged();
         }
     }
 
     private onMonitorDisconnected(): void {
-        if (this.monitorConnected) {
-            this.monitorConnected = false;
+        if (this.setMonitorConnected(false)) {
             this.diagnostics.info(DiagnosticSource.Server, 'Disconnected from SDSIO monitor');
-            this.notifyChanged();
         }
     }
 
@@ -398,12 +426,44 @@ export class SdsIoControlService {
             this.flags[i].enabled = bit !== 0;
         }
 
-        this.notifyChanged();
+        this.notifyFlagsChanged();
         this.diagnostics.info(DiagnosticSource.Server, `Received monitor info: sdsFlags=0x${info.sdsFlags.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
-    private notifyChanged(): void {
-        this._onDidChange.fire();
+    private setMonitorConnected(connected: boolean): boolean {
+        if (this.monitorConnected === connected) {
+            return false;
+        }
+
+        this.monitorConnected = connected;
+        this._onDidChange.fire({ event: SdsIoNotifyEvent.Connected, state: connected });
+        return true;
+    }
+
+    private notifyModeChanged(): void {
+        this._onDidChange.fire({
+            event: SdsIoNotifyEvent.Mode,
+            mode: this.mode,
+            state: this.mode !== 'idle',
+        });
+    }
+
+    private notifyFlagsChanged(): void {
+        const flagSignature = this.getFlagSignature();
+        if (flagSignature === this.lastFlagSignature) {
+            return;
+        }
+
+        this.lastFlagSignature = flagSignature;
+        this._onDidChange.fire({ event: SdsIoNotifyEvent.Flags });
+    }
+
+    private notifyFileUpdate(): void {
+        this._onDidChange.fire({ event: SdsIoNotifyEvent.FileUpdate });
+    }
+
+    private getFlagSignature(): string {
+        return this.flags.map((flag) => `${flag.enabled ? '1' : '0'}:${flag.name}`).join('|');
     }
 
     private computeSetMask(): number {

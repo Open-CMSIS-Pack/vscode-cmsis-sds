@@ -87,6 +87,7 @@ vi.mock('../../src/providers/sdsExplorerProvider', () => {
 
     class SdsExplorerProvider {
         refresh = vi.fn();
+        refreshFiles = vi.fn();
     }
 
     return {
@@ -132,7 +133,10 @@ function createContext() {
 
 function registerCommands() {
     const context = createContext();
-    const explorerProvider = { refresh: vi.fn() };
+    const explorerProvider = {
+        refresh: vi.fn(),
+        refreshFiles: vi.fn(),
+    };
     const configManager = {};
 
     registerSdsFileCommands({
@@ -431,7 +435,8 @@ describe('registerSdsFileCommands', () => {
         await getCommand('arm-sds.deleteFile')({ filePath });
 
         expect(fs.existsSync(filePath)).toBe(false);
-        expect(explorerProvider.refresh).toHaveBeenCalled();
+        expect(explorerProvider.refreshFiles).toHaveBeenCalled();
+        expect(explorerProvider.refresh).not.toHaveBeenCalled();
         expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('Deleted delete-me.0.sds');
     });
 
@@ -445,6 +450,7 @@ describe('registerSdsFileCommands', () => {
         await command({ filePath: missingPath });
 
         expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(1);
+        expect(explorerProvider.refreshFiles).not.toHaveBeenCalled();
         expect(explorerProvider.refresh).not.toHaveBeenCalled();
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining('Failed to delete:'));
     });

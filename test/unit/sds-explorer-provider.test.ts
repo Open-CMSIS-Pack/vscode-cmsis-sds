@@ -242,7 +242,31 @@ describe('SdsExplorerProvider', () => {
         expect(rootItems[0].label).toBe('SDS Files');
         expect(rootItems[1].label).toBe('SDS Flags');
         expect(rootItems[1].description).toBe('connected');
-        expect(rootItems[1].children).toEqual([flagItem]);
+
+        const flagItems = await provider.getChildren(rootItems[1]);
+
+        expect(flagItems).toEqual([flagItem]);
+    });
+
+    it('fires targeted refresh events for stable files and flags root nodes', async () => {
+        const configManager = {
+            onDidChangeConfig: vi.fn(),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: undefined, metadir: undefined })),
+        };
+
+        const provider = new SdsExplorerProvider(configManager as never);
+        const rootItems = await provider.getChildren();
+        const refreshedItems: Array<SdsTreeItem | undefined | null> = [];
+        provider.onDidChangeTreeData((item) => {
+            refreshedItems.push(item);
+        });
+
+        provider.refreshFiles();
+        provider.refreshFlags();
+        provider.refresh();
+
+        expect(refreshedItems).toEqual([rootItems[0], rootItems[1], undefined]);
     });
 
     it('returns empty list when no active config file is selected', async () => {
@@ -385,7 +409,7 @@ describe('SdsExplorerProvider', () => {
 
         const rootItems = await provider.getChildren();
         const filesRoot = rootItems[0];
-        const groups = filesRoot.children ?? [];
+        const groups = await provider.getChildren(filesRoot);
         const imageGroup = groups.find((item) => item.label === 'image');
         const sensorGroup = groups.find((item) => item.label === 'sensor');
         const unusedGroup = groups.find((item) => item.label === 'unused');
@@ -432,7 +456,7 @@ describe('SdsExplorerProvider', () => {
         const provider = new SdsExplorerProvider(configManager as never);
 
         const rootItems = await provider.getChildren();
-        const files = rootItems[0].children ?? [];
+        const files = await provider.getChildren(rootItems[0]);
 
         expect(files.map((item) => item.label)).toEqual(['alpha', 'beta.0.sds']);
         expect(files[0].itemType).toBe('group');
