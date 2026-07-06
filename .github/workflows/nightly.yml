@@ -25,7 +25,7 @@ jobs:
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Validate Links
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2.8.0
@@ -65,7 +65,7 @@ jobs:
         run: git config --global core.autocrlf false
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           submodules: false
@@ -99,7 +99,7 @@ jobs:
 
       - name: Update current version
         id: set_version
-        if: runner.os == 'Linux' && github.repository_owner == 'Open-CMSIS-Pack'
+        if: matrix.vsce_target == 'linux-x64' && github.repository_owner == 'Open-CMSIS-Pack'
         run: |
           # Increment patch version by 1 (e.g. 1.64.1 -> 1.64.2)
           BASE_VERSION=$(node -p "require('./package.json').version.split('-')[0]")
@@ -136,13 +136,13 @@ jobs:
           echo "nightly_version=${NIGHTLY_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Remove badges
-        if: runner.os == 'Linux'
+        if: matrix.vsce_target == 'linux-x64'
         run: |
           sed -i "/https:\/\/securityscorecards\.dev\/viewer/d" README.md
           sed -i "/https:\/\/img.shields.io\//d" README.md
 
       - name: Upload dist
-        if: runner.os == 'Linux'
+        if: matrix.vsce_target == 'linux-x64'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: dist
@@ -204,7 +204,7 @@ jobs:
       - name: Configure git settings
         run: git config --global core.autocrlf false
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         env:
