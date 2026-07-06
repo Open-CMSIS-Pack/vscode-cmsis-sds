@@ -560,7 +560,7 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canStop()).toBe(false);
     });
 
-    it('emits one mode event per mode transition and file update only after recording stops', async () => {
+    it('emits mode events on stop and file update only after monitor close', async () => {
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');
         const service = new SdsIoControlService(
@@ -583,6 +583,15 @@ describe('SdsIoControlService launcher delegation', () => {
         service.record();
         service.record();
         service.stop();
+
+        expect(events).toEqual([
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+        ]);
+
+        monitor.emit('close', 'capture.0.sds');
 
         expect(events).toEqual([
             SdsIoNotifyEvent.Mode,

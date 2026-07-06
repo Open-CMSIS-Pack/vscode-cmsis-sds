@@ -73,6 +73,7 @@ export class SdsIoControlService {
             monitor.on('connected', () => this.onMonitorConnected());
             monitor.on('disconnected', () => this.onMonitorDisconnected());
             monitor.on('info', (info: SdsioMonitorInfo) => this.onMonitorInfo(info));
+            monitor.on('close', () => this.onMonitorClose());
         }
 
         configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
@@ -200,15 +201,10 @@ export class SdsIoControlService {
             return;
         }
 
-        const previousMode = this.mode;
         this.mode = 'idle';
         const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
         this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
         this.notifyModeChanged();
-
-        if (previousMode === 'record') {
-            this.notifyFileUpdate();
-        }
     }
 
     canPlay(): boolean {
@@ -428,6 +424,10 @@ export class SdsIoControlService {
 
         this.notifyFlagsChanged();
         this.diagnostics.info(DiagnosticSource.Server, `Received monitor info: sdsFlags=0x${info.sdsFlags.toString(16).toUpperCase().padStart(2, '0')}`);
+    }
+
+    private onMonitorClose(): void {
+        this.notifyFileUpdate();
     }
 
     private setMonitorConnected(connected: boolean): boolean {
