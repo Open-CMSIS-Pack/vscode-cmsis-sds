@@ -51,11 +51,11 @@ export interface SdsImageMeta {
 
 /** Audio metadata within a content value */
 export interface SdsAudioMeta {
-    sample_rate: number;         // Sample rate in Hz (e.g., 44100)
-    bit_depth: number;           // Bits per sample (e.g., 16, 24, 32)
-    audio_channels: number;      // Number of audio channels (1=mono, 2=stereo)
-    codec?: string;              // Codec identifier (e.g., 'pcm', 'wav', 'opus')
-    frame_size?: number;         // Samples per frame (for block-based codecs)
+    'sample-frequency': number;         // Sample rate in Hz (e.g., 44100)
+    'bit-depth': number;           // Bits per sample (e.g., 16, 24, 32)
+    'audio-channels': number;      // Number of audio channels (1=mono, 2=stereo)
+    format?: string;              // Codec identifier (e.g., 'pcm', 'wav', 'opus')
+    //frame_size?: number;         // Samples per frame (for block-based codecs)
 }
 
 /** Video metadata — extends image with temporal info */
@@ -77,8 +77,8 @@ export type SdsMediaType = 'sensor' | 'image' | 'video' | 'audio';
  * Describes one channel of the data stream.
  */
 export interface SdsContentValue {
-    value: string;           // Name of the value (e.g., "x", "y", "z")
-    type: SdsDataType;       // Data type (e.g., "int16_t")
+    value?: string;           // Name of the value (e.g., "x", "y", "z")
+    type?: SdsDataType;       // Data type (e.g., "int16_t")
     offset?: number;         // Offset, default 0
     scale?: number;          // Scale factor, default 1.0
     unit?: string;           // Physical unit (e.g., "dps", "G")
@@ -95,7 +95,7 @@ export interface SdsMetadata {
     sds: {
         name: string;                // Name of the stream
         description?: string;        // Optional description
-        frequency: number;           // Capture frequency in Hz
+        'sample-frequency': number;  // Capture frequency in Hz
         'tick-frequency'?: number;   // Timestamp tick frequency, default 1000 Hz
         content: SdsContentValue[];  // List of values/channels
     };
@@ -176,6 +176,7 @@ export function sdsDataTypeSize(type: SdsDataType): number {
 export function sdsFrameSize(content: SdsContentValue[]): number {
     let size = 0;
     for (const ch of content) {
+        if (!ch.type) { continue; }
         // Handle bit-field types like "uint32_t:1"
         const baseType = ch.type.split(':')[0] as SdsDataType;
         size += sdsDataTypeSize(baseType);
@@ -218,8 +219,8 @@ export interface SdsDecodedFrame {
  */
 export interface SdsMetadataConflict {
     field: string;
-    existingValue: string | number;
-    newValue: string | number;
+    existingValue: string | number | undefined;
+    newValue: string | number | undefined;
 }
 
 /**
@@ -233,8 +234,8 @@ export function compareMetadata(existing: SdsMetadata, incoming: SdsMetadata): S
     if (e.name !== n.name) {
         conflicts.push({ field: 'name', existingValue: e.name, newValue: n.name });
     }
-    if (e.frequency !== n.frequency) {
-        conflicts.push({ field: 'frequency', existingValue: e.frequency, newValue: n.frequency });
+    if (e['sample-frequency'] !== n['sample-frequency']) {
+        conflicts.push({ field: 'sample-frequency', existingValue: e['sample-frequency'], newValue: n['sample-frequency'] });
     }
     const eTick = e['tick-frequency'] ?? 1000;
     const nTick = n['tick-frequency'] ?? 1000;

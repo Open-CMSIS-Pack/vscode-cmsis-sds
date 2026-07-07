@@ -67,13 +67,13 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                     vscode.window.showErrorMessage('Could not determine metadata file path.');
                     return;
                 }
-                // Create a starter metadata template
                 const streamName = path.basename(filePath).replace(SDS_FILE_MATCHER, '$1');
+
                 const template = [
                     'sds:',
                     `  name: ${streamName}`,
                     '  description: \'\'',
-                    '  frequency: 100',
+                    '  sample-frequency: 100',
                     '  content:',
                     '    - value: channel1',
                     '      type: float',

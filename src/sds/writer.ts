@@ -105,7 +105,7 @@ export function encodeRecords(
     // Calculate frame size
     let frameSize = 0;
     for (const ch of content) {
-        const baseType = ch.type.split(':')[0] as SdsDataType;
+        const baseType = ch.type?.split(':')[0] as SdsDataType;
         frameSize += sdsDataTypeSize(baseType);
     }
 
@@ -114,9 +114,9 @@ export function encodeRecords(
         let byteOffset = 0;
 
         for (const ch of content) {
-            const baseType = ch.type.split(':')[0] as SdsDataType;
+            const baseType = ch.type?.split(':')[0] as SdsDataType;
             const typeSize = sdsDataTypeSize(baseType);
-            const rawValue = sample.values[ch.value] ?? 0;
+            const rawValue = ch.value ? sample.values[ch.value] ?? 0 : 0;
 
             // Reverse scale and offset: raw = (value - offset) / scale
             const scale = ch.scale ?? 1.0;
@@ -163,7 +163,7 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
         yaml += `  description: ${sds.description}
 `;
     }
-    yaml += `  frequency: ${sds.frequency}
+    yaml += `  sample-frequency: ${sds['sample-frequency']}
 `;
     if (sds['tick-frequency'] !== undefined) {
         yaml += `  tick-frequency: ${sds['tick-frequency']}
@@ -208,46 +208,42 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
         if (ch.audio) {
             yaml += `    audio:
 `;
-            yaml += `      sample_rate: ${ch.audio.sample_rate}
+            yaml += `      sample-frequency: ${ch.audio['sample-frequency']}
 `;
-            yaml += `      bit_depth: ${ch.audio.bit_depth}
+            yaml += `      bit-depth: ${ch.audio['bit-depth']}
 `;
-            yaml += `      audio_channels: ${ch.audio.audio_channels}
+            yaml += `      audio-channels: ${ch.audio['audio-channels']}
 `;
-            if (ch.audio.codec) {
-                yaml += `      codec: ${ch.audio.codec}
-`;
-            }
-            if (ch.audio.frame_size !== undefined) {
-                yaml += `      frame_size: ${ch.audio.frame_size}
+            if (ch.audio.format) {
+                yaml += `      format: ${ch.audio.format}
 `;
             }
         }
-        // Video metadata block
-        if (ch.video) {
-            yaml += `    video:
-`;
-            yaml += `      pixel_format: ${ch.video.pixel_format}
-`;
-            yaml += `      width: ${ch.video.width}
-`;
-            yaml += `      height: ${ch.video.height}
-`;
-            yaml += `      fps: ${ch.video.fps}
-`;
-            if (ch.video.codec) {
-                yaml += `      codec: ${ch.video.codec}
-`;
-            }
-            if (ch.video.stride_bytes !== undefined) {
-                yaml += `      stride_bytes: ${ch.video.stride_bytes}
-`;
-            }
-            if (ch.video.keyframe_interval !== undefined) {
-                yaml += `      keyframe_interval: ${ch.video.keyframe_interval}
-`;
-            }
-        }
+        //         // Video metadata block
+        //         if (ch.video) {
+        //             yaml += `    video:
+        // `;
+        //             yaml += `      pixel_format: ${ch.video.pixel_format}
+        // `;
+        //             yaml += `      width: ${ch.video.width}
+        // `;
+        //             yaml += `      height: ${ch.video.height}
+        // `;
+        //             yaml += `      fps: ${ch.video.fps}
+        // `;
+        //             if (ch.video.codec) {
+        //                 yaml += `      codec: ${ch.video.codec}
+        // `;
+        //             }
+        //             if (ch.video.stride_bytes !== undefined) {
+        //                 yaml += `      stride_bytes: ${ch.video.stride_bytes}
+        // `;
+        //             }
+        //             if (ch.video.keyframe_interval !== undefined) {
+        //                 yaml += `      keyframe_interval: ${ch.video.keyframe_interval}
+        // `;
+        //             }
+        //         }
     }
     return yaml;
 }
@@ -269,7 +265,7 @@ export function parseMetadataString(text: string): SdsMetadata {
     const metadata: SdsMetadata = {
         sds: {
             name: '',
-            frequency: 0,
+            'sample-frequency': 0,
             content: [],
         },
     };
@@ -322,14 +318,14 @@ export function parseMetadataString(text: string): SdsMetadata {
                     inImage = true;
                     inAudio = false;
                     inVideo = false;
-                    currentContent.image = { pixel_format: 'RGB888', width: 0, height: 0 };
+                    currentContent.image = { pixel_format: 'RGB888', width: 0, height: 0, stride_bytes: 0 };
                     continue;
                 }
                 if (trimmed === 'audio:') {
                     inAudio = true;
                     inImage = false;
                     inVideo = false;
-                    currentContent.audio = { sample_rate: 0, bit_depth: 16, audio_channels: 1 };
+                    currentContent.audio = { 'sample-frequency': 0, 'bit-depth': 16, 'audio-channels': 1 };
                     continue;
                 }
                 if (trimmed === 'video:') {
@@ -356,16 +352,14 @@ export function parseMetadataString(text: string): SdsMetadata {
 
                 // Parse audio sub-fields
                 if (inAudio && currentContent.audio) {
-                    if (trimmed.startsWith('sample_rate:')) {
-                        currentContent.audio.sample_rate = parseInt(trimmed.replace('sample_rate:', '').trim(), 10);
-                    } else if (trimmed.startsWith('bit_depth:')) {
-                        currentContent.audio.bit_depth = parseInt(trimmed.replace('bit_depth:', '').trim(), 10);
-                    } else if (trimmed.startsWith('audio_channels:')) {
-                        currentContent.audio.audio_channels = parseInt(trimmed.replace('audio_channels:', '').trim(), 10);
-                    } else if (trimmed.startsWith('codec:')) {
-                        currentContent.audio.codec = extractYamlValue(trimmed.replace('codec:', '').trim());
-                    } else if (trimmed.startsWith('frame_size:')) {
-                        currentContent.audio.frame_size = parseInt(trimmed.replace('frame_size:', '').trim(), 10);
+                    if (trimmed.startsWith('sample-frequency:')) {
+                        currentContent.audio['sample-frequency'] = parseInt(trimmed.replace('sample-frequency:', '').trim(), 10);
+                    } else if (trimmed.startsWith('bit-depth:')) {
+                        currentContent.audio['bit-depth'] = parseInt(trimmed.replace('bit-depth:', '').trim(), 10);
+                    } else if (trimmed.startsWith('audio-channels:')) {
+                        currentContent.audio['audio-channels'] = parseInt(trimmed.replace('audio-channels:', '').trim(), 10);
+                    } else if (trimmed.startsWith('format:')) {
+                        currentContent.audio['format'] = extractYamlValue(trimmed.replace('format:', '').trim());
                     }
                     continue;
                 }
@@ -380,12 +374,8 @@ export function parseMetadataString(text: string): SdsMetadata {
                         currentContent.video.height = parseInt(trimmed.replace('height:', '').trim(), 10);
                     } else if (trimmed.startsWith('fps:')) {
                         currentContent.video.fps = parseFloat(trimmed.replace('fps:', '').trim());
-                    } else if (trimmed.startsWith('codec:')) {
-                        currentContent.video.codec = extractYamlValue(trimmed.replace('codec:', '').trim());
                     } else if (trimmed.startsWith('stride_bytes:')) {
                         currentContent.video.stride_bytes = parseInt(trimmed.replace('stride_bytes:', '').trim(), 10);
-                    } else if (trimmed.startsWith('keyframe_interval:')) {
-                        currentContent.video.keyframe_interval = parseInt(trimmed.replace('keyframe_interval:', '').trim(), 10);
                     }
                     continue;
                 }
@@ -413,8 +403,8 @@ export function parseMetadataString(text: string): SdsMetadata {
             metadata.sds.name = extractYamlValue(trimmed.replace('name:', '').trim());
         } else if (trimmed.startsWith('description:')) {
             metadata.sds.description = extractYamlValue(trimmed.replace('description:', '').trim());
-        } else if (trimmed.startsWith('frequency:')) {
-            metadata.sds.frequency = parseFloat(trimmed.replace('frequency:', '').trim());
+        } else if (trimmed.startsWith('sample-frequency:')) {
+            metadata.sds['sample-frequency'] = parseFloat(trimmed.replace('sample-frequency:', '').trim());
         } else if (trimmed.startsWith('tick-frequency:')) {
             metadata.sds['tick-frequency'] = parseFloat(trimmed.replace('tick-frequency:', '').trim());
         }
@@ -458,7 +448,7 @@ export function exportToCsv(
     const rows = samples.map(s => {
         const t = (s.timeSeconds - startTime).toFixed(6);
         const vals = channelNames.map(name => {
-            const v = s.values[name];
+            const v = name ? s.values[name] : undefined;
             return v !== undefined ? v.toFixed(6) : '0';
         });
         return [t, ...vals].join(',');
@@ -475,7 +465,7 @@ export function exportToCsv(
 export function importFromCsv(
     csvPath: string,
     streamName: string,
-    frequency: number,
+    sampleFrequency: number,
     dataType: SdsDataType = 'float',
     tickFrequency: number = 1000
 ): { records: SdsRecord[]; metadata: SdsMetadata } {
@@ -497,7 +487,7 @@ export function importFromCsv(
     const metadata: SdsMetadata = {
         sds: {
             name: streamName,
-            frequency,
+            'sample-frequency': sampleFrequency,
             content,
         },
     };

@@ -261,7 +261,7 @@ describe('SdsViewerPanel', () => {
         const metadata = {
             sds: {
                 name: 'stream',
-                frequency: 100,
+                'sample-frequency': 100,
                 'tick-frequency': 2000,
                 content: [{ value: 'x', type: 'float' }],
             },
@@ -327,7 +327,7 @@ describe('SdsViewerPanel', () => {
         const metadata = {
             sds: {
                 name: 'dense',
-                frequency: 1000,
+                'sample-frequency': 1000,
                 content: [{ value: 'x', type: 'float' }],
             },
         };
@@ -449,7 +449,7 @@ describe('SdsMediaViewerPanel', () => {
         const metadata = {
             sds: {
                 name: 'camera',
-                frequency: 30,
+                'sample-frequency': 30,
                 'tick-frequency': 100,
                 content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
@@ -519,7 +519,7 @@ describe('SdsMediaViewerPanel', () => {
         const metadata = {
             sds: {
                 name: 'video',
-                frequency: 24,
+                'sample-frequency': 24,
                 content: [{ value: 'frame', type: 'uint8_t', video: { pixel_format: 'RGB888', width: 2, height: 1, fps: 24, codec: 'raw' } }],
             },
         };
@@ -567,9 +567,9 @@ describe('SdsMediaViewerPanel', () => {
         const metadata = {
             sds: {
                 name: 'audio',
-                frequency: 100,
+                'sample-frequency': 100,
                 'tick-frequency': 1000,
-                content: [{ value: 'samples', type: 'int16_t', audio: { sample_rate: 1000, bit_depth: 16, audio_channels: 1 } }],
+                content: [{ audio: { 'sample-frequency': 1000, 'bit-depth': 16, 'audio-channels': 1 } }],
             },
         };
         const records = Array.from({ length: 200 }, (_value, index) => ({
@@ -635,7 +635,7 @@ describe('SdsMediaViewerPanel', () => {
         sdsMockState.parseMetadataFile.mockReturnValue({
             sds: {
                 name: 'sensor',
-                frequency: 1,
+                'sample-frequency': 1,
                 content: [{ value: 'x', type: 'float' }],
             },
         });
@@ -660,7 +660,7 @@ describe('SdsMediaViewerPanel', () => {
         sdsMockState.parseMetadataFile.mockReturnValue({
             sds: {
                 name: 'post-error',
-                frequency: 1,
+                'sample-frequency': 1,
                 content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         });
