@@ -560,6 +560,44 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canStop()).toBe(false);
     });
 
+    it('does not transition mode when the connected monitor rejects the operation', async () => {
+        const monitor = new FakeMonitor();
+        const configManager = createConfigManager('active.sdsio.yml');
+        const service = new SdsIoControlService(
+            configManager as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+        await service.connectServer();
+
+        const events: SdsIoNotifyEvent[] = [];
+        service.onDidChange((event) => {
+            events.push(event.event);
+        });
+
+        monitor.startPlayback.mockReturnValueOnce(false);
+        service.play();
+
+        expect(events).toEqual([]);
+        expect(service.canPlay()).toBe(true);
+        expect(service.canStop()).toBe(false);
+
+        monitor.startRecording.mockReturnValueOnce(false);
+        service.record();
+
+        expect(events).toEqual([]);
+        expect(service.canRecord()).toBe(true);
+        expect(service.canStop()).toBe(false);
+
+        service.play();
+        monitor.stopRecordingOrPlayback.mockReturnValueOnce(false);
+        service.stop();
+
+        expect(events).toEqual([SdsIoNotifyEvent.Mode]);
+        expect(service.canPlay()).toBe(false);
+        expect(service.canStop()).toBe(true);
+    });
+
     it('emits mode events on stop and file update only after monitor close', async () => {
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');

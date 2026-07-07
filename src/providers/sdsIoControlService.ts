@@ -176,36 +176,15 @@ export class SdsIoControlService {
     }
 
     play(): void {
-        if (this.mode === 'play') {
-            return;
-        }
-
-        this.mode = 'play';
-        const modeSent = this.monitorConnected ? this.monitor?.startPlayback() === true : false;
-        this.diagnostics.info(DiagnosticSource.Server, `Play invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyModeChanged();
+        this.transitionMode('play', 'Play', () => this.monitor?.startPlayback() === true);
     }
 
     record(): void {
-        if (this.mode === 'record') {
-            return;
-        }
-
-        this.mode = 'record';
-        const modeSent = this.monitorConnected ? this.monitor?.startRecording() === true : false;
-        this.diagnostics.info(DiagnosticSource.Server, `Record invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyModeChanged();
+        this.transitionMode('record', 'Record', () => this.monitor?.startRecording() === true);
     }
 
     stop(): void {
-        if (this.mode === 'idle') {
-            return;
-        }
-
-        this.mode = 'idle';
-        const modeSent = this.monitorConnected ? this.monitor?.stopRecordingOrPlayback() === true : false;
-        this.diagnostics.info(DiagnosticSource.Server, `Stop invoked. Control flags ${modeSent ? 'sent' : 'not sent'};`);
-        this.notifyModeChanged();
+        this.transitionMode('idle', 'Stop', () => this.monitor?.stopRecordingOrPlayback() === true);
     }
 
     canPlay(): boolean {
@@ -352,6 +331,22 @@ export class SdsIoControlService {
         this.monitor.sendFlags(setMask, unsetMask);
     }
 
+    private transitionMode(nextMode: SdsIoMode, operationName: string, sendToMonitor: () => boolean): void {
+        if (this.mode === nextMode) {
+            return;
+        }
+
+        const accepted = this.monitorConnected ? sendToMonitor() : true;
+        if (!accepted) {
+            this.diagnostics.warn(DiagnosticSource.Server, `${operationName} rejected by monitor`);
+            return;
+        }
+
+        this.mode = nextMode;
+        this.diagnostics.info(DiagnosticSource.Server, `${operationName} invoked. Control flags ${this.monitorConnected ? 'sent' : 'not sent'};`);
+        this.notifyModeChanged();
+    }
+
     private findFlag(id: string): SdsFlag | undefined {
         return this.flags.find((f) => f.id === id);
     }
@@ -432,15 +427,21 @@ export class SdsIoControlService {
     }
 
     private onMonitorFlags(setMask: number, unsetMask: number): void {
+        let changed = false;
+
         for (let i = 0; i < this.flags.length && i < 8; i++) {
-            if ((setMask >> i) & 1) {
+            if ((setMask >> i) & 1 && !this.flags[i].enabled) {
                 this.flags[i].enabled = true;
+                changed = true;
             }
-            if ((unsetMask >> i) & 1) {
+            if ((unsetMask >> i) & 1 && this.flags[i].enabled) {
                 this.flags[i].enabled = false;
+                changed = true;
             }
         }
-        this.notifyFlagsChanged();
+        if (changed) {
+            this.notifyFlagsChanged();
+        }
     }
 
     private setMonitorConnected(connected: boolean): boolean {
