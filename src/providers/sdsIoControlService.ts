@@ -74,6 +74,7 @@ export class SdsIoControlService {
             monitor.on('disconnected', () => this.onMonitorDisconnected());
             monitor.on('info', (info: SdsioMonitorInfo) => this.onMonitorInfo(info));
             monitor.on('close', () => this.onMonitorClose());
+            monitor.on('flags', () => this.onMonitorFlags());
         }
 
         configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
@@ -428,6 +429,10 @@ export class SdsIoControlService {
 
     private onMonitorClose(): void {
         this.notifyFileUpdate();
+    }
+
+    private onMonitorFlags(): void {
+        this.notifyFlagsChanged();
     }
 
     private setMonitorConnected(connected: boolean): boolean {
