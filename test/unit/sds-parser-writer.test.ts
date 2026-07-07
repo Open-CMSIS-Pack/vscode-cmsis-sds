@@ -300,15 +300,19 @@ describe('decodeAllRecords', () => {
         // One record containing 2 frames (6 floats = 2 * 3-channel)
         const data = Buffer.alloc(24);
         [10, 20, 30, 40, 50, 60].forEach((v, i) => data.writeFloatLE(v, i * 4));
-        const records: SdsRecord[] = [{ timestamp: 0, dataSize: 24, data }];
+        const records: SdsRecord[] = [{ timestamp: 1000, dataSize: 24, data }];
 
         const filePath = path.join(tmpDir, 'multi.0.sds');
         writeSdsFile(filePath, records);
         const parsed = parseSdsFile(filePath);
-        const metadata = make3AxisMetadata();
+        const metadata = make3AxisMetadata('Accel', 100);
+        metadata.sds['tick-frequency'] = 1000;
 
         const samples = decodeAllRecords(parsed, metadata);
         expect(samples.length).toBe(2);
+        expect(samples.map(sample => sample.index)).toEqual([0, 1]);
+        expect(samples.map(sample => sample.timestamp)).toEqual([1000, 1010]);
+        expect(samples.map(sample => sample.timeSeconds)).toEqual([1.0, 1.01]);
         expect(samples[0].values['x']).toBeCloseTo(10);
         expect(samples[1].values['x']).toBeCloseTo(40);
     });
@@ -425,6 +429,20 @@ describe('getSdsFileStats', () => {
         expect(stats.recordingTimeSeconds).toBeCloseTo(0.2); // 200ms / 1000
     });
 
+    it('converts recording interval to milliseconds for custom tick frequency', () => {
+        const parsed = parseSdsBuffer(Buffer.concat([
+            Buffer.from([0x00, 0, 0, 0, 1, 0, 0, 0]),
+            Buffer.from([1]),
+            Buffer.from([0x80, 0, 0, 0, 1, 0, 0, 0]),
+            Buffer.from([2]),
+        ]));
+
+        const stats = getSdsFileStats(parsed, 32768);
+
+        expect(stats.recordingTimeSeconds).toBeCloseTo(128 / 32768);
+        expect(stats.recordingIntervalMs).toBeCloseTo(128 / 32768 * 1000);
+    });
+
     it('uses zero interval and data rate for a single record', () => {
         const parsed = parseSdsBuffer(Buffer.concat([
             Buffer.from([0x7B, 0, 0, 0, 4, 0, 0, 0]),
@@ -487,6 +505,10 @@ describe('media decoding helpers', () => {
     it('handles truncated image input by leaving missing color channels black', () => {
         expect(Array.from(decodeImageFrameToRGBA(Buffer.from([4, 5]), 1, 1, 'RGB888')))
             .toEqual([0, 0, 0, 255]);
+        expect(Array.from(decodeImageFrameToRGBA(Buffer.from([9]), 2, 1, 'RAW8')))
+            .toEqual([9, 9, 9, 255, 0, 0, 0, 255]);
+        expect(Array.from(decodeImageFrameToRGBA(Buffer.from([7]), 2, 1, 'BAYER')))
+            .toEqual([7, 7, 7, 255, 0, 0, 0, 255]);
         expect(Array.from(decodeImageFrameToRGBA(Buffer.from([]), 1, 1, 'NV12')))
             .toEqual([0, 0, 0, 255]);
     });
