@@ -275,7 +275,7 @@ export class SdsMediaViewerPanel {
                         width: imgMeta.width,
                         height: imgMeta.height,
                         totalFrames: this.recordIndex.length,
-                        interval: `${metadata.sds.frequency}`,
+                        interval: `${metadata.sds['sample-frequency']}`,
                         fileStats: this.sdsFileStats,
                         pixelFormat: imgMeta.pixel_format,
                     },
@@ -294,20 +294,20 @@ export class SdsMediaViewerPanel {
                 const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
                 for (const record of parsed.records) {
                     try {
-                        const block = decodeAudioBlock(record.data, audioMeta.sample_rate, audioMeta.bit_depth, audioMeta.audio_channels);
+                        const block = decodeAudioBlock(record.data, audioMeta['sample-frequency'], audioMeta['bit-depth'], audioMeta['audio-channels']);
                         frames.push({ timestamp: record.timestamp / tickFreq, samples: Array.from(block[0]) });
                     } catch { /* skip */ }
                 }
 
                 this.audioFrames = frames;
-                this.audioSampleRate = audioMeta.sample_rate;
-                this.audioBitDepth = audioMeta.bit_depth;
-                this.audioChannels = audioMeta.audio_channels;
+                this.audioSampleRate = audioMeta['sample-frequency'];
+                this.audioBitDepth = audioMeta['bit-depth'];
+                this.audioChannels = audioMeta['audio-channels'];
 
                 const totalSamples = frames.reduce((sum, frame) => sum + frame.samples.length, 0);
                 const domainStart = frames.length > 0 ? frames[0].timestamp : 0;
                 const domainEnd = frames.length > 0
-                    ? frames[frames.length - 1].timestamp + (frames[frames.length - 1].samples.length / audioMeta.sample_rate)
+                    ? frames[frames.length - 1].timestamp + (frames[frames.length - 1].samples.length / audioMeta['sample-frequency'])
                     : 1;
                 const audioWindow = this.getAudioWindow(domainStart, domainEnd, 1200, 'high');
                 return {
@@ -320,9 +320,9 @@ export class SdsMediaViewerPanel {
                         domainStart,
                         domainEnd,
                         decimationPreset,
-                        sampleRate: audioMeta.sample_rate,
-                        bitDepth: audioMeta.bit_depth,
-                        channels: audioMeta.audio_channels,
+                        sampleRate: audioMeta['sample-frequency'],
+                        bitDepth: audioMeta['bit-depth'],
+                        channels: audioMeta['audio-channels'],
                         totalSamples,
                         totalRecords: parsed.records.length,
                         fileStats: this.sdsFileStats,
@@ -344,7 +344,7 @@ export class SdsMediaViewerPanel {
                         height: vidMeta.height,
                         fps: vidMeta.fps,
                         totalFrames: this.recordIndex.length,
-                        interval: `${metadata.sds.frequency}`,
+                        interval: `${metadata.sds['sample-frequency']}`,
                         fileStats: this.sdsFileStats,
                         codec: vidMeta.codec,
                         pixelFormat: vidMeta.pixel_format,

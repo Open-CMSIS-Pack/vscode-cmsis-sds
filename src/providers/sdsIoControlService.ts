@@ -16,14 +16,13 @@
 
 import * as vscode from 'vscode';
 import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
-import { SdsioConfigManager } from '../controller/sdsioConfigManager';
+import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS } from '../controller/sdsioConfigManager';
 import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 import { SdsioServerLauncher } from '../controller/sdsioServerLauncher';
 import { SdsTreeItem } from './sdsExplorerProvider';
 
 const FLAG_NAME_PATTERN = /^[a-zA-Z0-9 \-_.+,/()]+$/;
-const MAX_FLAGS = 8;
 
 export type SdsFlag = {
     id: string;
@@ -56,7 +55,7 @@ export class SdsIoControlService {
     private readonly _onDidChange = new vscode.EventEmitter<SdsIoChangeEvent>();
     readonly onDidChange = this._onDidChange.event;
 
-    private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
+    private readonly flags: SdsFlag[] = Array.from({ length: MAX_FLAG_INFO_FLAGS }, (_, i) => ({ id: `flag-${i}`, name: `${i}`, enabled: false }));
     private lastFlagSignature = '';
     private mode: SdsIoMode = 'idle';
     private readonly monitor?: SdsioMonitorClient | undefined;
@@ -150,7 +149,7 @@ export class SdsIoControlService {
 
             flag.enabled = enabled;
             const index = this.flags.findIndex((f) => f.id === flag.id);
-            if (index >= 0 && index < MAX_FLAGS) {
+            if (index >= 0 && index < MAX_FLAG_INFO_FLAGS) {
                 changed.push({ index, enabled });
             }
         }
@@ -381,7 +380,7 @@ export class SdsIoControlService {
     }
 
     private getFallbackName(currentId?: string): string {
-        for (let i = 0; i < MAX_FLAGS; i++) {
+        for (let i = 0; i < MAX_FLAG_INFO_FLAGS; i++) {
             const candidate = `${i}`;
             const isUsed = this.flags.some((f) => f.id !== currentId && f.name === candidate);
             if (!isUsed) {

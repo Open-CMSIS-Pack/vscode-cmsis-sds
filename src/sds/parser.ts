@@ -133,14 +133,16 @@ function decodeRecordFrame(
     let currentOffset = byteOffset;
 
     for (const ch of content) {
-        const baseType = ch.type.split(':')[0] as SdsDataType;
+        const baseType = ch.type?.split(':')[0] as SdsDataType;
         const typeSize = sdsDataTypeSize(baseType);
 
-        if (currentOffset + typeSize <= record.data.length) {
-            const raw = readValue(record.data, currentOffset, baseType);
-            const scale = ch.scale ?? 1.0;
-            const offset = ch.offset ?? 0;
-            values[ch.value] = raw * scale + offset;
+        if (ch.value) {
+            if (currentOffset + typeSize <= record.data.length) {
+                const raw = readValue(record.data, currentOffset, baseType);
+                const scale = ch.scale ?? 1.0;
+                const offset = ch.offset ?? 0;
+                values[ch.value] = raw * scale + offset;
+            }
         }
         currentOffset += typeSize;
     }
@@ -175,7 +177,7 @@ export function decodeAllRecords(
 ): SdsDecodedSample[] {
     const content = metadata.sds.content;
     const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
-    const frequency = metadata.sds.frequency;
+    const frequency = metadata.sds['sample-frequency'] ?? 100;
     const frameBytes = sdsFrameSize(content);
     const samples: SdsDecodedSample[] = [];
 

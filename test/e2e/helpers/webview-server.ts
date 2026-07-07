@@ -33,7 +33,7 @@ function assertWebviewAssetsExist(assets: string[]): void {
     const missing = assets.filter(asset => !fs.existsSync(path.join(REPO_ROOT, asset)));
     if (missing.length > 0) {
         throw new Error(
-            `Missing webview build artifacts: ${missing.join(', ')}. Run \"npm run compile:webviews\" before e2e tests.`
+            `Missing webview build artifacts: ${missing.join(', ')}. Run "npm run compile:webviews" before e2e tests.`
         );
     }
 }
@@ -58,7 +58,7 @@ const MOCK_VSCODE_API = `
 
 /**
  * Extract the HTML template from a panel source file.
- * Looks for `return /*html*​/ \`...\`` and returns the content.
+ * Looks for `return \/*html*\/ \`...\`` and returns the content.
  */
 function extractHtml(sourceFile: string): string {
     const src = fs.readFileSync(path.join(SRC_ROOT, sourceFile), 'utf-8');
@@ -108,7 +108,7 @@ export function getViewerHtml(): string {
     };
     const metadata = {
         sds: {
-            name: 'TestAccel', frequency: 100, content: [
+            name: 'TestAccel', 'sample-frequency': 100, content: [
                 { value: 'x', type: 'float', unit: 'mG' },
                 { value: 'y', type: 'float', unit: 'mG' },
                 { value: 'z', type: 'float', unit: 'mG' },

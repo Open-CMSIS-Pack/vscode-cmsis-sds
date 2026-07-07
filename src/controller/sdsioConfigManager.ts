@@ -29,14 +29,14 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const MAX_FLAG_INFO_FLAGS = 8;
+export const MAX_FLAG_INFO_FLAGS = 8;
 
 export interface SdsioConfigData {
     /** Resolved absolute path to workdir, or undefined if not set in the file. */
     readonly workdir: string | undefined;
     /** Resolved absolute path to metadir, or undefined if not set in the file. */
     readonly metadir: string | undefined;
-    /** Custom labels for flags 0-7.  Missing indices fall back to the numeric default. */
+    /** Custom labels for flags 0-23.  Missing indices fall back to the numeric default. */
     readonly flagNames: ReadonlyMap<number, string>;
 }
 

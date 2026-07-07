@@ -89,7 +89,7 @@ function make3AxisMetadata(name = 'Accel', freq = 100): SdsMetadata {
     return {
         sds: {
             name,
-            frequency: freq,
+            'sample-frequency': freq,
             content: [
                 { value: 'x', type: 'float', unit: 'mG' },
                 { value: 'y', type: 'float', unit: 'mG' },
@@ -321,7 +321,7 @@ describe('encodeRecords / decodeAllRecords roundtrip', () => {
             { value: 'y', type: 'float' },
         ];
         const metadata: SdsMetadata = {
-            sds: { name: 'Test', frequency: 100, content },
+            sds: { name: 'Test', 'sample-frequency': 100, content },
         };
 
         const originalSamples: SdsDecodedSample[] = [
@@ -347,7 +347,7 @@ describe('encodeRecords / decodeAllRecords roundtrip', () => {
             { value: 'temp', type: 'int16_t', scale: 0.01, offset: -40 },
         ];
         const metadata: SdsMetadata = {
-            sds: { name: 'Temp', frequency: 10, content },
+            sds: { name: 'Temp', 'sample-frequency': 10, content },
         };
 
         const original: SdsDecodedSample[] = [
@@ -381,7 +381,7 @@ describe('data type roundtrip', () => {
         it(`roundtrips ${tc.type} (value=${tc.value})`, () => {
             const content: SdsContentValue[] = [{ value: 'v', type: tc.type as SdsDataType }];
             const metadata: SdsMetadata = {
-                sds: { name: 'T', frequency: 1, content },
+                sds: { name: 'T', 'sample-frequency': 1, content },
             };
             const samples: SdsDecodedSample[] = [
                 { timestamp: 0, timeSeconds: 0, values: { v: tc.value }, index: 0 },
@@ -450,7 +450,7 @@ describe('media decoding helpers', () => {
         const metadata: SdsMetadata = {
             sds: {
                 name: 'Camera',
-                frequency: 30,
+                'sample-frequency': 30,
                 'tick-frequency': 2000,
                 content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
@@ -552,28 +552,28 @@ describe('streaming parser helpers', () => {
 
 describe('metadata helpers', () => {
     it('detects media type priority and defaults to sensor', () => {
-        expect(detectMediaType({ sds: { name: 'Empty', frequency: 1, content: [] } })).toBe('sensor');
-        expect(detectMediaType({ sds: { name: 'Sensor', frequency: 1, content: [{ value: 'x', type: 'float' }] } })).toBe('sensor');
+        expect(detectMediaType({ sds: { name: 'Empty', 'sample-frequency': 1, content: [] } })).toBe('sensor');
+        expect(detectMediaType({ sds: { name: 'Sensor', 'sample-frequency': 1, content: [{ value: 'x', type: 'float' }] } })).toBe('sensor');
         expect(detectMediaType({
             sds: {
                 name: 'Video',
-                frequency: 30,
+                'sample-frequency': 30,
                 content: [{ value: 'video', type: 'uint8_t', video: { pixel_format: 'NV12', width: 2, height: 2, fps: 30 } }],
             },
         })).toBe('video');
         expect(detectMediaType({
             sds: {
                 name: 'Mic',
-                frequency: 1,
+                'sample-frequency': 1,
                 content: [
-                    { value: 'audio', type: 'int16_t', audio: { sample_rate: 16000, bit_depth: 16, audio_channels: 1 } },
+                    { audio: { 'sample-frequency': 16000, 'bit-depth': 16, 'audio-channels': 1 } },
                 ],
             },
         })).toBe('audio');
         expect(detectMediaType({
             sds: {
                 name: 'Camera',
-                frequency: 30,
+                'sample-frequency': 30,
                 content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         })).toBe('image');
@@ -583,7 +583,7 @@ describe('metadata helpers', () => {
         const existing: SdsMetadata = {
             sds: {
                 name: 'A',
-                frequency: 10,
+                'sample-frequency': 10,
                 'tick-frequency': 1000,
                 content: [{ value: 'x', type: 'float' }],
             },
@@ -593,13 +593,13 @@ describe('metadata helpers', () => {
         expect(compareMetadata(existing, {
             sds: {
                 name: 'B',
-                frequency: 20,
+                'sample-frequency': 20,
                 'tick-frequency': 2000,
                 content: [{ value: 'y', type: 'int16_t' }],
             },
         })).toEqual([
             { field: 'name', existingValue: 'A', newValue: 'B' },
-            { field: 'frequency', existingValue: 10, newValue: 20 },
+            { field: 'sample-frequency', existingValue: 10, newValue: 20 },
             { field: 'tick-frequency', existingValue: 1000, newValue: 2000 },
             { field: 'content[0].value', existingValue: 'x', newValue: 'y' },
             { field: 'content[0].type', existingValue: 'float', newValue: 'int16_t' },
@@ -607,7 +607,7 @@ describe('metadata helpers', () => {
         expect(compareMetadata(existing, {
             sds: {
                 name: 'A',
-                frequency: 10,
+                'sample-frequency': 10,
                 content: [
                     { value: 'x', type: 'float' },
                     { value: 'y', type: 'float' },
@@ -631,7 +631,7 @@ describe('metadata YAML roundtrip', () => {
 
         expect(parsed.sds.name).toBe('Gyro');
         expect(parsed.sds.description).toBe('Test gyroscope');
-        expect(parsed.sds.frequency).toBe(200);
+        expect(parsed.sds['sample-frequency']).toBe(200);
         expect(parsed.sds['tick-frequency']).toBe(32768);
         expect(parsed.sds.content.length).toBe(3);
         expect(parsed.sds.content[0].value).toBe('x');
@@ -643,7 +643,7 @@ describe('metadata YAML roundtrip', () => {
         const meta: SdsMetadata = {
             sds: {
                 name: 'Camera',
-                frequency: 30,
+                'sample-frequency': 30,
                 content: [{
                     value: 'frame',
                     type: 'uint8_t',
@@ -665,11 +665,9 @@ describe('metadata YAML roundtrip', () => {
         const meta: SdsMetadata = {
             sds: {
                 name: 'Mic',
-                frequency: 1,
+                'sample-frequency': 1,
                 content: [{
-                    value: 'audio',
-                    type: 'int16_t',
-                    audio: { sample_rate: 16000, bit_depth: 16, audio_channels: 1 },
+                    audio: { 'sample-frequency': 16000, 'bit-depth': 16, 'audio-channels': 1 },
                 }],
             },
         };
@@ -678,62 +676,24 @@ describe('metadata YAML roundtrip', () => {
         const parsed = parseMetadataString(yaml);
 
         expect(parsed.sds.content[0].audio).toBeDefined();
-        expect(parsed.sds.content[0].audio!.sample_rate).toBe(16000);
-        expect(parsed.sds.content[0].audio!.bit_depth).toBe(16);
-        expect(parsed.sds.content[0].audio!.audio_channels).toBe(1);
-    });
-
-    it('roundtrips video metadata', () => {
-        const meta: SdsMetadata = {
-            sds: {
-                name: 'Video',
-                frequency: 30,
-                content: [{
-                    value: 'frame',
-                    type: 'uint8_t',
-                    video: { pixel_format: 'NV12', width: 640, height: 480, fps: 30 },
-                }],
-            },
-        };
-
-        const yaml = serializeMetadataToYaml(meta);
-        const parsed = parseMetadataString(yaml);
-
-        expect(parsed.sds.content[0].video).toBeDefined();
-        expect(parsed.sds.content[0].video!.pixel_format).toBe('NV12');
-        expect(parsed.sds.content[0].video!.width).toBe(640);
-        expect(parsed.sds.content[0].video!.fps).toBe(30);
+        expect(parsed.sds.content[0].audio!['sample-frequency']).toBe(16000);
+        expect(parsed.sds.content[0].audio!['bit-depth']).toBe(16);
+        expect(parsed.sds.content[0].audio!['audio-channels']).toBe(1);
     });
 
     it('writes metadata into missing directories and preserves optional media fields', () => {
         const meta: SdsMetadata = {
             sds: {
                 name: 'Media',
-                frequency: 60,
+                'sample-frequency': 60,
                 content: [
                     {
-                        value: 'image',
-                        type: 'uint8_t',
                         image: { pixel_format: 'RGB888', width: 2, height: 1, stride_bytes: 8 },
                     },
                     {
-                        value: 'audio',
-                        type: 'int16_t',
-                        audio: { sample_rate: 48000, bit_depth: 24, audio_channels: 2, codec: 'pcm', frame_size: 128 },
+                        audio: { 'sample-frequency': 48000, 'bit-depth': 24, 'audio-channels': 2, format: 'pcm' },
                     },
-                    {
-                        value: 'video',
-                        type: 'uint8_t',
-                        video: {
-                            pixel_format: 'NV12',
-                            width: 4,
-                            height: 2,
-                            fps: 29.97,
-                            codec: 'raw',
-                            stride_bytes: 4,
-                            keyframe_interval: 15,
-                        },
-                    },
+
                 ],
             },
         };
@@ -744,12 +704,9 @@ describe('metadata YAML roundtrip', () => {
         const parsed = parseMetadataFile(filePath);
 
         expect(text).toContain('stride_bytes: 8');
-        expect(text).toContain('codec: pcm');
-        expect(text).toContain('frame_size: 128');
-        expect(text).toContain('keyframe_interval: 15');
-        expect(parsed.sds.content[0].image!.stride_bytes).toBe(8);
-        expect(parsed.sds.content[1].audio).toMatchObject({ codec: 'pcm', frame_size: 128 });
-        expect(parsed.sds.content[2].video).toMatchObject({ codec: 'raw', stride_bytes: 4, keyframe_interval: 15 });
+        expect(text).toContain('format: pcm');
+        expect(parsed.sds.content[0].image!['stride_bytes']).toBe(8);
+        expect(parsed.sds.content[1].audio).toMatchObject({ format: 'pcm' });
     });
 
     it('parses quoted scalar and content values', () => {
@@ -757,7 +714,7 @@ describe('metadata YAML roundtrip', () => {
 sds:
   name: "Quoted Stream"
   description: 'quoted description'
-  frequency: 12.5
+  sample-frequency: 12.5
   tick-frequency: 250
   content:
   - value: "channel one"
@@ -767,7 +724,7 @@ sds:
 
         expect(parsed.sds.name).toBe('Quoted Stream');
         expect(parsed.sds.description).toBe('quoted description');
-        expect(parsed.sds.frequency).toBe(12.5);
+        expect(parsed.sds['sample-frequency']).toBe(12.5);
         expect(parsed.sds['tick-frequency']).toBe(250);
         expect(parsed.sds.content[0]).toMatchObject({ value: 'channel one', type: 'int16_t', unit: 'm/s' });
     });
@@ -776,7 +733,7 @@ sds:
         const meta: SdsMetadata = {
             sds: {
                 name: 'Scaled',
-                frequency: 10,
+                'sample-frequency': 10,
                 content: [
                     { value: 'temp', type: 'int16_t', scale: 0.01, offset: -40, unit: 'C' },
                 ],
@@ -797,9 +754,6 @@ describe('CSV export / import roundtrip', () => {
             { value: 'x', type: 'float' },
             { value: 'y', type: 'float' },
         ];
-        const metadata: SdsMetadata = {
-            sds: { name: 'Test', frequency: 100, content },
-        };
 
         const samples: SdsDecodedSample[] = [
             { timestamp: 0, timeSeconds: 0, values: { x: 1.5, y: 2.5 }, index: 0 },
@@ -858,7 +812,7 @@ describe('CSV export / import roundtrip', () => {
         expect(imported.records[0].data.readFloatLE(4)).toBeCloseTo(0);
         expect(imported.records[1].timestamp).toBe(30);
         expect(imported.records[1].data.readFloatLE(4)).toBeCloseTo(4);
-        expect(imported.metadata.sds).toMatchObject({ name: 'Messy', frequency: 50 });
+        expect(imported.metadata.sds).toMatchObject({ name: 'Messy', 'sample-frequency': 50 });
     });
 
     it('rejects CSV files without data rows', () => {

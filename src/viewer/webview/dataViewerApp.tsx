@@ -328,7 +328,7 @@ function DataViewerApp() {
                 <Col style={statsTitleStyle}>Time</Col>
                 <Col style={statsValueStyle}>{highlightedTime?.toFixed(4) ?? 0} s</Col>
                 <Col style={statsTitleStyle}>Interval</Col>
-                <Col style={statsValueStyle}>{stats.recordingIntervalMs || 0} ms / {metadata?.sds?.frequency}Hz</Col>
+                <Col style={statsValueStyle}>{stats.recordingIntervalMs || 0} ms / {metadata?.sds ? metadata.sds['sample-frequency'] : 0}Hz</Col>
                 <Col flex="auto" style={{ textAlign: 'right' }}>
                     <Button type='text' icon={<ExportOutlined />} size='small' title='Export CSV' onClick={onExport}>Export</Button>
                 </Col>
