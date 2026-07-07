@@ -87,11 +87,12 @@ export class SdsTreeItem extends vscode.TreeItem {
     }
 }
 
-export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem> {
+export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>, vscode.Disposable {
     private readonly diagnostics = SdsDiagnostics.getInstance();
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<SdsTreeItem | undefined | null>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
+    private readonly disposables: vscode.Disposable[] = [];
     private readonly fileWatchers: vscode.FileSystemWatcher[] = [];
     private readonly filesRoot = new SdsTreeItem('SDS Files', 'folder', '', vscode.TreeItemCollapsibleState.Expanded);
     private readonly flagsRoot = new SdsTreeItem('SDS Flags', 'flags', '', vscode.TreeItemCollapsibleState.Expanded);
@@ -104,7 +105,9 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
         this.watchFiles('**/*.sds.yml', () => this.refreshFiles());
         this.watchFiles('**/*.sdsio.yml', () => this.refresh());
 
-        configManager.onDidChangeConfig(() => { try { this.refresh(); } catch { /* ignore */ } });
+        this.disposables.push(
+            configManager.onDidChangeConfig(() => { try { this.refresh(); } catch { /* ignore */ } })
+        );
     }
 
     refresh(): void {
@@ -226,10 +229,13 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     private watchFiles(pattern: string, refresh: () => void): void {
         const watcher = vscode.workspace.createFileSystemWatcher(pattern);
         this.fileWatchers.push(watcher);
+        this.disposables.push(watcher);
 
-        watcher.onDidCreate(() => { try { refresh(); } catch { /* ignore */ } });
-        watcher.onDidDelete(() => { try { refresh(); } catch { /* ignore */ } });
-        watcher.onDidChange(() => { try { refresh(); } catch { /* ignore */ } });
+        this.disposables.push(
+            watcher.onDidCreate(() => { try { refresh(); } catch { /* ignore */ } }),
+            watcher.onDidDelete(() => { try { refresh(); } catch { /* ignore */ } }),
+            watcher.onDidChange(() => { try { refresh(); } catch { /* ignore */ } })
+        );
     }
 
     private async scanConfiguredDirectories(
@@ -390,7 +396,11 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
     }
 
     dispose(): void {
-        this.fileWatchers.forEach(w => w.dispose());
+        for (const disposable of this.disposables.splice(0)) {
+            disposable.dispose();
+        }
+        this.fileWatchers.length = 0;
+        this._onDidChangeTreeData.dispose();
     }
 }
 

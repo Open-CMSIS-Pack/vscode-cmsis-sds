@@ -45,6 +45,10 @@ vi.mock('vscode', () => {
                 listener(event);
             }
         }
+
+        dispose(): void {
+            this.listeners = [];
+        }
     }
 
     class TreeItem {
@@ -179,6 +183,7 @@ describe('SdsExplorerProvider', () => {
         const configManager = {
             onDidChangeConfig: vi.fn((handler: () => void) => {
                 configChangeHandler = handler;
+                return { dispose: vi.fn() };
             }),
             getConfigFile: vi.fn(() => 'active.sdsio.yml'),
             getConfig: vi.fn(() => ({ workdir: undefined, metadir: undefined })),

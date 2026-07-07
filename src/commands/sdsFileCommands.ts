@@ -147,7 +147,7 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
 
             if (confirm === 'Delete') {
                 try {
-                    fs.unlinkSync(item.filePath);
+                    await fs.promises.unlink(item.filePath);
                     explorerProvider.refreshFiles();
                     vscode.window.showInformationMessage(`Deleted ${path.basename(item.filePath)}`);
                 } catch (err) {
