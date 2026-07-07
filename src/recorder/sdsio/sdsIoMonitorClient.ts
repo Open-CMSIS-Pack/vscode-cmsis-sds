@@ -39,6 +39,8 @@ export const HEADER_SIZE = 16;
 const SDS_FLAG_IO_ACTIVE = 0x80000000; // bit 31
 const SDS_FLAG_PLAYBACK = 0x20000000;  // bit 29
 
+const MAX_MONITOR_FILENAME_BYTES = 4096;
+
 // ── Types ──────────────────────────────────────────────────
 
 type Bit = 0 | 1 | boolean;
@@ -131,6 +133,9 @@ class MonitorFrameAccumulator {
                     return undefined; // Can't determine yet
                 }
                 const filenameLen = this.buf.readUInt32LE(HEADER_SIZE);
+                if (filenameLen > MAX_MONITOR_FILENAME_BYTES) {
+                    throw new Error(`Monitor filename payload too large: ${filenameLen}`);
+                }
                 return 4 + filenameLen;
             }
             default:
