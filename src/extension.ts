@@ -97,6 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
         treeDataProvider: explorerProvider,
         showCollapseAll: true,
     });
+    context.subscriptions.push(explorerProvider);
     context.subscriptions.push(explorerTreeView);
 
     const { setActiveConfig, resolveConfigPathFromSettings } = setupSdsioConfigLifecycle(

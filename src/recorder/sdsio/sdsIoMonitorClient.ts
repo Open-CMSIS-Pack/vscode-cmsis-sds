@@ -39,6 +39,8 @@ export const HEADER_SIZE = 16;
 const SDS_FLAG_IO_ACTIVE = 0x80000000; // bit 31
 const SDS_FLAG_PLAYBACK = 0x20000000;  // bit 29
 
+const MAX_MONITOR_FILENAME_BYTES = 4096;
+
 // ── Types ──────────────────────────────────────────────────
 
 type Bit = 0 | 1 | boolean;
@@ -58,10 +60,16 @@ export type SdsioMonitorOpenMessage = {
     fileName: string;
 };
 
+export type SdsioMonitorFlagsMessage = {
+    setMask: number;
+    clearMask: number;
+    arg3: number;
+};
+
 interface SdsioMonitorHeader {
     cmd: number;
-    arg1: number;
-    arg2: number;
+    setMask: number;
+    clearMask: number;
     arg3: number;
 }
 
@@ -86,6 +94,10 @@ class MonitorFrameAccumulator {
             const header = this._parseHeader(0);
             const payloadSize = this._getPayloadSize(header);
 
+            if (payloadSize === undefined) {
+                break; // Wait for enough payload metadata
+            }
+
             if (this.buf.length < HEADER_SIZE + payloadSize) {
                 break; // Wait for more data
             }
@@ -102,13 +114,13 @@ class MonitorFrameAccumulator {
     private _parseHeader(offset: number): SdsioMonitorHeader {
         return {
             cmd: this.buf.readUInt32LE(offset),
-            arg1: this.buf.readUInt32LE(offset + 4),
-            arg2: this.buf.readUInt32LE(offset + 8),
+            setMask: this.buf.readUInt32LE(offset + 4),
+            clearMask: this.buf.readUInt32LE(offset + 8),
             arg3: this.buf.readUInt32LE(offset + 12),
         };
     }
 
-    private _getPayloadSize(header: SdsioMonitorHeader): number {
+    private _getPayloadSize(header: SdsioMonitorHeader): number | undefined {
         switch (header.cmd) {
             case MON_FLAGS:
                 return 0; // No payload for FLAGS command
@@ -118,9 +130,12 @@ class MonitorFrameAccumulator {
             case MON_CLOSE: {
                 // Payload is: filenameLen (u32) + filename
                 if (this.buf.length < HEADER_SIZE + 4) {
-                    return 0; // Can't determine yet
+                    return undefined; // Can't determine yet
                 }
                 const filenameLen = this.buf.readUInt32LE(HEADER_SIZE);
+                if (filenameLen > MAX_MONITOR_FILENAME_BYTES) {
+                    throw new Error(`Monitor filename payload too large: ${filenameLen}`);
+                }
                 return 4 + filenameLen;
             }
             default:
@@ -140,6 +155,7 @@ class MonitorFrameAccumulator {
  *   'info'         (info: SdsioMonitorInfo)
  *   'open'         (msg: SdsioMonitorOpenMessage)
  *   'close'        (fileName: string)
+ *   'flags'        (msg: SdsioMonitorFlagsMessage)
  *   'log'          (message: string)
  *   'error'        (message: string)
  */
@@ -291,6 +307,9 @@ export class SdsioMonitorClient extends EventEmitter {
                 case MON_CLOSE:
                     this._handleClose(payload);
                     break;
+                case MON_FLAGS:
+                    this._handleFlags(header);
+                    break;
                 case MON_INFO:
                     this._handleInfo(header);
                     break;
@@ -311,7 +330,7 @@ export class SdsioMonitorClient extends EventEmitter {
         }
 
         const fileName = payload.subarray(4, 4 + filenameLen).toString('utf-8');
-        const mode = header.arg2 === 0 ? 0 : 1;
+        const mode = header.clearMask === 0 ? 0 : 1;
         this._safeEmit('open', { mode, fileName } as SdsioMonitorOpenMessage);
     }
 
@@ -330,8 +349,8 @@ export class SdsioMonitorClient extends EventEmitter {
     }
 
     private _handleInfo(header: SdsioMonitorHeader): void {
-        const sdsFlags = header.arg1;
-        const sdsIdleRate = header.arg2;
+        const sdsFlags = header.setMask;
+        const sdsIdleRate = header.clearMask;
         //const errorLen = header.arg3;
 
         const info: SdsioMonitorInfo = {
@@ -343,6 +362,14 @@ export class SdsioMonitorClient extends EventEmitter {
         // For now, just emit the basic info
 
         this._safeEmit('info', info);
+    }
+
+    private _handleFlags(header: SdsioMonitorHeader): void {
+        this._safeEmit('flags', {
+            setMask: header.setMask,
+            clearMask: header.clearMask,
+            arg3: header.arg3,
+        } as SdsioMonitorFlagsMessage);
     }
 
     private _scheduleReconnect(): void {

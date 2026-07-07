@@ -42,6 +42,9 @@ const sdsIoServiceMethods = {
 
 const explorerProviderMethods = {
     refresh: vi.fn(),
+    refreshFiles: vi.fn(),
+    refreshFlags: vi.fn(),
+    dispose: vi.fn(),
 };
 
 const configManagerMethods = {
@@ -169,6 +172,9 @@ vi.mock('../../src/providers/sdsExplorerProvider', () => {
 
     class SdsExplorerProvider {
         refresh = explorerProviderMethods.refresh;
+        refreshFiles = explorerProviderMethods.refreshFiles;
+        refreshFlags = explorerProviderMethods.refreshFlags;
+        dispose = explorerProviderMethods.dispose;
     }
 
     return {
@@ -226,6 +232,20 @@ describe('activate integration wiring', () => {
         expect(sdsIoServiceMethods.setEnabledByTreeItems).toHaveBeenCalledWith([
             [{ itemType: 'sdsFlag', filePath: 'flag-0' }, 1],
         ]);
+    });
+
+    it('registers the explorer provider for disposal on deactivation', async () => {
+        const extension = await import('../../src/extension');
+
+        const context = {
+            subscriptions: [] as Array<{ dispose?: () => void }>,
+            extensionPath: 'c:/workspace/ext',
+            extensionUri: { fsPath: 'c:/workspace/ext' },
+        };
+
+        extension.activate(context as never);
+
+        expect(context.subscriptions.some((subscription) => subscription.dispose === explorerProviderMethods.dispose)).toBe(true);
     });
 
     it('registers contributed commands in activation flow', async () => {

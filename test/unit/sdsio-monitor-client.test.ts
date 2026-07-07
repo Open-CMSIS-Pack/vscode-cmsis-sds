@@ -322,10 +322,12 @@ describe('SdsioMonitorClient protocol parsing', () => {
         const client = new SdsioMonitorClient();
         const opened: unknown[] = [];
         const closed: string[] = [];
+        const flags: unknown[] = [];
         const infos: unknown[] = [];
         const logs: string[] = [];
         client.on('open', (message) => opened.push(message));
         client.on('close', (fileName) => closed.push(fileName));
+        client.on('flags', (message) => flags.push(message));
         client.on('info', (info) => infos.push(info));
         client.on('log', (message) => logs.push(message));
 
@@ -339,9 +341,9 @@ describe('SdsioMonitorClient protocol parsing', () => {
         ]);
         const flagsFrame = writeHeader(MON_FLAGS, 1, 2, 3);
         const unknownFrame = writeHeader(99);
-        const firstChunk = openFrame.subarray(0, HEADER_SIZE + 5);
+        const firstChunk = openFrame.subarray(0, HEADER_SIZE + 2);
         const secondChunk = Buffer.concat([
-            openFrame.subarray(HEADER_SIZE + 5),
+            openFrame.subarray(HEADER_SIZE + 2),
             idleOpenFrame,
             closeFrame,
             infoFrame,
@@ -364,7 +366,8 @@ describe('SdsioMonitorClient protocol parsing', () => {
             { sdsFlags: 0x1234, sdsIdleRate: undefined },
             { sdsFlags: 0x5, sdsIdleRate: 42 },
         ]);
-        expect(logs).toEqual(['Unknown monitor message: 6', 'Unknown monitor message: 99']);
+        expect(flags).toEqual([{ setMask: 1, clearMask: 2, arg3: 3 }]);
+        expect(logs).toEqual(['Unknown monitor message: 99']);
     });
 
     it('ignores malformed open and close payloads', () => {
