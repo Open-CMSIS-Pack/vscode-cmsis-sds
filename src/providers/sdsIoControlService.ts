@@ -74,7 +74,7 @@ export class SdsIoControlService {
             monitor.on('disconnected', () => this.onMonitorDisconnected());
             monitor.on('info', (info: SdsioMonitorInfo) => this.onMonitorInfo(info));
             monitor.on('close', () => this.onMonitorClose());
-            monitor.on('flags', () => this.onMonitorFlags());
+            monitor.on('flags', (setMask: number, unsetMask: number) => this.onMonitorFlags(setMask, unsetMask));
         }
 
         configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
@@ -431,7 +431,15 @@ export class SdsIoControlService {
         this.notifyFileUpdate();
     }
 
-    private onMonitorFlags(): void {
+    private onMonitorFlags(setMask: number, unsetMask: number): void {
+        for (let i = 0; i < this.flags.length && i < 8; i++) {
+            if ((setMask >> i) & 1) {
+                this.flags[i].enabled = true;
+            }
+            if ((unsetMask >> i) & 1) {
+                this.flags[i].enabled = false;
+            }
+        }
         this.notifyFlagsChanged();
     }
 
