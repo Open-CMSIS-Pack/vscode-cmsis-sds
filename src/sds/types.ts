@@ -31,6 +31,27 @@ export type SdsDataType =
     | 'float'
     | 'double';
 
+const SDS_DATA_TYPES = new Set<string>([
+    'uint8_t',
+    'uint16_t',
+    'uint32_t',
+    'int8_t',
+    'int16_t',
+    'int32_t',
+    'float',
+    'double',
+]);
+
+export function isSdsDataType(type: string): type is SdsDataType {
+    return SDS_DATA_TYPES.has(type);
+}
+
+export function sdsBaseDataType(type: string | undefined): SdsDataType | undefined {
+    if (!type) { return undefined; }
+    const baseType = type.split(':')[0];
+    return isSdsDataType(baseType) ? baseType : undefined;
+}
+
 /** Pixel format identifiers for image streams */
 export type SdsPixelFormat =
     | 'RAW8' | 'RAW10'
@@ -176,9 +197,9 @@ export function sdsDataTypeSize(type: SdsDataType): number {
 export function sdsFrameSize(content: SdsContentValue[]): number {
     let size = 0;
     for (const ch of content) {
-        if (!ch.type) { continue; }
         // Handle bit-field types like "uint32_t:1"
-        const baseType = ch.type.split(':')[0] as SdsDataType;
+        const baseType = sdsBaseDataType(ch.type);
+        if (!baseType) { continue; }
         size += sdsDataTypeSize(baseType);
     }
     return size;

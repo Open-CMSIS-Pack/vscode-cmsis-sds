@@ -267,7 +267,7 @@ describe('decodeRecord', () => {
         expect(sample.timeSeconds).toBeCloseTo(1.0, 4);
     });
 
-    it('uses uint32 decoding for unknown base types', () => {
+    it('skips unknown base types', () => {
         const data = Buffer.alloc(4);
         data.writeUInt32LE(0x12345678, 0);
         const record: SdsRecord = { timestamp: 50, dataSize: data.length, data };
@@ -275,7 +275,7 @@ describe('decodeRecord', () => {
 
         const sample = decodeRecord(record, content);
 
-        expect(sample.values['raw']).toBe(0x12345678);
+        expect(sample.values['raw']).toBeUndefined();
     });
 });
 
@@ -727,6 +727,17 @@ sds:
         expect(parsed.sds['sample-frequency']).toBe(12.5);
         expect(parsed.sds['tick-frequency']).toBe(250);
         expect(parsed.sds.content[0]).toMatchObject({ value: 'channel one', type: 'int16_t', unit: 'm/s' });
+    });
+
+    it('rejects unsupported metadata data types', () => {
+        expect(() => parseMetadataString(`
+sds:
+  name: Invalid
+  sample-frequency: 1
+  content:
+  - value: raw
+    type: fixed32
+`)).toThrow('Unsupported SDS data type: fixed32');
     });
 
     it('handles scale and offset in metadata', () => {

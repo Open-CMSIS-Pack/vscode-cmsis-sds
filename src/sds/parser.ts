@@ -33,6 +33,7 @@ import {
     SdsMetadata,
     SdsContentValue,
     SdsDataType,
+    sdsBaseDataType,
     sdsDataTypeSize,
     sdsFrameSize,
     detectMediaType
@@ -133,7 +134,8 @@ function decodeRecordFrame(
     let currentOffset = byteOffset;
 
     for (const ch of content) {
-        const baseType = ch.type?.split(':')[0] as SdsDataType;
+        const baseType = sdsBaseDataType(ch.type);
+        if (!baseType) { continue; }
         const typeSize = sdsDataTypeSize(baseType);
 
         if (ch.value) {

@@ -29,6 +29,7 @@ import {
     SdsContentValue,
     SdsDataType,
     SdsDecodedSample,
+    sdsBaseDataType,
     sdsDataTypeSize,
     SdsPixelFormat,
 } from './types';
@@ -105,7 +106,10 @@ export function encodeRecords(
     // Calculate frame size
     let frameSize = 0;
     for (const ch of content) {
-        const baseType = ch.type?.split(':')[0] as SdsDataType;
+        const baseType = sdsBaseDataType(ch.type);
+        if (!baseType) {
+            throw new Error(`Unsupported SDS data type: ${ch.type ?? '<missing>'}`);
+        }
         frameSize += sdsDataTypeSize(baseType);
     }
 
@@ -114,7 +118,10 @@ export function encodeRecords(
         let byteOffset = 0;
 
         for (const ch of content) {
-            const baseType = ch.type?.split(':')[0] as SdsDataType;
+            const baseType = sdsBaseDataType(ch.type);
+            if (!baseType) {
+                throw new Error(`Unsupported SDS data type: ${ch.type ?? '<missing>'}`);
+            }
             const typeSize = sdsDataTypeSize(baseType);
             const rawValue = ch.value ? sample.values[ch.value] ?? 0 : 0;
 
@@ -173,10 +180,16 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
 `;
 
     for (const ch of sds.content) {
-        yaml += `  - value: ${ch.value}
+        yaml += '  -';
+        if (ch.value !== undefined) {
+            yaml += ` value: ${ch.value}`;
+        }
+        yaml += `
 `;
-        yaml += `    type: ${ch.type}
+        if (ch.type !== undefined) {
+            yaml += `    type: ${ch.type}
 `;
+        }
         if (ch.offset !== undefined && ch.offset !== 0) {
             yaml += `    offset: ${ch.offset}
 `;
@@ -297,15 +310,13 @@ export function parseMetadataString(text: string): SdsMetadata {
         }
 
         if (inContent) {
-            // New content item (starts with "- value:")
-            if (trimmed.startsWith('- value:')) {
+            // New content item (starts with "-" or "- value:")
+            if (trimmed === '-' || trimmed.startsWith('- value:')) {
                 if (currentContent) {
                     metadata.sds.content.push(currentContent);
                 }
-                currentContent = {
-                    value: extractYamlValue(trimmed.replace('- value:', '').trim()),
-                    type: 'float',
-                };
+                const value = trimmed.startsWith('- value:') ? extractYamlValue(trimmed.replace('- value:', '').trim()) : undefined;
+                currentContent = value !== undefined ? { value, type: 'float' } : {};
                 inImage = false;
                 inAudio = false;
                 inVideo = false;
@@ -382,7 +393,16 @@ export function parseMetadataString(text: string): SdsMetadata {
 
                 // Standard content value fields (not in a sub-block)
                 if (trimmed.startsWith('type:')) {
-                    currentContent.type = extractYamlValue(trimmed.replace('type:', '').trim()) as SdsDataType;
+                    const type = extractYamlValue(trimmed.replace('type:', '').trim());
+                    if (type === '' || type === 'undefined') {
+                        inImage = false; inAudio = false; inVideo = false;
+                        continue;
+                    }
+                    const baseType = sdsBaseDataType(type);
+                    if (!baseType) {
+                        throw new Error(`Unsupported SDS data type: ${type}`);
+                    }
+                    currentContent.type = type as SdsDataType;
                     inImage = false; inAudio = false; inVideo = false;
                 } else if (trimmed.startsWith('offset:')) {
                     currentContent.offset = parseFloat(trimmed.replace('offset:', '').trim());
