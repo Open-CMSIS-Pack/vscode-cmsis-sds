@@ -762,6 +762,43 @@ sds:
 `)).toThrow('Unsupported SDS data type: fixed32');
     });
 
+    it('rejects missing or legacy sample frequency fields', () => {
+        expect(() => parseMetadataString(`
+sds:
+  name: MissingFrequency
+  content:
+  - value: raw
+    type: uint8_t
+`)).toThrow('SDS metadata requires a positive sample-frequency');
+
+        expect(() => parseMetadataString(`
+sds:
+  name: LegacyFrequency
+  frequency: 1
+  content:
+  - value: raw
+    type: uint8_t
+`)).toThrow('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
+    });
+
+    it('rejects value content without a matching type', () => {
+        expect(() => parseMetadataString(`
+sds:
+  name: InvalidContent
+  sample-frequency: 1
+  content:
+  - value: raw
+`)).toThrow('SDS content entry 0 must define both value and type, or neither for media-only content');
+
+        expect(() => serializeMetadataToYaml({
+            sds: {
+                name: 'InvalidContent',
+                'sample-frequency': 1,
+                content: [{ value: 'raw' }],
+            },
+        })).toThrow('SDS content entry 0 must define both value and type, or neither for media-only content');
+    });
+
     it('handles scale and offset in metadata', () => {
         const meta: SdsMetadata = {
             sds: {

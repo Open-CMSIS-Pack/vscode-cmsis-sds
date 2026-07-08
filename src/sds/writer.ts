@@ -161,6 +161,8 @@ export function writeMetadataFile(filePath: string, metadata: SdsMetadata): void
  * Serialize SdsMetadata to a YAML string.
  */
 export function serializeMetadataToYaml(metadata: SdsMetadata): string {
+    validateMetadata(metadata);
+
     const sds = metadata.sds;
     let yaml = `sds:
 `;
@@ -278,7 +280,7 @@ export function parseMetadataString(text: string): SdsMetadata {
     const metadata: SdsMetadata = {
         sds: {
             name: '',
-            'sample-frequency': 0,
+            'sample-frequency': Number.NaN,
             content: [],
         },
     };
@@ -316,7 +318,7 @@ export function parseMetadataString(text: string): SdsMetadata {
                     metadata.sds.content.push(currentContent);
                 }
                 const value = trimmed.startsWith('- value:') ? extractYamlValue(trimmed.replace('- value:', '').trim()) : undefined;
-                currentContent = value !== undefined ? { value, type: 'float' } : {};
+                currentContent = value !== undefined ? { value } : {};
                 inImage = false;
                 inAudio = false;
                 inVideo = false;
@@ -425,6 +427,8 @@ export function parseMetadataString(text: string): SdsMetadata {
             metadata.sds.description = extractYamlValue(trimmed.replace('description:', '').trim());
         } else if (trimmed.startsWith('sample-frequency:')) {
             metadata.sds['sample-frequency'] = parseFloat(trimmed.replace('sample-frequency:', '').trim());
+        } else if (trimmed.startsWith('frequency:')) {
+            throw new Error('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
         } else if (trimmed.startsWith('tick-frequency:')) {
             metadata.sds['tick-frequency'] = parseFloat(trimmed.replace('tick-frequency:', '').trim());
         }
@@ -435,7 +439,32 @@ export function parseMetadataString(text: string): SdsMetadata {
         metadata.sds.content.push(currentContent);
     }
 
+    validateMetadata(metadata);
+
     return metadata;
+}
+
+function validateMetadata(metadata: SdsMetadata): void {
+    const sampleFrequency = metadata.sds['sample-frequency'];
+    if (!Number.isFinite(sampleFrequency) || sampleFrequency <= 0) {
+        throw new Error('SDS metadata requires a positive sample-frequency');
+    }
+
+    metadata.sds.content.forEach((content, index) => {
+        const hasValue = content.value !== undefined && content.value !== '';
+        const hasType = content.type !== undefined;
+        const hasMedia = content.image !== undefined || content.audio !== undefined || content.video !== undefined;
+
+        if (hasValue !== hasType) {
+            throw new Error(`SDS content entry ${index} must define both value and type, or neither for media-only content`);
+        }
+        if (hasType && !sdsBaseDataType(content.type)) {
+            throw new Error(`Unsupported SDS data type: ${content.type}`);
+        }
+        if (!hasValue && !hasMedia) {
+            throw new Error(`SDS content entry ${index} must define value/type or media metadata`);
+        }
+    });
 }
 
 function extractYamlValue(val: string): string {
