@@ -487,6 +487,10 @@ describe('media decoding helpers', () => {
     it('handles truncated image input by leaving missing color channels black', () => {
         expect(Array.from(decodeImageFrameToRGBA(Buffer.from([4, 5]), 1, 1, 'RGB888')))
             .toEqual([0, 0, 0, 255]);
+        expect(Array.from(decodeImageFrameToRGBA(Buffer.from([9]), 2, 1, 'RAW8')))
+            .toEqual([9, 9, 9, 255, 0, 0, 0, 255]);
+        expect(Array.from(decodeImageFrameToRGBA(Buffer.from([12]), 2, 1, 'BAYER')))
+            .toEqual([12, 12, 12, 255, 0, 0, 0, 255]);
         expect(Array.from(decodeImageFrameToRGBA(Buffer.from([]), 1, 1, 'NV12')))
             .toEqual([0, 0, 0, 255]);
     });

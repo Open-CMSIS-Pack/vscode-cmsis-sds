@@ -287,20 +287,24 @@ export function decodeImageFrameToRGBA(
             break;
         }
         case 'RAW8': {
-            for (let i = 0; i < expectedSize && i < data.length; i++) {
-                rgba[i * 4 + 0] = data[i];
-                rgba[i * 4 + 1] = data[i];
-                rgba[i * 4 + 2] = data[i];
+            for (let i = 0; i < expectedSize; i++) {
+                if (i < data.length) {
+                    rgba[i * 4 + 0] = data[i];
+                    rgba[i * 4 + 1] = data[i];
+                    rgba[i * 4 + 2] = data[i];
+                }
                 rgba[i * 4 + 3] = 255;
             }
             break;
         }
         case 'RGB565': {
-            for (let i = 0; i < expectedSize && i * 2 + 1 < data.length; i++) {
-                const pixel = data[i * 2] | (data[i * 2 + 1] << 8);
-                rgba[i * 4 + 0] = ((pixel >> 11) & 0x1F) * 255 / 31;
-                rgba[i * 4 + 1] = ((pixel >> 5) & 0x3F) * 255 / 63;
-                rgba[i * 4 + 2] = (pixel & 0x1F) * 255 / 31;
+            for (let i = 0; i < expectedSize; i++) {
+                if (i * 2 + 1 < data.length) {
+                    const pixel = data[i * 2] | (data[i * 2 + 1] << 8);
+                    rgba[i * 4 + 0] = ((pixel >> 11) & 0x1F) * 255 / 31;
+                    rgba[i * 4 + 1] = ((pixel >> 5) & 0x3F) * 255 / 63;
+                    rgba[i * 4 + 2] = (pixel & 0x1F) * 255 / 31;
+                }
                 rgba[i * 4 + 3] = 255;
             }
             break;
@@ -336,11 +340,13 @@ export function decodeImageFrameToRGBA(
             break;
         }
         default: {
-            // Fallback: treat as grayscale
-            for (let i = 0; i < expectedSize && i < data.length; i++) {
-                rgba[i * 4 + 0] = data[i];
-                rgba[i * 4 + 1] = data[i];
-                rgba[i * 4 + 2] = data[i];
+            // Fallback: BAYER/treat as grayscale
+            for (let i = 0; i < expectedSize; i++) {
+                if (i < data.length) {
+                    rgba[i * 4 + 0] = data[i];
+                    rgba[i * 4 + 1] = data[i];
+                    rgba[i * 4 + 2] = data[i];
+                }
                 rgba[i * 4 + 3] = 255;
             }
             break;
