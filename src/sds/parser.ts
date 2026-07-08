@@ -132,6 +132,7 @@ function decodeRecordFrame(
 ): SdsDecodedSample {
     const values: { [channelName: string]: number } = {};
     let currentOffset = byteOffset;
+    const timestamp = record.timestamp + Math.round(subFrameOffsetSeconds * tickFreq);
 
     for (const ch of content) {
         const baseType = sdsBaseDataType(ch.type);
@@ -150,8 +151,8 @@ function decodeRecordFrame(
     }
 
     return {
-        timestamp: record.timestamp,
-        timeSeconds: record.timestamp / tickFreq + subFrameOffsetSeconds,
+        timestamp,
+        timeSeconds: timestamp / tickFreq,
         values,
         index,
     };
@@ -182,15 +183,17 @@ export function decodeAllRecords(
     const frequency = metadata.sds['sample-frequency'] ?? 100;
     const frameBytes = sdsFrameSize(content);
     const samples: SdsDecodedSample[] = [];
+    let sampleIndex = 0;
 
-    for (const { record, index } of parsed.records.map((r, i) => ({ record: r, index: i }))) {
+    for (const record of parsed.records) {
         // A record may contain multiple frames
         const frameCount = frameBytes > 0 ? Math.floor(record.data.length / frameBytes) : 0;
 
         for (let f = 0; f < frameCount; f++) {
             // Calculate time: base timestamp + sub-frame offset
             const subFrameOffset = frameCount > 1 ? f / frequency : 0;
-            samples.push(decodeRecordFrame(record, content, tickFreq, index, f * frameBytes, subFrameOffset));
+            samples.push(decodeRecordFrame(record, content, tickFreq, sampleIndex, f * frameBytes, subFrameOffset));
+            sampleIndex++;
         }
     }
 
@@ -226,7 +229,7 @@ export function getSdsFileStats(parsed: SdsParsedFile, tickFrequency: number = 1
         totalRecords: records.length,
         recordingTimeSeconds: durationSec,
         recordingIntervalMs: records.length > 1
-            ? durationTicks / (records.length - 1)
+            ? durationSec * 1000 / (records.length - 1)
             : 0,
         avgBlockSize: Math.round(totalData / records.length),
         minBlockSize: sizes.reduce((a, b) => Math.min(a, b), Infinity),
