@@ -27,6 +27,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      packages: read
       security-events: write
 
     steps:
@@ -41,15 +42,31 @@ jobs:
 
       - name: Initialize CodeQL
         id: initialize
-        uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           queries: security-extended 
           languages: TypeScript
           source-root: src
-          
-      - name: Autobuild
-        id: autobuild
-        uses: github/codeql-action/autobuild@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          node-version-file: package.json
+          registry-url: https://npm.pkg.github.com
+          package-manager-cache: false
+
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm ci
+
+      - name: Build for CodeQL
+        run: |
+          npm run compile
+          npm run build
 
       - name: Perform CodeQL Analysis
         id: analyze
