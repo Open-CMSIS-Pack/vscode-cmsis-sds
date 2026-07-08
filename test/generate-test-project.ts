@@ -55,10 +55,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import {
-    SdsRecord,
-    SdsMetadata,
-} from '../src/sds/types';
+import { SdsRecord, SdsMetadata } from '../src/sds/types';
 import { writeSdsFile, writeMetadataFile } from '../src/sds/writer';
 
 // ── Output directory ─────────────────────────────────────────
@@ -89,7 +86,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'accelerometer',
             description: '3-axis MEMS accelerometer',
-            frequency: 100,
+            ['sample-frequency']: 100,
             content: [
                 { value: 'x', type: 'int16_t', scale: 0.001, offset: 0, unit: 'G' },
                 { value: 'y', type: 'int16_t', scale: 0.001, offset: 0, unit: 'G' },
@@ -115,7 +112,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'temperature',
             description: 'Ambient temperature sensor',
-            frequency: 1,
+            ['sample-frequency']: 1,
             content: [
                 { value: 'temp', type: 'float', unit: 'degC' },
             ],
@@ -136,7 +133,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'gyroscope',
             description: '3-axis MEMS gyroscope',
-            frequency: 200,
+            ['sample-frequency']: 200,
             content: [
                 { value: 'wx', type: 'float', unit: 'dps' },
                 { value: 'wy', type: 'float', unit: 'dps' },
@@ -162,7 +159,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'adc_raw',
             description: 'Raw ADC channel',
-            frequency: 1000,
+            ['sample-frequency']: 1000,
             content: [
                 { value: 'adc', type: 'uint16_t' },
             ],
@@ -183,7 +180,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'precision',
             description: 'High-precision measurement with custom tick-frequency',
-            frequency: 10,
+            ['sample-frequency']: 10,
             'tick-frequency': 1000000,
             content: [
                 { value: 'measurement', type: 'double', unit: 'V' },
@@ -205,7 +202,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'gpio',
             description: 'Digital GPIO state',
-            frequency: 10,
+            ['sample-frequency']: 10,
             content: [
                 { value: 'state', type: 'uint8_t' },
             ],
@@ -226,7 +223,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'counter',
             description: 'Hardware event counter',
-            frequency: 50,
+            ['sample-frequency']: 50,
             content: [
                 { value: 'count', type: 'uint32_t' },
             ],
@@ -249,7 +246,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'multi_frame',
             description: 'Sensor with multiple frames per record',
-            frequency: 100,
+            ['sample-frequency']: 100,
             content: [
                 { value: 'ch1', type: 'int32_t' },
                 { value: 'ch2', type: 'int32_t' },
@@ -282,11 +279,9 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'camera_rgb888',
             description: 'RGB888 test pattern',
-            frequency: 1,
+            ['sample-frequency']: 1,
             content: [{
-                value: 'frame',
-                type: 'uint8_t',
-                image: { pixel_format: 'RGB888', width: W, height: H },
+                image: { pixel_format: 'RGB888', width: W, height: H, stride_bytes: W * 3 },
             }],
         },
     };
@@ -320,11 +315,9 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'camera_raw8',
             description: 'RAW8 grayscale test pattern',
-            frequency: 2,
+            ['sample-frequency']: 2,
             content: [{
-                value: 'frame',
-                type: 'uint8_t',
-                image: { pixel_format: 'RAW8', width: W, height: H },
+                image: { pixel_format: 'RAW8', width: W, height: H, stride_bytes: W * 3 },
             }],
         },
     };
@@ -353,11 +346,9 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'camera_rgb565',
             description: 'RGB565 test pattern',
-            frequency: 1,
+            ['sample-frequency']: 1,
             content: [{
-                value: 'frame',
-                type: 'uint8_t',
-                image: { pixel_format: 'RGB565', width: W, height: H },
+                image: { pixel_format: 'RGB565', width: W, height: H, stride_bytes: W * 2 },
             }],
         },
     };
@@ -388,11 +379,11 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'camera_nv12',
             description: 'NV12 YUV test pattern',
-            frequency: 1,
+            ['sample-frequency']: 1,
             content: [{
                 value: 'frame',
                 type: 'uint8_t',
-                image: { pixel_format: 'NV12', width: W, height: H },
+                image: { pixel_format: 'NV12', width: W, height: H, stride_bytes: W * 3 },
             }],
         },
     };
@@ -431,15 +422,13 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'mic_16bit',
             description: 'Mono 16-bit PCM microphone',
-            frequency: blocksPerSec,
+            ['sample-frequency']: blocksPerSec,
             content: [{
-                value: 'audio',
-                type: 'int16_t',
                 audio: {
-                    sample_rate: sampleRate,
-                    bit_depth: 16,
-                    audio_channels: 1,
-                    codec: 'pcm',
+                    'sample-frequency': sampleRate,
+                    'bit-depth': 16,
+                    'audio-channels': 1,
+                    format: 'pcm',
                 },
             }],
         },
@@ -451,8 +440,8 @@ console.log(`Generating test project in: ${outDir}\n`);
             const t = (b * samplesPerBlock + s) / sampleRate;
             // 440 Hz sine (A4 note) + 880 Hz harmonic
             const val = Math.sin(2 * Math.PI * 440 * t) * 16000
-                      + Math.sin(2 * Math.PI * 880 * t) * 4000
-                      + (Math.random() - 0.5) * 500;
+                + Math.sin(2 * Math.PI * 880 * t) * 4000
+                + (Math.random() - 0.5) * 500;
             data.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(val))), s * 2);
         }
         records.push({ timestamp: b * 100, dataSize: data.length, data });
@@ -470,15 +459,13 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'mic_stereo',
             description: 'Stereo 16-bit PCM',
-            frequency: blocksPerSec,
+            ['sample-frequency']: blocksPerSec,
             content: [{
-                value: 'audio',
-                type: 'int16_t',
                 audio: {
-                    sample_rate: sampleRate,
-                    bit_depth: 16,
-                    audio_channels: channels,
-                    codec: 'pcm',
+                    'sample-frequency': sampleRate,
+                    'bit-depth': 16,
+                    'audio-channels': channels,
+                    format: 'pcm',
                 },
             }],
         },
@@ -499,53 +486,53 @@ console.log(`Generating test project in: ${outDir}\n`);
     writePair('mic_stereo', 0, metadata, records);
 }
 
-// ════════════════════════════════════════════════════════════
-//  VIDEO DATA
-// ════════════════════════════════════════════════════════════
+// // ════════════════════════════════════════════════════════════
+// //  VIDEO DATA
+// // ════════════════════════════════════════════════════════════
 
-// ── Raw RGB888 video: 160x120, 10 fps ──
-{
-    const W = 160, H = 120;
-    const metadata: SdsMetadata = {
-        sds: {
-            name: 'video_raw',
-            description: 'Raw RGB888 video stream',
-            frequency: 10,
-            content: [{
-                value: 'frame',
-                type: 'uint8_t',
-                video: {
-                    pixel_format: 'RGB888',
-                    width: W,
-                    height: H,
-                    fps: 10,
-                    codec: 'raw',
-                },
-            }],
-        },
-    };
-    const records: SdsRecord[] = [];
-    for (let f = 0; f < 30; f++) {
-        const data = Buffer.alloc(W * H * 3);
-        // Moving bright spot with smooth falloff
-        const cx = W / 2 + Math.cos(f * 0.3) * (W / 3);
-        const cy = H / 2 + Math.sin(f * 0.3) * (H / 3);
-        const radius = 30;
-        for (let y = 0; y < H; y++) {
-            for (let x = 0; x < W; x++) {
-                const i = (y * W + x) * 3;
-                const dx = x - cx, dy = y - cy;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                const brightness = Math.max(0, Math.min(255, Math.round((1 - dist / radius) * 255)));
-                data[i + 0] = brightness;
-                data[i + 1] = Math.round(brightness * 0.7);
-                data[i + 2] = Math.round(brightness * 0.3);
-            }
-        }
-        records.push({ timestamp: f * 100, dataSize: data.length, data });
-    }
-    writePair('video_raw', 0, metadata, records);
-}
+// // ── Raw RGB888 video: 160x120, 10 fps ──
+// {
+//     const W = 160, H = 120;
+//     const metadata: SdsMetadata = {
+//         sds: {
+//             name: 'video_raw',
+//             description: 'Raw RGB888 video stream',
+//             ['sample-frequency']: 10,
+//             content: [{
+//                 value: 'frame',
+//                 type: 'uint8_t',
+//                 video: {
+//                     pixel_format: 'RGB888',
+//                     width: W,
+//                     height: H,
+//                     fps: 10,
+//                     codec: 'raw',
+//                 },
+//             }],
+//         },
+//     };
+//     const records: SdsRecord[] = [];
+//     for (let f = 0; f < 30; f++) {
+//         const data = Buffer.alloc(W * H * 3);
+//         // Moving bright spot with smooth falloff
+//         const cx = W / 2 + Math.cos(f * 0.3) * (W / 3);
+//         const cy = H / 2 + Math.sin(f * 0.3) * (H / 3);
+//         const radius = 30;
+//         for (let y = 0; y < H; y++) {
+//             for (let x = 0; x < W; x++) {
+//                 const i = (y * W + x) * 3;
+//                 const dx = x - cx, dy = y - cy;
+//                 const dist = Math.sqrt(dx * dx + dy * dy);
+//                 const brightness = Math.max(0, Math.min(255, Math.round((1 - dist / radius) * 255)));
+//                 data[i + 0] = brightness;
+//                 data[i + 1] = Math.round(brightness * 0.7);
+//                 data[i + 2] = Math.round(brightness * 0.3);
+//             }
+//         }
+//         records.push({ timestamp: f * 100, dataSize: data.length, data });
+//     }
+//     writePair('video_raw', 0, metadata, records);
+// }
 
 // ════════════════════════════════════════════════════════════
 //  EDGE CASES
@@ -557,7 +544,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'empty',
             description: 'Empty recording — zero records',
-            frequency: 100,
+            ['sample-frequency']: 100,
             content: [
                 { value: 'x', type: 'float' },
                 { value: 'y', type: 'float' },
@@ -573,7 +560,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'single_record',
             description: 'Recording with exactly one record',
-            frequency: 100,
+            ['sample-frequency']: 100,
             content: [
                 { value: 'value', type: 'float' },
             ],
@@ -590,7 +577,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'large_block',
             description: 'Large payload records (1 KB each)',
-            frequency: 1,
+            ['sample-frequency']: 1,
             content: [
                 { value: 'payload', type: 'uint8_t' },
             ],
@@ -627,7 +614,7 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'accelerometer',
             description: '3-axis MEMS accelerometer',
-            frequency: 100,
+            ['sample-frequency']: 100,
             content: [
                 { value: 'x', type: 'int16_t', scale: 0.001, offset: 0, unit: 'G' },
                 { value: 'y', type: 'int16_t', scale: 0.001, offset: 0, unit: 'G' },
@@ -646,6 +633,7 @@ console.log(`Generating test project in: ${outDir}\n`);
     }
     const sdsPath = path.join(outDir, 'accelerometer.1.sds');
     writeSdsFile(sdsPath, records);
+    writeMetadataFile(path.join(outDir, 'accelerometer.sds.yml'), metadata);
     console.log(`  accelerometer.1.sds  (${records.length} records, shares metadata with .0)`);
 }
 

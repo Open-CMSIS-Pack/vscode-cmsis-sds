@@ -6,7 +6,7 @@
       "sds:",
       "  name: ${1:accelerometer}",
       "  description: ${2:3-axis accelerometer data}",
-      "  frequency: ${3:100}",
+      "  sample-frequency: ${3:100}",
       "  tick-frequency: ${4:1000}",
       "  content:",
       "    - value: ${5:x}",
@@ -33,16 +33,15 @@
       "sds:",
       "  name: ${1:camera}",
       "  description: ${2:Camera image stream}",
-      "  frequency: ${3:30}",
+      "  sample-frequency: ${3:30}",
       "  tick-frequency: ${4:1000}",
       "  content:",
-      "    - value: ${5:frame}",
-      "      type: uint8_t",
       "      image:",
       "        pixel_format: ${6|RGB888,RAW8,RGB565,NV12,NV21,I420,YUYV|}",
       "        width: ${7:320}",
-      "        height: ${8:240}"
-    ]
+      "        height: ${8:240}",
+      "        stride_bytes: ${9:240}"
+]
   },
   "SDS Audio Metadata": {
     "prefix": "sds-audio",
@@ -51,36 +50,14 @@
       "sds:",
       "  name: ${1:microphone}",
       "  description: ${2:Audio capture stream}",
-      "  frequency: ${3:44100}",
+      "  sample-frequency: ${3:44100}",
       "  tick-frequency: ${4:1000}",
       "  content:",
-      "    - value: ${5:audio}",
-      "      type: int16_t",
-      "      audio:",
-      "        sample_rate: ${6:44100}",
-      "        bit_depth: ${7|16,8,24,32|}",
-      "        audio_channels: ${8|1,2|}",
-      "        codec: ${9:pcm}"
-    ]
-  },
-  "SDS Video Metadata": {
-    "prefix": "sds-video",
-    "description": "SDS metadata for a video stream",
-    "body": [
-      "sds:",
-      "  name: ${1:video}",
-      "  description: ${2:Video capture stream}",
-      "  frequency: ${3:30}",
-      "  tick-frequency: ${4:1000}",
-      "  content:",
-      "    - value: ${5:frame}",
-      "      type: uint8_t",
-      "      video:",
-      "        pixel_format: ${6|RGB888,NV12,YUYV|}",
-      "        width: ${7:640}",
-      "        height: ${8:480}",
-      "        fps: ${9:30}",
-      "        codec: ${10:raw}"
+      "    - audio:",
+      "        sample-frequency: ${6:44100}",
+      "        bit-depth: ${7|16,8,24,32|}",
+      "        audio-channels: ${8|1,2|}",
+      "        format: ${9:pcm}"
     ]
   },
   "SDS Content Channel": {
@@ -101,7 +78,7 @@
       "sds:",
       "  name: ${1:temperature}",
       "  description: ${2:Temperature sensor data}",
-      "  frequency: ${3:10}",
+      "  sample-frequency: ${3:10}",
       "  tick-frequency: ${4:1000}",
       "  content:",
       "    - value: ${5:temperature}",
@@ -118,7 +95,7 @@
       "sds:",
       "  name: ${1:imu}",
       "  description: ${2:6-axis IMU (accel + gyro)}",
-      "  frequency: ${3:100}",
+      "  sample-frequency: ${3:100}",
       "  tick-frequency: ${4:1000}",
       "  content:",
       "    - value: accel_x",

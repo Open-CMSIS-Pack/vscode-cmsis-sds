@@ -182,7 +182,7 @@ export class SdsViewerPanel {
 
             if (metadata) {
                 this.decodedSamples = decodeAllRecords(parsed, metadata);
-                this.channelNames = metadata.sds.content.map(c => c.value);
+                this.channelNames = metadata.sds.content.map(c => c.value ?? 'unknown');
             } else {
                 // Without metadata, show raw record sizes over time
                 this.channelNames = ['data_size'];

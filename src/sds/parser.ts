@@ -33,6 +33,7 @@ import {
     SdsMetadata,
     SdsContentValue,
     SdsDataType,
+    sdsBaseDataType,
     sdsDataTypeSize,
     sdsFrameSize,
     detectMediaType
@@ -134,14 +135,17 @@ function decodeRecordFrame(
     const timestamp = record.timestamp + Math.round(subFrameOffsetSeconds * tickFreq);
 
     for (const ch of content) {
-        const baseType = ch.type.split(':')[0] as SdsDataType;
+        const baseType = sdsBaseDataType(ch.type);
+        if (!baseType) { continue; }
         const typeSize = sdsDataTypeSize(baseType);
 
-        if (currentOffset + typeSize <= record.data.length) {
-            const raw = readValue(record.data, currentOffset, baseType);
-            const scale = ch.scale ?? 1.0;
-            const offset = ch.offset ?? 0;
-            values[ch.value] = raw * scale + offset;
+        if (ch.value) {
+            if (currentOffset + typeSize <= record.data.length) {
+                const raw = readValue(record.data, currentOffset, baseType);
+                const scale = ch.scale ?? 1.0;
+                const offset = ch.offset ?? 0;
+                values[ch.value] = raw * scale + offset;
+            }
         }
         currentOffset += typeSize;
     }
@@ -176,7 +180,7 @@ export function decodeAllRecords(
 ): SdsDecodedSample[] {
     const content = metadata.sds.content;
     const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
-    const frequency = metadata.sds.frequency;
+    const frequency = metadata.sds['sample-frequency'] ?? 100;
     const frameBytes = sdsFrameSize(content);
     const samples: SdsDecodedSample[] = [];
     let sampleIndex = 0;
@@ -297,11 +301,13 @@ export function decodeImageFrameToRGBA(
             break;
         }
         case 'RGB565': {
-            for (let i = 0; i < expectedSize && i * 2 + 1 < data.length; i++) {
-                const pixel = data[i * 2] | (data[i * 2 + 1] << 8);
-                rgba[i * 4 + 0] = ((pixel >> 11) & 0x1F) * 255 / 31;
-                rgba[i * 4 + 1] = ((pixel >> 5) & 0x3F) * 255 / 63;
-                rgba[i * 4 + 2] = (pixel & 0x1F) * 255 / 31;
+            for (let i = 0; i < expectedSize; i++) {
+                if (i * 2 + 1 < data.length) {
+                    const pixel = data[i * 2] | (data[i * 2 + 1] << 8);
+                    rgba[i * 4 + 0] = ((pixel >> 11) & 0x1F) * 255 / 31;
+                    rgba[i * 4 + 1] = ((pixel >> 5) & 0x3F) * 255 / 63;
+                    rgba[i * 4 + 2] = (pixel & 0x1F) * 255 / 31;
+                }
                 rgba[i * 4 + 3] = 255;
             }
             break;
@@ -337,7 +343,7 @@ export function decodeImageFrameToRGBA(
             break;
         }
         default: {
-            // Fallback: treat as grayscale
+            // Fallback: BAYER/treat as grayscale
             for (let i = 0; i < expectedSize; i++) {
                 if (i < data.length) {
                     rgba[i * 4 + 0] = data[i];
