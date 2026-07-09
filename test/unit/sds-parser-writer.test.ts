@@ -681,6 +681,26 @@ describe('metadata YAML roundtrip', () => {
         expect(parsed.sds.content[0].image!.height).toBe(240);
     });
 
+    it('roundtrips image metadata on a typed content value', () => {
+        const meta: SdsMetadata = {
+            sds: {
+                name: 'Camera',
+                'sample-frequency': 30,
+                content: [{
+                    image: { pixel_format: 'RGB888', width: 320, height: 240 },
+                }],
+            },
+        };
+
+        const yaml = serializeMetadataToYaml(meta);
+        const parsed = parseMetadataString(yaml);
+
+        expect(yaml).toContain('  - value: frame');
+        expect(yaml).toContain('    type: uint8_t');
+        expect(yaml).toContain('    image:');
+        expect(parsed.sds.content[0]).toMatchObject(meta.sds.content[0]);
+    });
+
     it('roundtrips audio metadata', () => {
         const meta: SdsMetadata = {
             sds: {
