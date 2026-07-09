@@ -703,6 +703,30 @@ describe('metadata YAML roundtrip', () => {
         });
     });
 
+    it('preserves scalar fields when serializing mixed image metadata', () => {
+        const meta: SdsMetadata = {
+            sds: {
+                name: 'Camera',
+                'sample-frequency': 30,
+                content: [{
+                    value: 'frame',
+                    type: 'uint8_t',
+                    unit: 'px',
+                    image: { pixel_format: 'RGB888', width: 320, height: 240 },
+                }],
+            },
+        };
+
+        const yaml = serializeMetadataToYaml(meta);
+        const parsed = parseMetadataString(yaml);
+
+        expect(yaml).toContain('  - value: frame');
+        expect(yaml).toContain('    type: uint8_t');
+        expect(yaml).toContain('    unit: px');
+        expect(yaml).toContain('    image:');
+        expect(parsed.sds.content[0]).toMatchObject(meta.sds.content[0]);
+    });
+
     it('roundtrips audio metadata', () => {
         const meta: SdsMetadata = {
             sds: {

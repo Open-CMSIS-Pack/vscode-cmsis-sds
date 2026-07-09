@@ -183,7 +183,7 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
 
     for (const ch of sds.content) {
         const mediaBlocks = mediaBlockKeys(ch);
-        if (mediaBlocks.length > 0) {
+        if (mediaBlocks.length > 0 && !hasScalarContentFields(ch)) {
             const [firstBlock, ...remainingBlocks] = mediaBlocks;
             yaml += `  - ${firstBlock}:
 `;
@@ -199,7 +199,7 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
             yaml += ` value: ${ch.value}`;
         }
         yaml += `
-    `;
+`;
         if (ch.type !== undefined) {
             yaml += `    type: ${ch.type}
 `;
@@ -231,6 +231,14 @@ function mediaBlockKeys(content: SdsContentValue): MediaBlockKey[] {
     if (content.audio) { keys.push('audio'); }
     if (content.video) { keys.push('video'); }
     return keys;
+}
+
+function hasScalarContentFields(content: SdsContentValue): boolean {
+    return content.value !== undefined
+        || content.type !== undefined
+        || content.offset !== undefined
+        || content.scale !== undefined
+        || content.unit !== undefined;
 }
 
 function appendMediaBlock(yaml: string, content: SdsContentValue, block: MediaBlockKey, blockIndent: string, fieldIndent: string): string {
