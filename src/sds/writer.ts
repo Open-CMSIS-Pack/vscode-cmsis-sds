@@ -224,8 +224,16 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
 `;
             yaml += `      fps: ${ch.video.fps}
 `;
+            if (ch.video.codec !== undefined) {
+                yaml += `      codec: ${ch.video.codec}
+`;
+            }
             if (ch.video.stride_bytes !== undefined) {
                 yaml += `      stride_bytes: ${ch.video.stride_bytes}
+`;
+            }
+            if (ch.video.keyframe_interval !== undefined) {
+                yaml += `      keyframe_interval: ${ch.video.keyframe_interval}
 `;
             }
             continue;
@@ -303,7 +311,13 @@ export function parseMetadataString(text: string): SdsMetadata {
 
         if (inContent) {
             // New content item (starts with "-" or "- value:")
-            if (trimmed === '-' || trimmed.startsWith('- value:') || trimmed === '- image:' || trimmed === '- audio:' || trimmed === '- video:') {
+            if (
+                trimmed === '-' ||
+                trimmed.startsWith('- value:') ||
+                trimmed.startsWith('- image:') ||
+                trimmed.startsWith('- audio:') ||
+                trimmed.startsWith('- video:')
+            ) {
                 if (currentContent) {
                     metadata.sds.content.push(currentContent);
                 }
