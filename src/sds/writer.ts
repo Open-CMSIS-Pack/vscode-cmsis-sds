@@ -183,8 +183,7 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
 
     for (const ch of sds.content) {
         const mediaBlocks = mediaBlockKeys(ch);
-        const isMediaOnly = ch.value === undefined && ch.type === undefined && mediaBlocks.length > 0;
-        if (isMediaOnly) {
+        if (mediaBlocks.length > 0) {
             const [firstBlock, ...remainingBlocks] = mediaBlocks;
             yaml += `  - ${firstBlock}:
 `;
@@ -195,8 +194,12 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
             continue;
         }
 
-        yaml += `  - value: ${ch.value}
-`;
+        yaml += '  -';
+        if (ch.value !== undefined) {
+            yaml += ` value: ${ch.value}`;
+        }
+        yaml += `
+    `;
         if (ch.type !== undefined) {
             yaml += `    type: ${ch.type}
 `;
@@ -220,69 +223,69 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
     return yaml;
 }
 
-    type MediaBlockKey = 'image' | 'audio' | 'video';
+type MediaBlockKey = 'image' | 'audio' | 'video';
 
-    function mediaBlockKeys(content: SdsContentValue): MediaBlockKey[] {
-        const keys: MediaBlockKey[] = [];
-        if (content.image) { keys.push('image'); }
-        if (content.audio) { keys.push('audio'); }
-        if (content.video) { keys.push('video'); }
-        return keys;
-    }
+function mediaBlockKeys(content: SdsContentValue): MediaBlockKey[] {
+    const keys: MediaBlockKey[] = [];
+    if (content.image) { keys.push('image'); }
+    if (content.audio) { keys.push('audio'); }
+    if (content.video) { keys.push('video'); }
+    return keys;
+}
 
-    function appendMediaBlock(yaml: string, content: SdsContentValue, block: MediaBlockKey, blockIndent: string, fieldIndent: string): string {
-        yaml += `${blockIndent}${block}:
-    `;
-        return appendMediaBlockFields(yaml, content, block, fieldIndent);
-    }
+function appendMediaBlock(yaml: string, content: SdsContentValue, block: MediaBlockKey, blockIndent: string, fieldIndent: string): string {
+    yaml += `${blockIndent}${block}:
+`;
+    return appendMediaBlockFields(yaml, content, block, fieldIndent);
+}
 
-    function appendMediaBlockFields(yaml: string, content: SdsContentValue, block: MediaBlockKey, fieldIndent: string): string {
-        if (block === 'image' && content.image) {
+function appendMediaBlockFields(yaml: string, content: SdsContentValue, block: MediaBlockKey, fieldIndent: string): string {
+    if (block === 'image' && content.image) {
         yaml += `${fieldIndent}pixel_format: ${content.image.pixel_format}
-    `;
+`;
         yaml += `${fieldIndent}width: ${content.image.width}
-    `;
+`;
         yaml += `${fieldIndent}height: ${content.image.height}
-    `;
+`;
         if (content.image.stride_bytes !== undefined) {
             yaml += `${fieldIndent}stride_bytes: ${content.image.stride_bytes}
-    `;
+`;
         }
-        } else if (block === 'audio' && content.audio) {
+    } else if (block === 'audio' && content.audio) {
         yaml += `${fieldIndent}sample-frequency: ${content.audio['sample-frequency']}
-    `;
+`;
         yaml += `${fieldIndent}bit-depth: ${content.audio['bit-depth']}
-    `;
+`;
         yaml += `${fieldIndent}audio-channels: ${content.audio['audio-channels']}
-    `;
+`;
         if (content.audio.format) {
             yaml += `${fieldIndent}format: ${content.audio.format}
-    `;
+`;
         }
-        } else if (block === 'video' && content.video) {
+    } else if (block === 'video' && content.video) {
         yaml += `${fieldIndent}pixel_format: ${content.video.pixel_format}
-    `;
+`;
         yaml += `${fieldIndent}width: ${content.video.width}
-    `;
+`;
         yaml += `${fieldIndent}height: ${content.video.height}
-    `;
+`;
         yaml += `${fieldIndent}fps: ${content.video.fps}
-    `;
+`;
         if (content.video.codec !== undefined) {
             yaml += `${fieldIndent}codec: ${content.video.codec}
-    `;
+`;
         }
         if (content.video.stride_bytes !== undefined) {
             yaml += `${fieldIndent}stride_bytes: ${content.video.stride_bytes}
-    `;
+`;
         }
         if (content.video.keyframe_interval !== undefined) {
             yaml += `${fieldIndent}keyframe_interval: ${content.video.keyframe_interval}
-    `;
+`;
         }
-        }
-        return yaml;
     }
+    return yaml;
+}
 
 /**
  * Parse an SDS YAML metadata file (simple parser, no YAML library dependency).

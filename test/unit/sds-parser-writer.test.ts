@@ -470,7 +470,7 @@ describe('media decoding helpers', () => {
                 name: 'Camera',
                 'sample-frequency': 30,
                 'tick-frequency': 2000,
-                content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
+                content: [{ image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         };
 
@@ -596,7 +596,7 @@ describe('metadata helpers', () => {
             sds: {
                 name: 'Camera',
                 'sample-frequency': 30,
-                content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
+                content: [{ image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         })).toBe('image');
     });
@@ -681,7 +681,7 @@ describe('metadata YAML roundtrip', () => {
         expect(parsed.sds.content[0].image!.height).toBe(240);
     });
 
-    it('roundtrips image metadata on a typed content value', () => {
+    it('serializes image metadata without scalar fields', () => {
         const meta: SdsMetadata = {
             sds: {
                 name: 'Camera',
@@ -695,10 +695,12 @@ describe('metadata YAML roundtrip', () => {
         const yaml = serializeMetadataToYaml(meta);
         const parsed = parseMetadataString(yaml);
 
-        expect(yaml).toContain('  - value: frame');
-        expect(yaml).toContain('    type: uint8_t');
-        expect(yaml).toContain('    image:');
-        expect(parsed.sds.content[0]).toMatchObject(meta.sds.content[0]);
+        expect(yaml).toContain('  - image:');
+        expect(yaml).not.toContain('value: frame');
+        expect(yaml).not.toContain('type: uint8_t');
+        expect(parsed.sds.content[0]).toMatchObject({
+            image: meta.sds.content[0].image,
+        });
     });
 
     it('roundtrips audio metadata', () => {
