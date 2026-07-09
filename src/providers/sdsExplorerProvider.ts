@@ -347,7 +347,7 @@ export class SdsExplorerProvider implements vscode.TreeDataProvider<SdsTreeItem>
                     // Detect media type from metadata — route to media viewer if not sensor data
                     if (fs.existsSync(metaPath)) {
                         try {
-                            const metadata = parseMetadataFile(metaPath);
+                            const metadata = parseMetadataFile(metaPath, fullPath);
                             const mediaType = detectMediaType(metadata);
                             if (mediaType !== 'sensor') {
                                 item.command = {

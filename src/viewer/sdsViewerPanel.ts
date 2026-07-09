@@ -171,7 +171,7 @@ export class SdsViewerPanel {
 
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
-                metadata = parseMetadataFile(this.metadataPath);
+                metadata = parseMetadataFile(this.metadataPath, this.sdsFilePath);
             }
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             this.stats = getSdsFileStats(parsed, tickFreq);

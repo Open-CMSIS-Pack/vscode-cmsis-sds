@@ -85,6 +85,15 @@ function makeRecord(timestamp: number, floats: number[]): SdsRecord {
     return { timestamp, dataSize: data.length, data };
 }
 
+function writeMinimalSdsFile(fileName = 'metadata-source.0.sds'): string {
+    const sdsPath = path.join(tmpDir, fileName);
+    writeSdsFile(sdsPath, [
+        { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+        { timestamp: 10, dataSize: 1, data: Buffer.from([2]) },
+    ]);
+    return sdsPath;
+}
+
 function make3AxisMetadata(name = 'Accel', freq = 100): SdsMetadata {
     return {
         sds: {
@@ -648,8 +657,9 @@ describe('metadata YAML roundtrip', () => {
         original.sds['tick-frequency'] = 32768;
 
         const filePath = path.join(tmpDir, 'Gyro.sds.yml');
+        const sdsPath = writeMinimalSdsFile('Gyro.0.sds');
         writeMetadataFile(filePath, original);
-        const parsed = parseMetadataFile(filePath);
+        const parsed = parseMetadataFile(filePath, sdsPath);
 
         expect(parsed.sds.name).toBe('Gyro');
         expect(parsed.sds.description).toBe('Test gyroscope');
@@ -675,7 +685,7 @@ describe('metadata YAML roundtrip', () => {
         };
 
         const yaml = serializeMetadataToYaml(meta);
-        const parsed = parseMetadataString(yaml);
+        const parsed = parseMetadataString(yaml, writeMinimalSdsFile('Camera.0.sds'));
 
         expect(parsed.sds.content[0].image).toBeDefined();
         expect(parsed.sds.content[0].image!.pixel_format).toBe('RGB888');
@@ -695,7 +705,7 @@ describe('metadata YAML roundtrip', () => {
         };
 
         const yaml = serializeMetadataToYaml(meta);
-        const parsed = parseMetadataString(yaml);
+        const parsed = parseMetadataString(yaml, writeMinimalSdsFile('Mic.0.sds'));
 
         expect(parsed.sds.content[0].audio).toBeDefined();
         expect(parsed.sds.content[0].audio!['sample-frequency']).toBe(16000);
@@ -720,10 +730,11 @@ describe('metadata YAML roundtrip', () => {
             },
         };
         const filePath = path.join(tmpDir, 'nested', 'metadata', 'Media.sds.yml');
+        const sdsPath = writeMinimalSdsFile('Media.0.sds');
 
         writeMetadataFile(filePath, meta);
         const text = fs.readFileSync(filePath, 'utf-8');
-        const parsed = parseMetadataFile(filePath);
+        const parsed = parseMetadataFile(filePath, sdsPath);
 
         expect(text).toContain('stride_bytes: 8');
         expect(text).toContain('format: pcm');
@@ -742,7 +753,7 @@ sds:
   - value: "channel one"
     type: 'int16_t'
     unit: "m/s"
-`);
+`, writeMinimalSdsFile('Quoted.0.sds'));
 
         expect(parsed.sds.name).toBe('Quoted Stream');
         expect(parsed.sds.description).toBe('quoted description');
@@ -759,18 +770,25 @@ sds:
   content:
   - value: raw
     type: fixed32
-`)).toThrow('Unsupported SDS data type: fixed32');
+`, writeMinimalSdsFile('Invalid.0.sds'))).toThrow('Unsupported SDS data type: fixed32');
     });
 
-    it('rejects missing or legacy sample frequency fields', () => {
+    it('rejects missing sample frequency when the SDS file cannot provide an inference', () => {
+        const sdsPath = path.join(tmpDir, 'MissingFrequency.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+        ]);
+
         expect(() => parseMetadataString(`
 sds:
   name: MissingFrequency
   content:
   - value: raw
     type: uint8_t
-`)).toThrow('SDS metadata requires a positive sample-frequency');
+`, sdsPath)).toThrow('at least two SDS records are required');
+    });
 
+    it('rejects legacy frequency fields', () => {
         expect(() => parseMetadataString(`
 sds:
   name: LegacyFrequency
@@ -778,7 +796,74 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`)).toThrow('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
+`, writeMinimalSdsFile('LegacyFrequency.0.sds'))).toThrow('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
+    });
+
+    it('infers missing sample frequency from the median SDS timestamp interval', () => {
+        const sdsPath = path.join(tmpDir, 'Inferred.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 10, dataSize: 1, data: Buffer.from([2]) },
+            { timestamp: 20, dataSize: 1, data: Buffer.from([3]) },
+            { timestamp: 50, dataSize: 1, data: Buffer.from([4]) },
+        ]);
+
+        const parsed = parseMetadataString(`
+sds:
+  name: Inferred
+  content:
+  - value: raw
+    type: uint8_t
+`, sdsPath);
+
+        expect(parsed.sds['sample-frequency']).toBe(100);
+    });
+
+    it('infers missing sample frequency when parsing a metadata file with an explicit SDS path', () => {
+        const sdsPath = path.join(tmpDir, 'Adjacent.0.sds');
+        const metaPath = path.join(tmpDir, 'Adjacent.sds.yml');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 5, dataSize: 1, data: Buffer.from([2]) },
+            { timestamp: 10, dataSize: 1, data: Buffer.from([3]) },
+        ]);
+        fs.writeFileSync(metaPath, `
+sds:
+  name: Adjacent
+  tick-frequency: 1000
+  content:
+  - value: raw
+    type: uint8_t
+`, 'utf-8');
+
+        const parsed = parseMetadataFile(metaPath, sdsPath);
+
+        expect(parsed.sds['sample-frequency']).toBe(200);
+    });
+
+    it('infers missing sample frequency from an explicit SDS path when metadata is stored elsewhere', () => {
+        const dataDir = path.join(tmpDir, 'recordings');
+        const metadataDir = path.join(tmpDir, 'metadata');
+        fs.mkdirSync(dataDir);
+        fs.mkdirSync(metadataDir);
+        const sdsPath = path.join(dataDir, 'Configured.0.sds');
+        const metaPath = path.join(metadataDir, 'Configured.sds.yml');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 4, dataSize: 1, data: Buffer.from([2]) },
+            { timestamp: 8, dataSize: 1, data: Buffer.from([3]) },
+        ]);
+        fs.writeFileSync(metaPath, `
+sds:
+  name: Configured
+  content:
+  - value: raw
+    type: uint8_t
+`, 'utf-8');
+
+        const parsed = parseMetadataFile(metaPath, sdsPath);
+
+        expect(parsed.sds['sample-frequency']).toBe(250);
     });
 
     it('rejects value content without a matching type', () => {
@@ -788,7 +873,7 @@ sds:
   sample-frequency: 1
   content:
   - value: raw
-`)).toThrow('SDS content entry 0 must define both value and type, or neither for media-only content');
+`, writeMinimalSdsFile('InvalidContent.0.sds'))).toThrow('SDS content entry 0 must define both value and type, or neither for media-only content');
 
         expect(() => serializeMetadataToYaml({
             sds: {
@@ -811,7 +896,7 @@ sds:
         };
 
         const yaml = serializeMetadataToYaml(meta);
-        const parsed = parseMetadataString(yaml);
+        const parsed = parseMetadataString(yaml, writeMinimalSdsFile('Scaled.0.sds'));
 
         expect(parsed.sds.content[0].scale).toBe(0.01);
         expect(parsed.sds.content[0].offset).toBe(-40);

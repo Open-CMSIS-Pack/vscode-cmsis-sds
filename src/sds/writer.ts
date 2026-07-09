@@ -265,17 +265,18 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
 
 /**
  * Parse an SDS YAML metadata file (simple parser, no YAML library dependency).
+ * sdsFilePath identifies the SDS data file used for metadata inference.
  */
-export function parseMetadataFile(filePath: string): SdsMetadata {
+export function parseMetadataFile(filePath: string, sdsFilePath: string): SdsMetadata {
     const text = fs.readFileSync(filePath, 'utf-8');
-    return parseMetadataString(text);
+    return parseMetadataString(text, sdsFilePath);
 }
 
 /**
  * Parse YAML metadata from a string.
  * Supports nested image, audio, and video metadata blocks.
  */
-export function parseMetadataString(text: string): SdsMetadata {
+export function parseMetadataString(text: string, sdsFilePath: string): SdsMetadata {
     const lines = text.split('\n');
     const metadata: SdsMetadata = {
         sds: {
@@ -439,9 +440,51 @@ export function parseMetadataString(text: string): SdsMetadata {
         metadata.sds.content.push(currentContent);
     }
 
+    if (!Number.isFinite(metadata.sds['sample-frequency']) && sdsFilePath) {
+        metadata.sds['sample-frequency'] = calculateMedianSampleFrequencyFromSdsFile(
+            sdsFilePath,
+            metadata.sds['tick-frequency'] ?? 1000
+        );
+    }
+
     validateMetadata(metadata);
 
     return metadata;
+}
+
+export function calculateMedianSampleFrequencyFromSdsFile(sdsFilePath: string, tickFrequency: number = 1000): number {
+    const timestamps: number[] = [];
+    const buffer = fs.readFileSync(sdsFilePath);
+    let offset = 0;
+
+    while (offset + 8 <= buffer.length) {
+        const timestamp = buffer.readUInt32LE(offset);
+        const dataSize = buffer.readUInt32LE(offset + 4);
+        offset += 8;
+        if (offset + dataSize > buffer.length) {
+            break;
+        }
+        timestamps.push(timestamp);
+        offset += dataSize;
+    }
+
+    if (timestamps.length < 2) {
+        throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: at least two SDS records are required`);
+    }
+
+    const deltas = timestamps
+        .slice(1)
+        .map((timestamp, index) => timestamp - timestamps[index])
+        .filter((delta) => delta > 0)
+        .sort((left, right) => left - right);
+
+    if (deltas.length === 0) {
+        throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: SDS record timestamps do not advance`);
+    }
+
+    const middle = Math.floor(deltas.length / 2);
+    const medianInterval = deltas.length % 2 === 0 ? (deltas[middle - 1] + deltas[middle]) / 2 : deltas[middle];
+    return tickFrequency / medianInterval;
 }
 
 function validateMetadata(metadata: SdsMetadata): void {

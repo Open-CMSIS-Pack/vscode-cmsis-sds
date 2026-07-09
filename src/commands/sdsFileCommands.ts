@@ -292,7 +292,7 @@ async function doExportCsv(sdsPath: string): Promise<void> {
     if (!csvUri) { return; }
 
     try {
-        const metadata = parseMetadataFile(metaPath);
+        const metadata = parseMetadataFile(metaPath, sdsPath);
         const parsed = parseSdsFile(sdsPath);
         const samples = decodeAllRecords(parsed, metadata);
 
