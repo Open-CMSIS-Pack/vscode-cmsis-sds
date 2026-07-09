@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExpandOutlined, LeftCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
+import { ExpandOutlined, LeftCircleOutlined, PauseCircleOutlined, PlayCircleOutlined, RightCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider } from 'antd';
 import { ImageFrame } from '../../../webview/protocol';
 import { decodeFrame, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
@@ -42,8 +42,11 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const { frames, rangeStart = 0, width, height, totalFrames } = state;
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [zoom, setZoom] = useState(1);
+    const [playing, setPlaying] = useState(false);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
     const getImageWindowSize = useCallback((quality: 'low' | 'high') => quality === 'low' ? 32 : 160, []);
     const getImageNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(8, Math.floor(loadedFrameCount * 0.2)), []);
+    const stopPlaybackOnManualChange = useCallback(() => setPlaying(false), []);
     const {
         index,
         windowFrames,
@@ -58,8 +61,25 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         mediaType: 'image',
         getWindowSize: getImageWindowSize,
         getNearEdgeMargin: getImageNearEdgeMargin,
-        stationaryRequestQuality: 'high',
+        stationaryRequestQuality: playing ? 'low' : 'high',
+        onManualChangeStart: stopPlaybackOnManualChange,
     });
+
+    useEffect(() => {
+        const framesPerSecond = parseFloat(state.interval);
+        if (!playing || !Number.isFinite(framesPerSecond) || framesPerSecond <= 0) { return; }
+        timerRef.current = setInterval(() => {
+            const nextIndex = (index + 1) % Math.max(1, totalFrames);
+            changeIndex(nextIndex, { manual: false });
+        }, 1000 / framesPerSecond);
+
+        return () => {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+        };
+    }, [changeIndex, index, playing, state.interval, totalFrames]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -75,6 +95,8 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
     }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
+
+    const togglePlay = () => setPlaying(p => !p);
 
     return (
         <div className="media-page">
@@ -100,6 +122,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
             </Row>
             <Row className="controls">
                 <Col flex="none" style={{ textAlign: 'center' }}>
+                    <Button icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />} type="link" title={playing ? 'Pause' : 'Play'} onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</Button>
                     <Button icon={<LeftCircleOutlined />} type="link" title="Previous Frame" onClick={() => changeIndex(Math.max(0, index - 1))} />
                 </Col>
                 <Col flex="auto">
