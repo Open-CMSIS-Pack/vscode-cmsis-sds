@@ -182,11 +182,56 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
 `;
 
     for (const ch of sds.content) {
-        yaml += '  -';
-        if (ch.value !== undefined) {
-            yaml += ` value: ${ch.value}`;
+        const isMediaOnly = ch.value === undefined && ch.type === undefined;
+        if (isMediaOnly && ch.image) {
+            yaml += `  - image:
+`;
+            yaml += `      pixel_format: ${ch.image.pixel_format}
+`;
+            yaml += `      width: ${ch.image.width}
+`;
+            yaml += `      height: ${ch.image.height}
+`;
+            if (ch.image.stride_bytes !== undefined) {
+                yaml += `      stride_bytes: ${ch.image.stride_bytes}
+`;
+            }
+            continue;
         }
-        yaml += `
+        if (isMediaOnly && ch.audio) {
+            yaml += `  - audio:
+`;
+            yaml += `      sample-frequency: ${ch.audio['sample-frequency']}
+`;
+            yaml += `      bit-depth: ${ch.audio['bit-depth']}
+`;
+            yaml += `      audio-channels: ${ch.audio['audio-channels']}
+`;
+            if (ch.audio.format) {
+                yaml += `      format: ${ch.audio.format}
+`;
+            }
+            continue;
+        }
+        if (isMediaOnly && ch.video) {
+            yaml += `  - video:
+`;
+            yaml += `      pixel_format: ${ch.video.pixel_format}
+`;
+            yaml += `      width: ${ch.video.width}
+`;
+            yaml += `      height: ${ch.video.height}
+`;
+            yaml += `      fps: ${ch.video.fps}
+`;
+            if (ch.video.stride_bytes !== undefined) {
+                yaml += `      stride_bytes: ${ch.video.stride_bytes}
+`;
+            }
+            continue;
+        }
+
+        yaml += `  - value: ${ch.value}
 `;
         if (ch.type !== undefined) {
             yaml += `    type: ${ch.type}
@@ -204,61 +249,6 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
             yaml += `    unit: ${ch.unit}
 `;
         }
-        // Image metadata block
-        if (ch.image) {
-            yaml += `    image:
-`;
-            yaml += `      pixel_format: ${ch.image.pixel_format}
-`;
-            yaml += `      width: ${ch.image.width}
-`;
-            yaml += `      height: ${ch.image.height}
-`;
-            if (ch.image.stride_bytes !== undefined) {
-                yaml += `      stride_bytes: ${ch.image.stride_bytes}
-`;
-            }
-        }
-        // Audio metadata block
-        if (ch.audio) {
-            yaml += `    audio:
-`;
-            yaml += `      sample-frequency: ${ch.audio['sample-frequency']}
-`;
-            yaml += `      bit-depth: ${ch.audio['bit-depth']}
-`;
-            yaml += `      audio-channels: ${ch.audio['audio-channels']}
-`;
-            if (ch.audio.format) {
-                yaml += `      format: ${ch.audio.format}
-`;
-            }
-        }
-        //         // Video metadata block
-        //         if (ch.video) {
-        //             yaml += `    video:
-        // `;
-        //             yaml += `      pixel_format: ${ch.video.pixel_format}
-        // `;
-        //             yaml += `      width: ${ch.video.width}
-        // `;
-        //             yaml += `      height: ${ch.video.height}
-        // `;
-        //             yaml += `      fps: ${ch.video.fps}
-        // `;
-        //             if (ch.video.codec) {
-        //                 yaml += `      codec: ${ch.video.codec}
-        // `;
-        //             }
-        //             if (ch.video.stride_bytes !== undefined) {
-        //                 yaml += `      stride_bytes: ${ch.video.stride_bytes}
-        // `;
-        //             }
-        //             if (ch.video.keyframe_interval !== undefined) {
-        //                 yaml += `      keyframe_interval: ${ch.video.keyframe_interval}
-        // `;
-        //             }
-        //         }
     }
     return yaml;
 }
@@ -313,7 +303,7 @@ export function parseMetadataString(text: string): SdsMetadata {
 
         if (inContent) {
             // New content item (starts with "-" or "- value:")
-            if (trimmed === '-' || trimmed.startsWith('- value:')) {
+            if (trimmed === '-' || trimmed.startsWith('- value:') || trimmed === '- image:' || trimmed === '- audio:' || trimmed === '- video:') {
                 if (currentContent) {
                     metadata.sds.content.push(currentContent);
                 }
@@ -322,6 +312,16 @@ export function parseMetadataString(text: string): SdsMetadata {
                 inImage = false;
                 inAudio = false;
                 inVideo = false;
+                if (trimmed === '- image:') {
+                    inImage = true;
+                    currentContent.image = { pixel_format: 'RGB888', width: 0, height: 0, stride_bytes: 0 };
+                } else if (trimmed === '- audio:') {
+                    inAudio = true;
+                    currentContent.audio = { 'sample-frequency': 0, 'bit-depth': 16, 'audio-channels': 1 };
+                } else if (trimmed === '- video:') {
+                    inVideo = true;
+                    currentContent.video = { pixel_format: 'RGB888', width: 0, height: 0, fps: 0 };
+                }
                 continue;
             }
 

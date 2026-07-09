@@ -697,6 +697,9 @@ describe('metadata YAML roundtrip', () => {
         const yaml = serializeMetadataToYaml(meta);
         const parsed = parseMetadataString(yaml);
 
+        expect(yaml).toContain('  - audio:');
+        expect(yaml).not.toContain('value: undefined');
+        expect(yaml).not.toContain('type: undefined');
         expect(parsed.sds.content[0].audio).toBeDefined();
         expect(parsed.sds.content[0].audio!['sample-frequency']).toBe(16000);
         expect(parsed.sds.content[0].audio!['bit-depth']).toBe(16);
@@ -725,10 +728,32 @@ describe('metadata YAML roundtrip', () => {
         const text = fs.readFileSync(filePath, 'utf-8');
         const parsed = parseMetadataFile(filePath);
 
+        expect(text).toContain('  - image:');
+        expect(text).toContain('  - audio:');
         expect(text).toContain('stride_bytes: 8');
         expect(text).toContain('format: pcm');
         expect(parsed.sds.content[0].image!['stride_bytes']).toBe(8);
         expect(parsed.sds.content[1].audio).toMatchObject({ format: 'pcm' });
+    });
+
+    it('parses media entries directly below content', () => {
+        const parsed = parseMetadataString(`
+sds:
+  name: Media
+  sample-frequency: 60
+  content:
+  - image:
+      pixel_format: RAW8
+      width: 2
+      height: 1
+  - audio:
+      sample-frequency: 48000
+      bit-depth: 16
+      audio-channels: 2
+`);
+
+        expect(parsed.sds.content[0].image).toMatchObject({ pixel_format: 'RAW8', width: 2, height: 1 });
+        expect(parsed.sds.content[1].audio).toMatchObject({ 'sample-frequency': 48000, 'bit-depth': 16, 'audio-channels': 2 });
     });
 
     it('parses quoted scalar and content values', () => {
