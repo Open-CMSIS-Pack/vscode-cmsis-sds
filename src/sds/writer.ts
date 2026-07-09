@@ -401,8 +401,12 @@ export function parseMetadataString(text: string): SdsMetadata {
                         currentContent.video.height = parseInt(trimmed.replace('height:', '').trim(), 10);
                     } else if (trimmed.startsWith('fps:')) {
                         currentContent.video.fps = parseFloat(trimmed.replace('fps:', '').trim());
+                    } else if (trimmed.startsWith('codec:')) {
+                        currentContent.video.codec = extractYamlValue(trimmed.replace('codec:', '').trim());
                     } else if (trimmed.startsWith('stride_bytes:')) {
                         currentContent.video.stride_bytes = parseInt(trimmed.replace('stride_bytes:', '').trim(), 10);
+                    } else if (trimmed.startsWith('keyframe_interval:')) {
+                        currentContent.video.keyframe_interval = parseInt(trimmed.replace('keyframe_interval:', '').trim(), 10);
                     }
                     continue;
                 }

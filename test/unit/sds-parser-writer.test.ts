@@ -748,10 +748,53 @@ sds:
       sample-frequency: 48000
       bit-depth: 16
       audio-channels: 2
+  - video:
+      pixel_format: NV12
+      width: 640
+      height: 480
+      fps: 30
+      codec: mjpeg
+      stride_bytes: 640
+      keyframe_interval: 10
 `);
 
         expect(parsed.sds.content[0].image).toMatchObject({ pixel_format: 'RAW8', width: 2, height: 1 });
         expect(parsed.sds.content[1].audio).toMatchObject({ 'sample-frequency': 48000, 'bit-depth': 16, 'audio-channels': 2 });
+        expect(parsed.sds.content[2].video).toMatchObject({
+            pixel_format: 'NV12',
+            width: 640,
+            height: 480,
+            fps: 30,
+            codec: 'mjpeg',
+            stride_bytes: 640,
+            keyframe_interval: 10,
+        });
+    });
+
+    it('roundtrips video metadata', () => {
+        const meta: SdsMetadata = {
+            sds: {
+                name: 'Video',
+                'sample-frequency': 30,
+                content: [{
+                    video: {
+                        pixel_format: 'NV12',
+                        width: 640,
+                        height: 480,
+                        fps: 30,
+                        codec: 'mjpeg',
+                        stride_bytes: 640,
+                        keyframe_interval: 10,
+                    },
+                }],
+            },
+        };
+
+        const yaml = serializeMetadataToYaml(meta);
+        const parsed = parseMetadataString(yaml);
+
+        expect(yaml).toContain('  - video:');
+        expect(parsed.sds.content[0].video).toMatchObject(meta.sds.content[0].video!);
     });
 
     it('parses quoted scalar and content values', () => {
