@@ -667,8 +667,6 @@ describe('metadata YAML roundtrip', () => {
                 name: 'Camera',
                 'sample-frequency': 30,
                 content: [{
-                    value: 'frame',
-                    type: 'uint8_t',
                     image: { pixel_format: 'RGB888', width: 320, height: 240 },
                 }],
             },
