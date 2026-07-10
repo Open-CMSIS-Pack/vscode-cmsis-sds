@@ -297,6 +297,7 @@ function appendMediaBlockFields(yaml: string, content: SdsContentValue, block: M
 
 export interface ParseMetadataOptions {
     sdsFilePath?: string;
+    allowMissingSampleFrequency?: boolean;
 }
 
 /**
@@ -504,7 +505,7 @@ export function parseMetadataString(text: string, options: ParseMetadataOptions 
         );
     }
 
-    validateMetadata(metadata);
+    validateMetadata(metadata, options);
 
     return metadata;
 }
@@ -514,12 +515,18 @@ export function calculateMedianSampleFrequencyFromSdsFile(sdsFilePath: string, t
     const buffer = fs.readFileSync(sdsFilePath);
     let offset = 0;
 
-    while (offset + 8 <= buffer.length) {
+    while (offset < buffer.length) {
+        const recordOffset = offset;
+        const remainingHeaderBytes = buffer.length - offset;
+        if (remainingHeaderBytes < 8) {
+            throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of 8 bytes available)`);
+        }
+
         const timestamp = buffer.readUInt32LE(offset);
         const dataSize = buffer.readUInt32LE(offset + 4);
         offset += 8;
         if (offset + dataSize > buffer.length) {
-            break;
+            throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: truncated payload (${buffer.length - offset} of ${dataSize} bytes available)`);
         }
         timestamps.push(timestamp);
         offset += dataSize;
@@ -545,9 +552,12 @@ export function calculateMedianSampleFrequencyFromSdsFile(sdsFilePath: string, t
     return tickFrequency / medianInterval;
 }
 
-function validateMetadata(metadata: SdsMetadata): void {
+function validateMetadata(metadata: SdsMetadata, options: ParseMetadataOptions = {}): void {
     const sampleFrequency = metadata.sds['sample-frequency'];
     if (!Number.isFinite(sampleFrequency) || sampleFrequency <= 0) {
+        if (options.allowMissingSampleFrequency && Number.isNaN(sampleFrequency)) {
+            return;
+        }
         throw new Error('SDS metadata requires a positive sample-frequency');
     }
 
