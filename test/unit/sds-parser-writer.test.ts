@@ -919,6 +919,58 @@ sds:
 `, { sdsFilePath: sdsPath })).toThrow('at least two SDS records are required');
     });
 
+    it('rejects missing sample frequency with a clear inference error for truncated SDS records', () => {
+        const sdsPath = path.join(tmpDir, 'TruncatedInference.0.sds');
+        const buffer = Buffer.alloc(8 + 10);
+        buffer.writeUInt32LE(0, 0);
+        buffer.writeUInt32LE(100, 4);
+        fs.writeFileSync(sdsPath, buffer);
+
+        expect(() => parseMetadataString(`
+sds:
+  name: TruncatedInference
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath })).toThrow(
+            `Cannot calculate sample-frequency from ${sdsPath}: corrupt SDS record at offset 0: truncated payload (10 of 100 bytes available)`
+        );
+    });
+
+    it('rejects missing sample frequency with a clear inference error for incomplete trailing headers', () => {
+        const sdsPath = path.join(tmpDir, 'IncompleteHeaderInference.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 10, dataSize: 1, data: Buffer.from([2]) },
+        ]);
+        fs.appendFileSync(sdsPath, Buffer.alloc(4));
+
+        expect(() => parseMetadataString(`
+sds:
+  name: IncompleteHeaderInference
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath })).toThrow(
+            `Cannot calculate sample-frequency from ${sdsPath}: corrupt SDS record at offset 18: incomplete header (4 of 8 bytes available)`
+        );
+    });
+
+    it('detects media metadata without requiring sample frequency inference', () => {
+        const parsed = parseMetadataString(`
+sds:
+  name: MetadataOnlyCamera
+  content:
+  - image:
+      pixel_format: RAW8
+      width: 2
+      height: 1
+`, { allowMissingSampleFrequency: true });
+
+        expect(parsed.sds['sample-frequency']).toBeNaN();
+        expect(detectMediaType(parsed)).toBe('image');
+    });
+
     it('rejects invalid explicit sample frequency instead of inferring from SDS data', () => {
         const sdsPath = path.join(tmpDir, 'InvalidExplicitFrequency.0.sds');
         writeSdsFile(sdsPath, [
