@@ -961,7 +961,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath })).toThrow('at least two SDS records are required');
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true })).toThrow('at least two SDS records are required');
     });
 
     it('rejects missing sample frequency with a clear inference error for truncated SDS records', () => {
@@ -977,7 +977,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath })).toThrow(
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true })).toThrow(
             `Cannot calculate sample-frequency from ${sdsPath}: corrupt SDS record at offset 0: truncated payload (10 of 100 bytes available)`
         );
     });
@@ -996,7 +996,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath })).toThrow(
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true })).toThrow(
             `Cannot calculate sample-frequency from ${sdsPath}: corrupt SDS record at offset 18: incomplete header (4 of 8 bytes available)`
         );
     });
@@ -1059,9 +1059,27 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath });
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true });
 
         expect(parsed.sds['sample-frequency']).toBe(100);
+    });
+
+    it('does not infer missing sample frequency from an SDS path unless inference is enabled', () => {
+        const sdsPath = path.join(tmpDir, 'NoImplicitInference.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 10, dataSize: 1, data: Buffer.from([2]) },
+        ]);
+
+        const parsed = parseMetadataString(`
+sds:
+  name: NoImplicitInference
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath, allowMissingSampleFrequency: true });
+
+        expect(parsed.sds['sample-frequency']).toBeNaN();
     });
 
     it('rejects inferred sample frequency when tick frequency is invalid', () => {
@@ -1078,7 +1096,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath })).toThrow('Cannot calculate sample-frequency: invalid tick-frequency 0');
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true })).toThrow('Cannot calculate sample-frequency: invalid tick-frequency 0');
     });
 
     it('rejects inferred sample frequency when timestamps do not advance', () => {
@@ -1094,7 +1112,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath })).toThrow('Cannot calculate sample-frequency: no positive timestamp deltas found');
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true })).toThrow('Cannot calculate sample-frequency: no positive timestamp deltas found');
     });
 
     it('infers missing sample frequency while skipping large SDS payloads', () => {
@@ -1128,7 +1146,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath });
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true });
 
         expect(parsed.sds['sample-frequency']).toBe(100);
     });
@@ -1147,7 +1165,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, { sdsFilePath: sdsPath });
+`, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true });
 
         expect(parsed.sds['sample-frequency']).toBe(50);
     });
@@ -1169,7 +1187,7 @@ sds:
     type: uint8_t
 `, 'utf-8');
 
-        const parsed = parseMetadataFile(metaPath, { sdsFilePath: sdsPath });
+        const parsed = parseMetadataFile(metaPath, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true });
 
         expect(parsed.sds['sample-frequency']).toBe(200);
     });
@@ -1194,7 +1212,7 @@ sds:
     type: uint8_t
 `, 'utf-8');
 
-        const parsed = parseMetadataFile(metaPath, { sdsFilePath: sdsPath });
+        const parsed = parseMetadataFile(metaPath, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true });
 
         expect(parsed.sds['sample-frequency']).toBe(250);
     });

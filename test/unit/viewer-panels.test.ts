@@ -287,7 +287,7 @@ describe('SdsViewerPanel', () => {
         expect(vscodeMockState.createWebviewPanelMock).toHaveBeenCalledTimes(1);
         expect(panel.reveal).toHaveBeenCalledWith(2);
         expect((panel.iconPath as { id: string }).id).toBe('graph-line');
-        expect(sdsMockState.parseMetadataFile).toHaveBeenCalledWith(metaPath, { sdsFilePath: sdsPath });
+        expect(sdsMockState.parseMetadataFile).toHaveBeenCalledWith(metaPath, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true });
         expect(sdsMockState.decodeAllRecords).toHaveBeenCalledWith(expect.anything(), metadata);
         expect(viewerUtilsMockState.registerViewerWebview).toHaveBeenCalledWith(panel.webview);
         expect(initialState(panel)).toMatchObject({

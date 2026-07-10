@@ -298,6 +298,7 @@ function appendMediaBlockFields(yaml: string, content: SdsContentValue, block: M
 export interface ParseMetadataOptions {
     sdsFilePath?: string;
     allowMissingSampleFrequency?: boolean;
+    inferMissingSampleFrequency?: boolean;
 }
 
 /**
@@ -498,7 +499,12 @@ export function parseMetadataString(text: string, options: ParseMetadataOptions 
         metadata.sds.content.push(currentContent);
     }
 
-    if (!hasSampleFrequency && !Number.isFinite(metadata.sds['sample-frequency']) && options.sdsFilePath) {
+    if (
+        options.inferMissingSampleFrequency &&
+        !hasSampleFrequency &&
+        !Number.isFinite(metadata.sds['sample-frequency']) &&
+        options.sdsFilePath
+    ) {
         metadata.sds['sample-frequency'] = calculateMedianSampleFrequencyFromSdsFile(
             options.sdsFilePath,
             metadata.sds['tick-frequency'] ?? 1000
