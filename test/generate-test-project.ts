@@ -381,8 +381,6 @@ console.log(`Generating test project in: ${outDir}\n`);
             description: 'NV12 YUV test pattern',
             ['sample-frequency']: 1,
             content: [{
-                value: 'frame',
-                type: 'uint8_t',
                 image: { pixel_format: 'NV12', width: W, height: H, stride_bytes: W * 3 },
             }],
         },
