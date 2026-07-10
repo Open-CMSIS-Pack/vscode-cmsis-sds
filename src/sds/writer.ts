@@ -564,11 +564,17 @@ export function calculateMedianSampleFrequencyFromSdsFile(sdsFilePath: string, t
     deltas.sort((left, right) => left - right);
 
     if (deltas.length === 0) {
-        throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: SDS record timestamps do not advance`);
+        throw new Error('Cannot calculate sample-frequency: no positive timestamp deltas found');
     }
 
     const middle = Math.floor(deltas.length / 2);
     const medianInterval = deltas.length % 2 === 0 ? (deltas[middle - 1] + deltas[middle]) / 2 : deltas[middle];
+    if (!Number.isFinite(tickFrequency) || tickFrequency <= 0) {
+        throw new Error(`Cannot calculate sample-frequency: invalid tick-frequency ${tickFrequency}`);
+    }
+    if (!Number.isFinite(medianInterval) || medianInterval <= 0) {
+        throw new Error('Cannot calculate sample-frequency: no positive timestamp deltas found');
+    }
     return tickFrequency / medianInterval;
 }
 

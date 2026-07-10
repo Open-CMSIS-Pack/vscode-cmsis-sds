@@ -1064,6 +1064,39 @@ sds:
         expect(parsed.sds['sample-frequency']).toBe(100);
     });
 
+    it('rejects inferred sample frequency when tick frequency is invalid', () => {
+        const sdsPath = path.join(tmpDir, 'InvalidTickFrequency.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 10, dataSize: 1, data: Buffer.from([2]) },
+        ]);
+
+        expect(() => parseMetadataString(`
+sds:
+  name: InvalidTickFrequency
+  tick-frequency: 0
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath })).toThrow('Cannot calculate sample-frequency: invalid tick-frequency 0');
+    });
+
+    it('rejects inferred sample frequency when timestamps do not advance', () => {
+        const sdsPath = path.join(tmpDir, 'DuplicateTimestamps.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 10, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 10, dataSize: 1, data: Buffer.from([2]) },
+        ]);
+
+        expect(() => parseMetadataString(`
+sds:
+  name: DuplicateTimestamps
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath })).toThrow('Cannot calculate sample-frequency: no positive timestamp deltas found');
+    });
+
     it('infers missing sample frequency while skipping large SDS payloads', () => {
         const sdsPath = path.join(tmpDir, 'StreamedInference.0.sds');
         const fd = fs.openSync(sdsPath, 'w');
