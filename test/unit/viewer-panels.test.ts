@@ -451,7 +451,7 @@ describe('SdsMediaViewerPanel', () => {
                 name: 'camera',
                 'sample-frequency': 30,
                 'tick-frequency': 100,
-                content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
+                content: [{ image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         };
         sdsMockState.parseMetadataFile.mockReturnValue(metadata);
@@ -520,7 +520,7 @@ describe('SdsMediaViewerPanel', () => {
             sds: {
                 name: 'video',
                 'sample-frequency': 24,
-                content: [{ value: 'frame', type: 'uint8_t', video: { pixel_format: 'RGB888', width: 2, height: 1, fps: 24, codec: 'raw' } }],
+                content: [{ video: { pixel_format: 'RGB888', width: 2, height: 1, fps: 24, codec: 'raw' } }],
             },
         };
         sdsMockState.parseMetadataFile.mockReturnValue(metadata);
@@ -661,7 +661,7 @@ describe('SdsMediaViewerPanel', () => {
             sds: {
                 name: 'post-error',
                 'sample-frequency': 1,
-                content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
+                content: [{ image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         });
         sdsMockState.detectMediaType.mockReturnValue('image');

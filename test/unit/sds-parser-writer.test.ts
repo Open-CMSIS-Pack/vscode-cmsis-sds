@@ -479,7 +479,7 @@ describe('media decoding helpers', () => {
                 name: 'Camera',
                 'sample-frequency': 30,
                 'tick-frequency': 2000,
-                content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
+                content: [{ image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         };
 
@@ -605,7 +605,7 @@ describe('metadata helpers', () => {
             sds: {
                 name: 'Camera',
                 'sample-frequency': 30,
-                content: [{ value: 'frame', type: 'uint8_t', image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
+                content: [{ image: { pixel_format: 'RAW8', width: 1, height: 1 } }],
             },
         })).toBe('image');
     });
@@ -677,8 +677,6 @@ describe('metadata YAML roundtrip', () => {
                 name: 'Camera',
                 'sample-frequency': 30,
                 content: [{
-                    value: 'frame',
-                    type: 'uint8_t',
                     image: { pixel_format: 'RGB888', width: 320, height: 240 },
                 }],
             },
@@ -691,6 +689,52 @@ describe('metadata YAML roundtrip', () => {
         expect(parsed.sds.content[0].image!.pixel_format).toBe('RGB888');
         expect(parsed.sds.content[0].image!.width).toBe(320);
         expect(parsed.sds.content[0].image!.height).toBe(240);
+    });
+
+    it('serializes image metadata without scalar fields', () => {
+        const meta: SdsMetadata = {
+            sds: {
+                name: 'Camera',
+                'sample-frequency': 30,
+                content: [{
+                    image: { pixel_format: 'RGB888', width: 320, height: 240 },
+                }],
+            },
+        };
+
+        const yaml = serializeMetadataToYaml(meta);
+        const parsed = parseMetadataString(yaml);
+
+        expect(yaml).toContain('  - image:');
+        expect(yaml).not.toContain('value: frame');
+        expect(yaml).not.toContain('type: uint8_t');
+        expect(parsed.sds.content[0]).toMatchObject({
+            image: meta.sds.content[0].image,
+        });
+    });
+
+    it('preserves scalar fields when serializing mixed image metadata', () => {
+        const meta: SdsMetadata = {
+            sds: {
+                name: 'Camera',
+                'sample-frequency': 30,
+                content: [{
+                    value: 'frame',
+                    type: 'uint8_t',
+                    unit: 'px',
+                    image: { pixel_format: 'RGB888', width: 320, height: 240 },
+                }],
+            },
+        };
+
+        const yaml = serializeMetadataToYaml(meta);
+        const parsed = parseMetadataString(yaml);
+
+        expect(yaml).toContain('  - value: frame');
+        expect(yaml).toContain('    type: uint8_t');
+        expect(yaml).toContain('    unit: px');
+        expect(yaml).toContain('    image:');
+        expect(parsed.sds.content[0]).toMatchObject(meta.sds.content[0]);
     });
 
     it('roundtrips audio metadata', () => {
@@ -707,6 +751,9 @@ describe('metadata YAML roundtrip', () => {
         const yaml = serializeMetadataToYaml(meta);
         const parsed = parseMetadataString(yaml, writeMinimalSdsFile('Mic.0.sds'));
 
+        expect(yaml).toContain('  - audio:');
+        expect(yaml).not.toContain('value: undefined');
+        expect(yaml).not.toContain('type: undefined');
         expect(parsed.sds.content[0].audio).toBeDefined();
         expect(parsed.sds.content[0].audio!['sample-frequency']).toBe(16000);
         expect(parsed.sds.content[0].audio!['bit-depth']).toBe(16);
@@ -736,10 +783,75 @@ describe('metadata YAML roundtrip', () => {
         const text = fs.readFileSync(filePath, 'utf-8');
         const parsed = parseMetadataFile(filePath, sdsPath);
 
+        expect(text).toContain('  - image:');
+        expect(text).toContain('  - audio:');
         expect(text).toContain('stride_bytes: 8');
         expect(text).toContain('format: pcm');
         expect(parsed.sds.content[0].image!['stride_bytes']).toBe(8);
         expect(parsed.sds.content[1].audio).toMatchObject({ format: 'pcm' });
+    });
+
+    it('parses media entries directly below content', () => {
+        const parsed = parseMetadataString(`
+sds:
+  name: Media
+  sample-frequency: 60
+  content:
+  - image:
+      pixel_format: RAW8
+      width: 2
+      height: 1
+  - audio:
+      sample-frequency: 48000
+      bit-depth: 16
+      audio-channels: 2
+  - video:
+      pixel_format: NV12
+      width: 640
+      height: 480
+      fps: 30
+      codec: mjpeg
+      stride_bytes: 640
+      keyframe_interval: 10
+`);
+
+        expect(parsed.sds.content[0].image).toMatchObject({ pixel_format: 'RAW8', width: 2, height: 1 });
+        expect(parsed.sds.content[1].audio).toMatchObject({ 'sample-frequency': 48000, 'bit-depth': 16, 'audio-channels': 2 });
+        expect(parsed.sds.content[2].video).toMatchObject({
+            pixel_format: 'NV12',
+            width: 640,
+            height: 480,
+            fps: 30,
+            codec: 'mjpeg',
+            stride_bytes: 640,
+            keyframe_interval: 10,
+        });
+    });
+
+    it('roundtrips video metadata', () => {
+        const meta: SdsMetadata = {
+            sds: {
+                name: 'Video',
+                'sample-frequency': 30,
+                content: [{
+                    video: {
+                        pixel_format: 'NV12',
+                        width: 640,
+                        height: 480,
+                        fps: 30,
+                        codec: 'mjpeg',
+                        stride_bytes: 640,
+                        keyframe_interval: 10,
+                    },
+                }],
+            },
+        };
+
+        const yaml = serializeMetadataToYaml(meta);
+        const parsed = parseMetadataString(yaml);
+
+        expect(yaml).toContain('  - video:');
+        expect(parsed.sds.content[0].video).toMatchObject(meta.sds.content[0].video!);
     });
 
     it('parses quoted scalar and content values', () => {
