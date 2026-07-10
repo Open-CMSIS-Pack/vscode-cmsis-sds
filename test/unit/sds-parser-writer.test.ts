@@ -1019,6 +1019,42 @@ sds:
         expect(parsed.sds['sample-frequency']).toBe(100);
     });
 
+    it('infers missing sample frequency while skipping large SDS payloads', () => {
+        const sdsPath = path.join(tmpDir, 'StreamedInference.0.sds');
+        const fd = fs.openSync(sdsPath, 'w');
+        const header = Buffer.alloc(8);
+        const payloadSize = 1024 * 1024;
+        const secondRecordOffset = 8 + payloadSize;
+        const thirdRecordOffset = secondRecordOffset + 8 + payloadSize;
+
+        try {
+            header.writeUInt32LE(0, 0);
+            header.writeUInt32LE(payloadSize, 4);
+            fs.writeSync(fd, header, 0, header.length, 0);
+
+            header.writeUInt32LE(10, 0);
+            header.writeUInt32LE(payloadSize, 4);
+            fs.writeSync(fd, header, 0, header.length, secondRecordOffset);
+
+            header.writeUInt32LE(20, 0);
+            header.writeUInt32LE(1, 4);
+            fs.writeSync(fd, header, 0, header.length, thirdRecordOffset);
+            fs.writeSync(fd, Buffer.from([3]), 0, 1, thirdRecordOffset + 8);
+        } finally {
+            fs.closeSync(fd);
+        }
+
+        const parsed = parseMetadataString(`
+sds:
+  name: StreamedInference
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath });
+
+        expect(parsed.sds['sample-frequency']).toBe(100);
+    });
+
     it('infers missing sample frequency across uint32 timestamp wrap-around', () => {
         const sdsPath = path.join(tmpDir, 'WrappedTimestamp.0.sds');
         writeSdsFile(sdsPath, [
