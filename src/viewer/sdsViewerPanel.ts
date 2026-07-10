@@ -167,7 +167,7 @@ export class SdsViewerPanel {
 
     private update(): void {
         try {
-            const parsed = parseSdsFile(this.sdsFilePath);
+            const parsed = parseSdsFile(this.sdsFilePath, { strict: false });
 
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {

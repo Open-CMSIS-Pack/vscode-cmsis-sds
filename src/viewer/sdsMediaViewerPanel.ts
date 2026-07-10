@@ -234,9 +234,9 @@ export class SdsMediaViewerPanel {
             this.parsedFile = undefined;
 
             if (this.mediaType === 'image' || this.mediaType === 'video') {
-                this.recordIndex = indexSdsRecords(this.sdsFilePath);
+                this.recordIndex = indexSdsRecords(this.sdsFilePath, { strict: false });
             }
-            this.parsedFile = parseSdsFile(this.sdsFilePath);
+            this.parsedFile = parseSdsFile(this.sdsFilePath, { strict: false });
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             this.sdsFileStats = getSdsFileStats(this.parsedFile, tickFreq);
 

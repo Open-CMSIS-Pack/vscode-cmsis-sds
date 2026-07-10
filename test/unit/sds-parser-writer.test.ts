@@ -209,6 +209,20 @@ describe('parseSdsBuffer', () => {
         );
     });
 
+    it('tolerates incomplete trailing headers when strict mode is disabled', () => {
+        const validRecord = Buffer.alloc(9);
+        validRecord.writeUInt32LE(100, 0);
+        validRecord.writeUInt32LE(1, 4);
+        validRecord.writeUInt8(42, 8);
+
+        const parsed = parseSdsBuffer(Buffer.concat([validRecord, Buffer.alloc(4)]), '', { strict: false });
+
+        expect(parsed.records).toHaveLength(1);
+        expect(parsed.warnings).toEqual([
+            'Corrupt SDS record at offset 9: incomplete header (4 of 8 bytes available)',
+        ]);
+    });
+
     it('throws on truncated payloads', () => {
         // Header says 100 bytes of data, but only 10 bytes follow
         const buf = Buffer.alloc(8 + 10);
@@ -217,6 +231,24 @@ describe('parseSdsBuffer', () => {
         expect(() => parseSdsBuffer(buf)).toThrow(
             'Corrupt SDS record at offset 0: truncated payload (10 of 100 bytes available)'
         );
+    });
+
+    it('tolerates truncated trailing payloads when strict mode is disabled', () => {
+        const validRecord = Buffer.alloc(9);
+        validRecord.writeUInt32LE(100, 0);
+        validRecord.writeUInt32LE(1, 4);
+        validRecord.writeUInt8(42, 8);
+        const truncatedRecord = Buffer.alloc(10);
+        truncatedRecord.writeUInt32LE(200, 0);
+        truncatedRecord.writeUInt32LE(4, 4);
+        truncatedRecord.writeUInt16LE(1, 8);
+
+        const parsed = parseSdsBuffer(Buffer.concat([validRecord, truncatedRecord]), '', { strict: false });
+
+        expect(parsed.records).toHaveLength(1);
+        expect(parsed.warnings).toEqual([
+            'Corrupt SDS record at offset 9: truncated payload (2 of 4 bytes available)',
+        ]);
     });
 
     it('parses multiple records correctly', () => {
@@ -584,6 +616,19 @@ describe('streaming parser helpers', () => {
         expect(() => indexSdsRecords(filePath)).toThrow(
             'Corrupt SDS record at offset 9: truncated payload (0 of 10 bytes available)'
         );
+    });
+
+    it('tolerates truncated trailing records when iterating and indexing with strict mode disabled', () => {
+        const filePath = path.join(tmpDir, 'tolerant-truncated-stream.0.sds');
+        writeSdsFile(filePath, [{ timestamp: 1, dataSize: 1, data: Buffer.from([9]) }]);
+        const truncatedHeader = Buffer.alloc(8 + 1);
+        truncatedHeader.writeUInt32LE(2, 0);
+        truncatedHeader.writeUInt32LE(10, 4);
+        truncatedHeader.writeUInt8(0xff, 8);
+        fs.appendFileSync(filePath, truncatedHeader);
+
+        expect(Array.from(parseSdsRecordIterator(filePath, { strict: false }))).toHaveLength(1);
+        expect(indexSdsRecords(filePath, { strict: false })).toHaveLength(1);
     });
 
     it('throws when iterating and indexing an incomplete trailing header', () => {

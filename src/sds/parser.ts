@@ -49,19 +49,29 @@ export interface SdsRecordIndexEntry {
     dataOffset: number;
 }
 
+export interface ParseSdsOptions {
+    strict?: boolean;
+}
+
+const DEFAULT_PARSE_SDS_OPTIONS: Required<ParseSdsOptions> = {
+    strict: true,
+};
+
 /**
  * Parse an SDS binary file into memory.
  */
-export function parseSdsFile(filePath: string): SdsParsedFile {
+export function parseSdsFile(filePath: string, options: ParseSdsOptions = DEFAULT_PARSE_SDS_OPTIONS): SdsParsedFile {
     const buffer = fs.readFileSync(filePath);
-    return parseSdsBuffer(buffer, filePath);
+    return parseSdsBuffer(buffer, filePath, options);
 }
 
 /**
  * Parse an SDS binary buffer.
  */
-export function parseSdsBuffer(buffer: Buffer, filePath: string = ''): SdsParsedFile {
+export function parseSdsBuffer(buffer: Buffer, filePath: string = '', options: ParseSdsOptions = DEFAULT_PARSE_SDS_OPTIONS): SdsParsedFile {
+    const strict = options.strict ?? DEFAULT_PARSE_SDS_OPTIONS.strict;
     const records: SdsRecord[] = [];
+    const warnings: string[] = [];
     let offset = 0;
     let totalDataSize = 0;
 
@@ -69,7 +79,12 @@ export function parseSdsBuffer(buffer: Buffer, filePath: string = ''): SdsParsed
         const recordOffset = offset;
         const remainingHeaderBytes = buffer.length - offset;
         if (remainingHeaderBytes < RECORD_HEADER_SIZE) {
-            throw new Error(`Corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of ${RECORD_HEADER_SIZE} bytes available)`);
+            const warning = `Corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of ${RECORD_HEADER_SIZE} bytes available)`;
+            if (strict) {
+                throw new Error(warning);
+            }
+            warnings.push(warning);
+            break;
         }
 
         const timestamp = buffer.readUInt32LE(offset);
@@ -77,7 +92,12 @@ export function parseSdsBuffer(buffer: Buffer, filePath: string = ''): SdsParsed
         offset += RECORD_HEADER_SIZE;
 
         if (offset + dataSize > buffer.length) {
-            throw new Error(`Corrupt SDS record at offset ${recordOffset}: truncated payload (${buffer.length - offset} of ${dataSize} bytes available)`);
+            const warning = `Corrupt SDS record at offset ${recordOffset}: truncated payload (${buffer.length - offset} of ${dataSize} bytes available)`;
+            if (strict) {
+                throw new Error(warning);
+            }
+            warnings.push(warning);
+            break;
         }
 
         const data = Buffer.alloc(dataSize);
@@ -98,6 +118,7 @@ export function parseSdsBuffer(buffer: Buffer, filePath: string = ''): SdsParsed
         totalDataSize,
         totalRecords: records.length,
         durationMs,
+        ...(warnings.length > 0 ? { warnings } : {}),
     };
 }
 
@@ -423,7 +444,8 @@ export function decodeAudioBlock(
  * Streaming record iterator — yields records one at a time without loading all into memory.
  * Useful for large video/audio files.
  */
-export function* parseSdsRecordIterator(filePath: string): Generator<SdsRecord & { recordIndex: number }> {
+export function* parseSdsRecordIterator(filePath: string, options: ParseSdsOptions = DEFAULT_PARSE_SDS_OPTIONS): Generator<SdsRecord & { recordIndex: number }> {
+    const strict = options.strict ?? DEFAULT_PARSE_SDS_OPTIONS.strict;
     const fd = fs.openSync(filePath, 'r');
     const headerBuf = Buffer.alloc(RECORD_HEADER_SIZE);
     let position = 0;
@@ -436,7 +458,11 @@ export function* parseSdsRecordIterator(filePath: string): Generator<SdsRecord &
             const recordOffset = position;
             const remainingHeaderBytes = fileSize - position;
             if (remainingHeaderBytes < RECORD_HEADER_SIZE) {
-                throw new Error(`Corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of ${RECORD_HEADER_SIZE} bytes available)`);
+                const warning = `Corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of ${RECORD_HEADER_SIZE} bytes available)`;
+                if (strict) {
+                    throw new Error(warning);
+                }
+                break;
             }
 
             // Read record header
@@ -450,7 +476,11 @@ export function* parseSdsRecordIterator(filePath: string): Generator<SdsRecord &
             position += RECORD_HEADER_SIZE;
 
             if (position + dataSize > fileSize) {
-                throw new Error(`Corrupt SDS record at offset ${recordOffset}: truncated payload (${fileSize - position} of ${dataSize} bytes available)`);
+                const warning = `Corrupt SDS record at offset ${recordOffset}: truncated payload (${fileSize - position} of ${dataSize} bytes available)`;
+                if (strict) {
+                    throw new Error(warning);
+                }
+                break;
             }
 
             // Read record data
@@ -473,7 +503,8 @@ export function* parseSdsRecordIterator(filePath: string): Generator<SdsRecord &
  * Build a lightweight index of SDS records using only headers.
  * This avoids loading all record payloads into memory.
  */
-export function indexSdsRecords(filePath: string): SdsRecordIndexEntry[] {
+export function indexSdsRecords(filePath: string, options: ParseSdsOptions = DEFAULT_PARSE_SDS_OPTIONS): SdsRecordIndexEntry[] {
+    const strict = options.strict ?? DEFAULT_PARSE_SDS_OPTIONS.strict;
     const fd = fs.openSync(filePath, 'r');
     const headerBuf = Buffer.alloc(RECORD_HEADER_SIZE);
     let position = 0;
@@ -487,7 +518,11 @@ export function indexSdsRecords(filePath: string): SdsRecordIndexEntry[] {
             const recordOffset = position;
             const remainingHeaderBytes = fileSize - position;
             if (remainingHeaderBytes < RECORD_HEADER_SIZE) {
-                throw new Error(`Corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of ${RECORD_HEADER_SIZE} bytes available)`);
+                const warning = `Corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of ${RECORD_HEADER_SIZE} bytes available)`;
+                if (strict) {
+                    throw new Error(warning);
+                }
+                break;
             }
 
             const headerRead = fs.readSync(fd, headerBuf, 0, RECORD_HEADER_SIZE, position);
@@ -500,7 +535,11 @@ export function indexSdsRecords(filePath: string): SdsRecordIndexEntry[] {
             const dataOffset = position + RECORD_HEADER_SIZE;
 
             if (dataOffset + dataSize > fileSize) {
-                throw new Error(`Corrupt SDS record at offset ${recordOffset}: truncated payload (${fileSize - dataOffset} of ${dataSize} bytes available)`);
+                const warning = `Corrupt SDS record at offset ${recordOffset}: truncated payload (${fileSize - dataOffset} of ${dataSize} bytes available)`;
+                if (strict) {
+                    throw new Error(warning);
+                }
+                break;
             }
 
             out.push({
