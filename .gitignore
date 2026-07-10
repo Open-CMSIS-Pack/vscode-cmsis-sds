@@ -12,3 +12,4 @@ media/cmsissds.json
 media/cmsissds.ttf
 tools/*
 .vscode/*
+.cmsis-dev/*
