@@ -144,6 +144,7 @@ export interface SdsParsedFile {
     totalDataSize: number;
     totalRecords: number;
     durationMs: number;
+    warnings?: string[];
 }
 
 /** Aggregate statistics returned by getSdsFileStats. */

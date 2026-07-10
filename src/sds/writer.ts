@@ -295,19 +295,25 @@ function appendMediaBlockFields(yaml: string, content: SdsContentValue, block: M
     return yaml;
 }
 
+export interface ParseMetadataOptions {
+    sdsFilePath?: string;
+    allowMissingSampleFrequency?: boolean;
+    inferMissingSampleFrequency?: boolean;
+}
+
 /**
  * Parse an SDS YAML metadata file (simple parser, no YAML library dependency).
  */
-export function parseMetadataFile(filePath: string): SdsMetadata {
+export function parseMetadataFile(filePath: string, options: ParseMetadataOptions = {}): SdsMetadata {
     const text = fs.readFileSync(filePath, 'utf-8');
-    return parseMetadataString(text);
+    return parseMetadataString(text, options);
 }
 
 /**
  * Parse YAML metadata from a string.
  * Supports nested image, audio, and video metadata blocks.
  */
-export function parseMetadataString(text: string): SdsMetadata {
+export function parseMetadataString(text: string, options: ParseMetadataOptions = {}): SdsMetadata {
     const lines = text.split('\n');
     const metadata: SdsMetadata = {
         sds: {
@@ -322,6 +328,7 @@ export function parseMetadataString(text: string): SdsMetadata {
     let inImage = false;
     let inAudio = false;
     let inVideo = false;
+    let hasSampleFrequency = false;
 
     for (const rawLine of lines) {
         const line = rawLine.trimEnd();
@@ -478,6 +485,7 @@ export function parseMetadataString(text: string): SdsMetadata {
         } else if (trimmed.startsWith('description:')) {
             metadata.sds.description = extractYamlValue(trimmed.replace('description:', '').trim());
         } else if (trimmed.startsWith('sample-frequency:')) {
+            hasSampleFrequency = true;
             metadata.sds['sample-frequency'] = parseFloat(trimmed.replace('sample-frequency:', '').trim());
         } else if (trimmed.startsWith('frequency:')) {
             throw new Error('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
@@ -491,14 +499,97 @@ export function parseMetadataString(text: string): SdsMetadata {
         metadata.sds.content.push(currentContent);
     }
 
-    validateMetadata(metadata);
+    if (
+        options.inferMissingSampleFrequency &&
+        !hasSampleFrequency &&
+        !Number.isFinite(metadata.sds['sample-frequency']) &&
+        options.sdsFilePath
+    ) {
+        metadata.sds['sample-frequency'] = calculateMedianSampleFrequencyFromSdsFile(
+            options.sdsFilePath,
+            metadata.sds['tick-frequency'] ?? 1000
+        );
+    }
+
+    validateMetadata(metadata, options);
 
     return metadata;
 }
 
-function validateMetadata(metadata: SdsMetadata): void {
+export function calculateMedianSampleFrequencyFromSdsFile(sdsFilePath: string, tickFrequency: number = 1000): number {
+    const fd = fs.openSync(sdsFilePath, 'r');
+    const header = Buffer.alloc(8);
+    const deltas: number[] = [];
+    let recordCount = 0;
+
+    try {
+        const fileSize = fs.fstatSync(fd).size;
+        let position = 0;
+        let previousTimestamp: number | undefined;
+
+        while (position < fileSize) {
+            const recordOffset = position;
+            const remainingHeaderBytes = fileSize - position;
+
+            if (remainingHeaderBytes < 8) {
+                throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of 8 bytes available)`);
+            }
+
+            const bytesRead = fs.readSync(fd, header, 0, 8, position);
+            if (bytesRead < 8) {
+                throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: incomplete header`);
+            }
+
+            const timestamp = header.readUInt32LE(0);
+            const dataSize = header.readUInt32LE(4);
+            position += 8;
+
+            if (position + dataSize > fileSize) {
+                throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: truncated payload (${fileSize - position} of ${dataSize} bytes available)`);
+            }
+
+            if (previousTimestamp !== undefined) {
+                const delta = (timestamp - previousTimestamp + 0x100000000) % 0x100000000;
+                if (delta > 0) {
+                    deltas.push(delta);
+                }
+            }
+
+            previousTimestamp = timestamp;
+            recordCount += 1;
+            position += dataSize;
+        }
+    } finally {
+        fs.closeSync(fd);
+    }
+
+    if (recordCount < 2) {
+        throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: at least two SDS records are required`);
+    }
+
+    deltas.sort((left, right) => left - right);
+
+    if (deltas.length === 0) {
+        throw new Error('Cannot calculate sample-frequency: no positive timestamp deltas found');
+    }
+
+    const middle = Math.floor(deltas.length / 2);
+    const medianInterval = deltas.length % 2 === 0 ? (deltas[middle - 1] + deltas[middle]) / 2 : deltas[middle];
+    if (!Number.isFinite(tickFrequency) || tickFrequency <= 0) {
+        throw new Error(`Cannot calculate sample-frequency: invalid tick-frequency ${tickFrequency}`);
+    }
+    if (!Number.isFinite(medianInterval) || medianInterval <= 0) {
+        throw new Error('Cannot calculate sample-frequency: no positive timestamp deltas found');
+    }
+    return tickFrequency / medianInterval;
+}
+
+function validateMetadata(metadata: SdsMetadata, options: ParseMetadataOptions = {}): void {
     const sampleFrequency = metadata.sds['sample-frequency'];
     if (!Number.isFinite(sampleFrequency) || sampleFrequency <= 0) {
+        if (options.allowMissingSampleFrequency && Number.isNaN(sampleFrequency)) {
+            return;
+        }
         throw new Error('SDS metadata requires a positive sample-frequency');
     }
 

@@ -434,6 +434,51 @@ describe('SdsExplorerProvider', () => {
         expect(unusedGroup?.contextValue).toBe('groupMetadata');
         expect(unusedGroup?.description).toBe('0 recordings');
         expect(unusedGroup?.children).toEqual([]);
+        const metadataParseCalls = vi.mocked(parseMetadataFile).mock.calls;
+        expect(metadataParseCalls.map(([metadataPath, options]) => [metadataPath.replace(/\\/g, '/'), options])).toContainEqual([
+            'c:/meta/nested/image.sds.yml',
+            { allowMissingSampleFrequency: true },
+        ]);
+        expect(metadataParseCalls).not.toContainEqual([expect.any(String), expect.objectContaining({ sdsFilePath: expect.any(String) })]);
+    });
+
+    it('routes media files without invoking SDS-backed frequency inference', async () => {
+        vi.mocked(fs.readdirSync).mockImplementation((dirPath: fs.PathLike) => {
+            const normalized = String(dirPath).replace(/\\/g, '/');
+            if (normalized === 'c:/workspace') {
+                return [createDirent('camera.0.sds', 'file')] as never;
+            }
+            return [] as never;
+        });
+        vi.mocked(fs.existsSync).mockImplementation((targetPath: fs.PathLike) => {
+            return String(targetPath).replace(/\\/g, '/') === 'c:/workspace/camera.sds.yml';
+        });
+        vi.mocked(fs.statSync).mockImplementation(() => ({ size: 1024 * 1024 * 1024 }) as never);
+        vi.mocked(parseMetadataFile).mockImplementation((metadataPath: string) => ({ metadataPath }) as never);
+        vi.mocked(detectMediaType).mockReturnValue('image');
+        const configManager = {
+            onDidChangeConfig: vi.fn(),
+            getConfigFile: vi.fn(() => 'active.sdsio.yml'),
+            getConfig: vi.fn(() => ({ workdir: undefined, metadir: undefined })),
+        };
+        const provider = new SdsExplorerProvider(configManager as never);
+
+        const rootItems = await provider.getChildren();
+        const groups = await provider.getChildren(rootItems[0]);
+        const cameraFile = groups.find((item) => item.label === 'camera')?.children?.[0];
+
+        const metadataParseCalls = vi.mocked(parseMetadataFile).mock.calls;
+        expect(metadataParseCalls.map(([metadataPath, options]) => [metadataPath.replace(/\\/g, '/'), options])).toContainEqual([
+            'c:/workspace/camera.sds.yml',
+            { allowMissingSampleFrequency: true },
+        ]);
+        expect(metadataParseCalls).not.toContainEqual([expect.any(String), expect.objectContaining({ sdsFilePath: expect.any(String) })]);
+        expect(cameraFile?.command).toEqual({
+            command: 'arm-sds.openMediaViewer',
+            title: 'Open in Media Viewer',
+            arguments: [cameraFile],
+        });
+        expect((cameraFile?.iconPath as { id: string }).id).toBe('paintcan');
     });
 
     it('scans workdir-only configs and sorts groups before standalone SDS files', async () => {

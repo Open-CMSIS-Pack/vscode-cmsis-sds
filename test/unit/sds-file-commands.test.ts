@@ -367,7 +367,7 @@ describe('registerSdsFileCommands', () => {
             filters: { 'CSV files': ['csv'] },
             title: 'Export SDS to CSV',
         });
-        expect(parseMetadataFile).toHaveBeenCalledWith(metadataPath);
+        expect(parseMetadataFile).toHaveBeenCalledWith(metadataPath, { sdsFilePath: sdsPath, inferMissingSampleFrequency: true });
         expect(parseSdsFile).toHaveBeenCalledWith(sdsPath);
         expect(decodeAllRecords).toHaveBeenCalledWith(parsed, metadata);
         expect(exportToCsv).toHaveBeenCalledWith(samples, metadata.sds.content, csvPath, true);

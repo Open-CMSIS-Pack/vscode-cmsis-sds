@@ -220,7 +220,7 @@ export class SdsMediaViewerPanel {
         try {
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
-                metadata = parseMetadataFile(this.metadataPath);
+                metadata = parseMetadataFile(this.metadataPath, { sdsFilePath: this.sdsFilePath, inferMissingSampleFrequency: true });
             }
             this.metadata = metadata;
 
@@ -234,9 +234,9 @@ export class SdsMediaViewerPanel {
             this.parsedFile = undefined;
 
             if (this.mediaType === 'image' || this.mediaType === 'video') {
-                this.recordIndex = indexSdsRecords(this.sdsFilePath);
+                this.recordIndex = indexSdsRecords(this.sdsFilePath, { strict: false });
             }
-            this.parsedFile = parseSdsFile(this.sdsFilePath);
+            this.parsedFile = parseSdsFile(this.sdsFilePath, { strict: false });
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             this.sdsFileStats = getSdsFileStats(this.parsedFile, tickFreq);
 
