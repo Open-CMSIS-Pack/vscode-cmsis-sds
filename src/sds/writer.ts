@@ -511,37 +511,57 @@ export function parseMetadataString(text: string, options: ParseMetadataOptions 
 }
 
 export function calculateMedianSampleFrequencyFromSdsFile(sdsFilePath: string, tickFrequency: number = 1000): number {
-    const timestamps: number[] = [];
-    const buffer = fs.readFileSync(sdsFilePath);
-    let offset = 0;
+    const fd = fs.openSync(sdsFilePath, 'r');
+    const header = Buffer.alloc(8);
+    const deltas: number[] = [];
+    let recordCount = 0;
 
-    while (offset < buffer.length) {
-        const recordOffset = offset;
-        const remainingHeaderBytes = buffer.length - offset;
-        if (remainingHeaderBytes < 8) {
-            throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of 8 bytes available)`);
-        }
+    try {
+        const fileSize = fs.fstatSync(fd).size;
+        let position = 0;
+        let previousTimestamp: number | undefined;
 
-        const timestamp = buffer.readUInt32LE(offset);
-        const dataSize = buffer.readUInt32LE(offset + 4);
-        offset += 8;
-        if (offset + dataSize > buffer.length) {
-            throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: truncated payload (${buffer.length - offset} of ${dataSize} bytes available)`);
+        while (position < fileSize) {
+            const recordOffset = position;
+            const remainingHeaderBytes = fileSize - position;
+
+            if (remainingHeaderBytes < 8) {
+                throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: incomplete header (${remainingHeaderBytes} of 8 bytes available)`);
+            }
+
+            const bytesRead = fs.readSync(fd, header, 0, 8, position);
+            if (bytesRead < 8) {
+                throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: incomplete header`);
+            }
+
+            const timestamp = header.readUInt32LE(0);
+            const dataSize = header.readUInt32LE(4);
+            position += 8;
+
+            if (position + dataSize > fileSize) {
+                throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: corrupt SDS record at offset ${recordOffset}: truncated payload (${fileSize - position} of ${dataSize} bytes available)`);
+            }
+
+            if (previousTimestamp !== undefined) {
+                const delta = (timestamp - previousTimestamp + 0x100000000) % 0x100000000;
+                if (delta > 0) {
+                    deltas.push(delta);
+                }
+            }
+
+            previousTimestamp = timestamp;
+            recordCount += 1;
+            position += dataSize;
         }
-        timestamps.push(timestamp);
-        offset += dataSize;
+    } finally {
+        fs.closeSync(fd);
     }
 
-    if (timestamps.length < 2) {
+    if (recordCount < 2) {
         throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: at least two SDS records are required`);
     }
 
-    const uint32Range = 0x100000000;
-    const deltas = timestamps
-        .slice(1)
-        .map((timestamp, index) => (timestamp - timestamps[index] + uint32Range) % uint32Range)
-        .filter((delta) => delta > 0)
-        .sort((left, right) => left - right);
+    deltas.sort((left, right) => left - right);
 
     if (deltas.length === 0) {
         throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: SDS record timestamps do not advance`);
