@@ -203,18 +203,20 @@ describe('parseSdsBuffer', () => {
         expect(parsed.records).toEqual([]);
     });
 
-    it('handles buffer shorter than header', () => {
-        const parsed = parseSdsBuffer(Buffer.alloc(4));
-        expect(parsed.totalRecords).toBe(0);
+    it('throws on incomplete trailing headers', () => {
+        expect(() => parseSdsBuffer(Buffer.alloc(4))).toThrow(
+            'Corrupt SDS record at offset 0: incomplete header (4 of 8 bytes available)'
+        );
     });
 
-    it('handles truncated record (header present, data cut off)', () => {
+    it('throws on truncated payloads', () => {
         // Header says 100 bytes of data, but only 10 bytes follow
         const buf = Buffer.alloc(8 + 10);
         buf.writeUInt32LE(0, 0);    // timestamp
         buf.writeUInt32LE(100, 4);  // dataSize = 100 (but only 10 bytes available)
-        const parsed = parseSdsBuffer(buf);
-        expect(parsed.totalRecords).toBe(0); // truncated record skipped
+        expect(() => parseSdsBuffer(buf)).toThrow(
+            'Corrupt SDS record at offset 0: truncated payload (10 of 100 bytes available)'
+        );
     });
 
     it('parses multiple records correctly', () => {
@@ -568,7 +570,7 @@ describe('streaming parser helpers', () => {
         ]);
     });
 
-    it('stops iterating and indexing at a truncated record', () => {
+    it('throws when iterating and indexing a truncated record', () => {
         const filePath = path.join(tmpDir, 'truncated-stream.0.sds');
         writeSdsFile(filePath, [{ timestamp: 1, dataSize: 1, data: Buffer.from([9]) }]);
         const truncatedHeader = Buffer.alloc(8);
@@ -576,8 +578,25 @@ describe('streaming parser helpers', () => {
         truncatedHeader.writeUInt32LE(10, 4);
         fs.appendFileSync(filePath, truncatedHeader);
 
-        expect(Array.from(parseSdsRecordIterator(filePath))).toHaveLength(1);
-        expect(indexSdsRecords(filePath)).toHaveLength(1);
+        expect(() => Array.from(parseSdsRecordIterator(filePath))).toThrow(
+            'Corrupt SDS record at offset 9: truncated payload (0 of 10 bytes available)'
+        );
+        expect(() => indexSdsRecords(filePath)).toThrow(
+            'Corrupt SDS record at offset 9: truncated payload (0 of 10 bytes available)'
+        );
+    });
+
+    it('throws when iterating and indexing an incomplete trailing header', () => {
+        const filePath = path.join(tmpDir, 'incomplete-header-stream.0.sds');
+        writeSdsFile(filePath, [{ timestamp: 1, dataSize: 1, data: Buffer.from([9]) }]);
+        fs.appendFileSync(filePath, Buffer.alloc(4));
+
+        expect(() => Array.from(parseSdsRecordIterator(filePath))).toThrow(
+            'Corrupt SDS record at offset 9: incomplete header (4 of 8 bytes available)'
+        );
+        expect(() => indexSdsRecords(filePath)).toThrow(
+            'Corrupt SDS record at offset 9: incomplete header (4 of 8 bytes available)'
+        );
     });
 });
 
@@ -659,7 +678,7 @@ describe('metadata YAML roundtrip', () => {
         const filePath = path.join(tmpDir, 'Gyro.sds.yml');
         const sdsPath = writeMinimalSdsFile('Gyro.0.sds');
         writeMetadataFile(filePath, original);
-        const parsed = parseMetadataFile(filePath, sdsPath);
+        const parsed = parseMetadataFile(filePath, { sdsFilePath: sdsPath });
 
         expect(parsed.sds.name).toBe('Gyro');
         expect(parsed.sds.description).toBe('Test gyroscope');
@@ -683,7 +702,7 @@ describe('metadata YAML roundtrip', () => {
         };
 
         const yaml = serializeMetadataToYaml(meta);
-        const parsed = parseMetadataString(yaml, writeMinimalSdsFile('Camera.0.sds'));
+        const parsed = parseMetadataString(yaml, { sdsFilePath: writeMinimalSdsFile('Camera.0.sds') });
 
         expect(parsed.sds.content[0].image).toBeDefined();
         expect(parsed.sds.content[0].image!.pixel_format).toBe('RGB888');
@@ -749,7 +768,7 @@ describe('metadata YAML roundtrip', () => {
         };
 
         const yaml = serializeMetadataToYaml(meta);
-        const parsed = parseMetadataString(yaml, writeMinimalSdsFile('Mic.0.sds'));
+        const parsed = parseMetadataString(yaml, { sdsFilePath: writeMinimalSdsFile('Mic.0.sds') });
 
         expect(yaml).toContain('  - audio:');
         expect(yaml).not.toContain('value: undefined');
@@ -781,7 +800,7 @@ describe('metadata YAML roundtrip', () => {
 
         writeMetadataFile(filePath, meta);
         const text = fs.readFileSync(filePath, 'utf-8');
-        const parsed = parseMetadataFile(filePath, sdsPath);
+        const parsed = parseMetadataFile(filePath, { sdsFilePath: sdsPath });
 
         expect(text).toContain('  - image:');
         expect(text).toContain('  - audio:');
@@ -865,7 +884,7 @@ sds:
   - value: "channel one"
     type: 'int16_t'
     unit: "m/s"
-`, writeMinimalSdsFile('Quoted.0.sds'));
+`, { sdsFilePath: writeMinimalSdsFile('Quoted.0.sds') });
 
         expect(parsed.sds.name).toBe('Quoted Stream');
         expect(parsed.sds.description).toBe('quoted description');
@@ -882,7 +901,7 @@ sds:
   content:
   - value: raw
     type: fixed32
-`, writeMinimalSdsFile('Invalid.0.sds'))).toThrow('Unsupported SDS data type: fixed32');
+`, { sdsFilePath: writeMinimalSdsFile('Invalid.0.sds') })).toThrow('Unsupported SDS data type: fixed32');
     });
 
     it('rejects missing sample frequency when the SDS file cannot provide an inference', () => {
@@ -897,7 +916,24 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, sdsPath)).toThrow('at least two SDS records are required');
+`, { sdsFilePath: sdsPath })).toThrow('at least two SDS records are required');
+    });
+
+    it('rejects invalid explicit sample frequency instead of inferring from SDS data', () => {
+        const sdsPath = path.join(tmpDir, 'InvalidExplicitFrequency.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 10, dataSize: 1, data: Buffer.from([2]) },
+        ]);
+
+        expect(() => parseMetadataString(`
+sds:
+  name: InvalidExplicitFrequency
+  sample-frequency: invalid
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath })).toThrow('SDS metadata requires a positive sample-frequency');
     });
 
     it('rejects legacy frequency fields', () => {
@@ -908,7 +944,7 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, writeMinimalSdsFile('LegacyFrequency.0.sds'))).toThrow('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
+`, { sdsFilePath: writeMinimalSdsFile('LegacyFrequency.0.sds') })).toThrow('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
     });
 
     it('infers missing sample frequency from the median SDS timestamp interval', () => {
@@ -926,9 +962,28 @@ sds:
   content:
   - value: raw
     type: uint8_t
-`, sdsPath);
+`, { sdsFilePath: sdsPath });
 
         expect(parsed.sds['sample-frequency']).toBe(100);
+    });
+
+    it('infers missing sample frequency across uint32 timestamp wrap-around', () => {
+        const sdsPath = path.join(tmpDir, 'WrappedTimestamp.0.sds');
+        writeSdsFile(sdsPath, [
+            { timestamp: 0xfffffff0, dataSize: 1, data: Buffer.from([1]) },
+            { timestamp: 4, dataSize: 1, data: Buffer.from([2]) },
+            { timestamp: 24, dataSize: 1, data: Buffer.from([3]) },
+        ]);
+
+        const parsed = parseMetadataString(`
+sds:
+  name: WrappedTimestamp
+  content:
+  - value: raw
+    type: uint8_t
+`, { sdsFilePath: sdsPath });
+
+        expect(parsed.sds['sample-frequency']).toBe(50);
     });
 
     it('infers missing sample frequency when parsing a metadata file with an explicit SDS path', () => {
@@ -948,7 +1003,7 @@ sds:
     type: uint8_t
 `, 'utf-8');
 
-        const parsed = parseMetadataFile(metaPath, sdsPath);
+        const parsed = parseMetadataFile(metaPath, { sdsFilePath: sdsPath });
 
         expect(parsed.sds['sample-frequency']).toBe(200);
     });
@@ -973,7 +1028,7 @@ sds:
     type: uint8_t
 `, 'utf-8');
 
-        const parsed = parseMetadataFile(metaPath, sdsPath);
+        const parsed = parseMetadataFile(metaPath, { sdsFilePath: sdsPath });
 
         expect(parsed.sds['sample-frequency']).toBe(250);
     });
@@ -985,7 +1040,7 @@ sds:
   sample-frequency: 1
   content:
   - value: raw
-`, writeMinimalSdsFile('InvalidContent.0.sds'))).toThrow('SDS content entry 0 must define both value and type, or neither for media-only content');
+`, { sdsFilePath: writeMinimalSdsFile('InvalidContent.0.sds') })).toThrow('SDS content entry 0 must define both value and type, or neither for media-only content');
 
         expect(() => serializeMetadataToYaml({
             sds: {
@@ -1008,7 +1063,7 @@ sds:
         };
 
         const yaml = serializeMetadataToYaml(meta);
-        const parsed = parseMetadataString(yaml, writeMinimalSdsFile('Scaled.0.sds'));
+        const parsed = parseMetadataString(yaml, { sdsFilePath: writeMinimalSdsFile('Scaled.0.sds') });
 
         expect(parsed.sds.content[0].scale).toBe(0.01);
         expect(parsed.sds.content[0].offset).toBe(-40);

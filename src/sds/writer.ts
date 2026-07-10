@@ -295,20 +295,23 @@ function appendMediaBlockFields(yaml: string, content: SdsContentValue, block: M
     return yaml;
 }
 
+export interface ParseMetadataOptions {
+    sdsFilePath?: string;
+}
+
 /**
  * Parse an SDS YAML metadata file (simple parser, no YAML library dependency).
- * sdsFilePath identifies the SDS data file used for metadata inference.
  */
-export function parseMetadataFile(filePath: string, sdsFilePath: string): SdsMetadata {
+export function parseMetadataFile(filePath: string, options: ParseMetadataOptions = {}): SdsMetadata {
     const text = fs.readFileSync(filePath, 'utf-8');
-    return parseMetadataString(text, sdsFilePath);
+    return parseMetadataString(text, options);
 }
 
 /**
  * Parse YAML metadata from a string.
  * Supports nested image, audio, and video metadata blocks.
  */
-export function parseMetadataString(text: string, sdsFilePath: string): SdsMetadata {
+export function parseMetadataString(text: string, options: ParseMetadataOptions = {}): SdsMetadata {
     const lines = text.split('\n');
     const metadata: SdsMetadata = {
         sds: {
@@ -323,6 +326,7 @@ export function parseMetadataString(text: string, sdsFilePath: string): SdsMetad
     let inImage = false;
     let inAudio = false;
     let inVideo = false;
+    let hasSampleFrequency = false;
 
     for (const rawLine of lines) {
         const line = rawLine.trimEnd();
@@ -479,6 +483,7 @@ export function parseMetadataString(text: string, sdsFilePath: string): SdsMetad
         } else if (trimmed.startsWith('description:')) {
             metadata.sds.description = extractYamlValue(trimmed.replace('description:', '').trim());
         } else if (trimmed.startsWith('sample-frequency:')) {
+            hasSampleFrequency = true;
             metadata.sds['sample-frequency'] = parseFloat(trimmed.replace('sample-frequency:', '').trim());
         } else if (trimmed.startsWith('frequency:')) {
             throw new Error('Unsupported SDS metadata field: frequency. Use sample-frequency instead.');
@@ -492,9 +497,9 @@ export function parseMetadataString(text: string, sdsFilePath: string): SdsMetad
         metadata.sds.content.push(currentContent);
     }
 
-    if (!Number.isFinite(metadata.sds['sample-frequency']) && sdsFilePath) {
+    if (!hasSampleFrequency && !Number.isFinite(metadata.sds['sample-frequency']) && options.sdsFilePath) {
         metadata.sds['sample-frequency'] = calculateMedianSampleFrequencyFromSdsFile(
-            sdsFilePath,
+            options.sdsFilePath,
             metadata.sds['tick-frequency'] ?? 1000
         );
     }
@@ -524,9 +529,10 @@ export function calculateMedianSampleFrequencyFromSdsFile(sdsFilePath: string, t
         throw new Error(`Cannot calculate sample-frequency from ${sdsFilePath}: at least two SDS records are required`);
     }
 
+    const uint32Range = 0x100000000;
     const deltas = timestamps
         .slice(1)
-        .map((timestamp, index) => timestamp - timestamps[index])
+        .map((timestamp, index) => (timestamp - timestamps[index] + uint32Range) % uint32Range)
         .filter((delta) => delta > 0)
         .sort((left, right) => left - right);
 

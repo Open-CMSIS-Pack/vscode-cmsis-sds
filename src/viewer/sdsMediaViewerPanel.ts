@@ -220,7 +220,7 @@ export class SdsMediaViewerPanel {
         try {
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
-                metadata = parseMetadataFile(this.metadataPath, this.sdsFilePath);
+                metadata = parseMetadataFile(this.metadataPath, { sdsFilePath: this.sdsFilePath });
             }
             this.metadata = metadata;
 
