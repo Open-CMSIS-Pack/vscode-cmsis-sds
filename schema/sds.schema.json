@@ -144,8 +144,8 @@
                             "minimum": 1,
                             "description": "Bits per audio sample"
                         },
-                        "audio-channels": {
-                            "title": "audio-channels:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/theory.html#audio-data-stream",
+                        "channels": {
+                            "title": "channels:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/theory.html#audio-data-stream",
                             "type": "integer",
                             "minimum": 1,
                             "description": "Number of interleaved audio channels"
@@ -162,7 +162,7 @@
                     "required": [
                         "sample-frequency",
                         "bit-depth",
-                        "audio-channels"
+                        "channels"
                     ],
                     "additionalProperties": false
                 }

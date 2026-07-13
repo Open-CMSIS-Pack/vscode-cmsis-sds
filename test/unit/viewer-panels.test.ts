@@ -569,7 +569,7 @@ describe('SdsMediaViewerPanel', () => {
                 name: 'audio',
                 'sample-frequency': 100,
                 'tick-frequency': 1000,
-                content: [{ audio: { 'sample-frequency': 1000, 'bit-depth': 16, 'audio-channels': 1 } }],
+                content: [{ audio: { 'sample-frequency': 1000, 'bit-depth': 16, 'channels': 1 } }],
             },
         };
         const records = Array.from({ length: 200 }, (_value, index) => ({

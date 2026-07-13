@@ -425,7 +425,7 @@ console.log(`Generating test project in: ${outDir}\n`);
                 audio: {
                     'sample-frequency': sampleRate,
                     'bit-depth': 16,
-                    'audio-channels': 1,
+                    'channels': 1,
                     format: 'pcm',
                 },
             }],
@@ -462,7 +462,7 @@ console.log(`Generating test project in: ${outDir}\n`);
                 audio: {
                     'sample-frequency': sampleRate,
                     'bit-depth': 16,
-                    'audio-channels': channels,
+                    'channels': channels,
                     format: 'pcm',
                 },
             }],
