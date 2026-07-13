@@ -56,7 +56,7 @@
       "    - audio:",
       "        sample-frequency: ${6:44100}",
       "        bit-depth: ${7|16,8,24,32|}",
-      "        audio-channels: ${8|1,2|}",
+      "        channels: ${8|1,2|}",
       "        format: ${9:pcm}"
     ]
   },

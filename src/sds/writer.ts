@@ -264,7 +264,7 @@ function appendMediaBlockFields(yaml: string, content: SdsContentValue, block: M
 `;
         yaml += `${fieldIndent}bit-depth: ${content.audio['bit-depth']}
 `;
-        yaml += `${fieldIndent}audio-channels: ${content.audio['audio-channels']}
+        yaml += `${fieldIndent}channels: ${content.audio['channels']}
 `;
         if (content.audio.format) {
             yaml += `${fieldIndent}format: ${content.audio.format}
@@ -372,7 +372,7 @@ export function parseMetadataString(text: string, options: ParseMetadataOptions 
                     currentContent.image = { pixel_format: 'RGB888', width: 0, height: 0, stride_bytes: 0 };
                 } else if (trimmed === '- audio:') {
                     inAudio = true;
-                    currentContent.audio = { 'sample-frequency': 0, 'bit-depth': 16, 'audio-channels': 1 };
+                    currentContent.audio = { 'sample-frequency': 0, 'bit-depth': 16, 'channels': 1 };
                 } else if (trimmed === '- video:') {
                     inVideo = true;
                     currentContent.video = { pixel_format: 'RGB888', width: 0, height: 0, fps: 0 };
@@ -393,7 +393,7 @@ export function parseMetadataString(text: string, options: ParseMetadataOptions 
                     inAudio = true;
                     inImage = false;
                     inVideo = false;
-                    currentContent.audio = { 'sample-frequency': 0, 'bit-depth': 16, 'audio-channels': 1 };
+                    currentContent.audio = { 'sample-frequency': 0, 'bit-depth': 16, 'channels': 1 };
                     continue;
                 }
                 if (trimmed === 'video:') {
@@ -424,8 +424,8 @@ export function parseMetadataString(text: string, options: ParseMetadataOptions 
                         currentContent.audio['sample-frequency'] = parseInt(trimmed.replace('sample-frequency:', '').trim(), 10);
                     } else if (trimmed.startsWith('bit-depth:')) {
                         currentContent.audio['bit-depth'] = parseInt(trimmed.replace('bit-depth:', '').trim(), 10);
-                    } else if (trimmed.startsWith('audio-channels:')) {
-                        currentContent.audio['audio-channels'] = parseInt(trimmed.replace('audio-channels:', '').trim(), 10);
+                    } else if (trimmed.startsWith('channels:')) {
+                        currentContent.audio['channels'] = parseInt(trimmed.replace('channels:', '').trim(), 10);
                     } else if (trimmed.startsWith('format:')) {
                         currentContent.audio['format'] = extractYamlValue(trimmed.replace('format:', '').trim());
                     }

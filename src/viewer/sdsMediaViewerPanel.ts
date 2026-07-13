@@ -294,7 +294,7 @@ export class SdsMediaViewerPanel {
                 const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
                 for (const record of parsed.records) {
                     try {
-                        const block = decodeAudioBlock(record.data, audioMeta['sample-frequency'], audioMeta['bit-depth'], audioMeta['audio-channels']);
+                        const block = decodeAudioBlock(record.data, audioMeta['sample-frequency'], audioMeta['bit-depth'], audioMeta['channels']);
                         frames.push({ timestamp: record.timestamp / tickFreq, samples: Array.from(block[0]) });
                     } catch { /* skip */ }
                 }
@@ -302,7 +302,7 @@ export class SdsMediaViewerPanel {
                 this.audioFrames = frames;
                 this.audioSampleRate = audioMeta['sample-frequency'];
                 this.audioBitDepth = audioMeta['bit-depth'];
-                this.audioChannels = audioMeta['audio-channels'];
+                this.audioChannels = audioMeta['channels'];
 
                 const totalSamples = frames.reduce((sum, frame) => sum + frame.samples.length, 0);
                 const domainStart = frames.length > 0 ? frames[0].timestamp : 0;
@@ -322,7 +322,7 @@ export class SdsMediaViewerPanel {
                         decimationPreset,
                         sampleRate: audioMeta['sample-frequency'],
                         bitDepth: audioMeta['bit-depth'],
-                        channels: audioMeta['audio-channels'],
+                        channels: audioMeta['channels'],
                         totalSamples,
                         totalRecords: parsed.records.length,
                         fileStats: this.sdsFileStats,
