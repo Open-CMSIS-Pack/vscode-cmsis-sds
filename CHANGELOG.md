@@ -1,5 +1,19 @@
 # Change Log
 
+## Unreleased
+
+- Fixed media-only SDS metadata YAML roundtrips for image, audio, and video streams without scalar content fields.
+- Added playback controls to the image viewer, using the stream sample frequency as the playback frame rate.
+- Aligned SDS and SDSIO schemas, snippets, generated sample projects, and metadata templates with SDS Framework 3.1.0 metadata fields.
+- Improved SDS sample timing for records containing multiple frames and corrected displayed recording intervals for custom tick frequencies.
+- Improved decoding of truncated image data so incomplete RAW8, Bayer, and grayscale frames remain viewable.
+- Improved SDS Explorer refresh behavior so recorded file sizes and flag changes update without unnecessary full tree refreshes.
+- Disabled SDSIO record and play controls when the extension is not connected to the SDSIO server.
+- Improved chart layout resizing and initial cursor synchronization in data and audio viewers.
+- Improved security handling for metadata/config file creation and webview message validation.
+- Improved CMSIS pack root discovery for SDS Check by falling back to the default pack cache location and showing clearer errors.
+- Updated README usage guidance and screenshots.
+
 ## 0.11.0
 
 - Combined SDSIO Flags and SDS Explorer into one streamlined control.
