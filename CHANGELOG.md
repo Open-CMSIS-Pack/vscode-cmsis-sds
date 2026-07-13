@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Fixed media-only SDS metadata YAML roundtrips for image, audio, and video streams without scalar content fields.
+- Fixed reading and saving image, audio, and video SDS metadata files that do not define scalar data channels.
 - Added playback controls to the image viewer, using the stream sample frequency as the playback frame rate.
 - Aligned SDS and SDSIO schemas, snippets, generated sample projects, and metadata templates with SDS Framework 3.1.0 metadata fields.
 - Improved SDS sample timing for records containing multiple frames and corrected displayed recording intervals for custom tick frequencies.
