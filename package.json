@@ -161,7 +161,7 @@
             },
             {
                 "command": "arm-sds.sds.closeConfig",
-                "title": "Close Configuration",
+                "title": "Close Configuration…",
                 "category": "SDS"
             },
             {
@@ -192,14 +192,14 @@
                     "id": "sdsExplorer",
                     "name": "Files",
                     "icon": "media/icons/sds-icon.svg",
-                    "contextualTitle": "SDS"
+                    "contextualTitle": "SDS View"
                 }
             ]
         },
         "viewsWelcome": [
             {
                 "view": "sdsExplorer",
-                "contents": "No SDS configuration selected.\n[New SDS Configuration](command:arm-sds.sds.newConfig)\n[Open SDS Configuration](command:arm-sds.sds.openConfig)"
+                "contents": "No SDS configuration selected.\n[Open Configuration in Workspace](command:arm-sds.sds.selectConfig)\n[Open Configuration](command:arm-sds.sds.openConfig)\n[Create Configuration](command:arm-sds.sds.newConfig)"
             }
         ],
         "menus": {
@@ -333,7 +333,7 @@
             }
         ],
         "configuration": {
-            "title": "SDS",
+            "title": "Arm SDS",
             "properties": {
                 "arm-sds.viewer.defaultZoomLevel": {
                     "type": "number",
