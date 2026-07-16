@@ -216,7 +216,7 @@ describe('SdsDiagnostics', () => {
 
         diagnostics.writeBanner();
 
-        expect(appendedLines()).toContain('  Extension: arm-cmsis-sds vunknown');
+        expect(appendedLines()).toContain('  Extension: arm-cmsis-sds v[unknown]');
     });
 
     it('keeps only the most recent history entries', () => {
