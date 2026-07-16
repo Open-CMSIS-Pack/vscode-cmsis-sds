@@ -212,7 +212,7 @@ export class SdsDiagnostics {
         const extension = vscode.extensions.all.find(
             ext => ext.packageJSON?.name === 'arm-cmsis-sds'
         );
-        return extension?.packageJSON?.version ?? 'unknown';
+        return extension?.packageJSON?.version ?? '[unknown]';
     }
 
     /** Dispose resources */
