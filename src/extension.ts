@@ -183,7 +183,7 @@ function configureTerminalPath(context: vscode.ExtensionContext, diagnostics: Sd
         diagnostics.error(DiagnosticSource.Extension, 'Terminal environment variable collection is not available. PATH will not be modified for SDSIO server terminal.');
         return;
     }
-    const pathVariableName = process.platform === 'win32' ? 'Path' : 'PATH';
+    const pathVariableName = getPathVariableName();
 
     collection.description = 'CMSIS SDS terminal environment';
     collection.delete('PATH');
@@ -199,4 +199,8 @@ function configureTerminalPath(context: vscode.ExtensionContext, diagnostics: Sd
         DiagnosticSource.Extension,
         `Prepended ${path.dirname(serverBinary)} to ${pathVariableName} for new integrated terminals.`
     );
+}
+
+function getPathVariableName(): string {
+    return Object.keys(process.env).find((variableName) => variableName.toLowerCase() === 'path') ?? (process.platform === 'win32' ? 'Path' : 'PATH');
 }

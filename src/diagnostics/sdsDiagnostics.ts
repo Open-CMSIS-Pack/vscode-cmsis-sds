@@ -68,7 +68,7 @@ export class SdsDiagnostics {
     };
 
     private constructor() {
-        this._outputChannel = vscode.window.createOutputChannel('CMSIS SDS Diagnostics');
+        this._outputChannel = vscode.window.createOutputChannel('Arm SDS');
     }
 
     /** Get the singleton instance */
@@ -113,7 +113,7 @@ export class SdsDiagnostics {
         this._outputChannel.clear();
         this._logHistory = [];
         this._writeRaw('╔═══════════════════════════════════════════════════════════════╗');
-        this._writeRaw('║              CMSIS SDS Diagnostics — Log cleared              ║');
+        this._writeRaw('║                     Arm SDS — Log cleared                     ║');
         this._writeRaw('╚═══════════════════════════════════════════════════════════════╝');
     }
 
@@ -154,7 +154,7 @@ export class SdsDiagnostics {
 
         this._writeRaw(' ');
         this._writeRaw('╔═════════════════════════════════════════════════════════╗');
-        this._writeRaw('║                   Arm SDS Diagnostics                   ║');
+        this._writeRaw('║                         Arm SDS                         ║');
         this._writeRaw('║                Server & System  Messages                ║');
         this._writeRaw('╚═════════════════════════════════════════════════════════╝');
         this._writeRaw(' ');
@@ -212,7 +212,7 @@ export class SdsDiagnostics {
         const extension = vscode.extensions.all.find(
             ext => ext.packageJSON?.name === 'arm-cmsis-sds'
         );
-        return extension?.packageJSON?.version ?? 'unknown';
+        return extension?.packageJSON?.version ?? '[unknown]';
     }
 
     /** Dispose resources */
