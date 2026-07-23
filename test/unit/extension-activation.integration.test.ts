@@ -15,6 +15,9 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 const createTreeViewMock = vi.fn();
 const executeCommandMock = vi.fn(async () => undefined);
@@ -270,5 +273,38 @@ describe('activate integration wiring', () => {
             'arm-sds.openGroupMetadata',
             expect.any(Function),
         );
+    });
+
+    it('prepends the SDSIO server directory to new terminal PATH environments', async () => {
+        const extension = await import('../../src/extension');
+        const extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'sds-extension-'));
+        const toolsDir = path.join(extensionPath, 'tools');
+        const collection = {
+            description: undefined as string | undefined,
+            delete: vi.fn(),
+            prepend: vi.fn(),
+        };
+
+        try {
+            fs.mkdirSync(toolsDir, { recursive: true });
+            fs.writeFileSync(path.join(toolsDir, 'sdsio-server.exe'), '');
+
+            const context = {
+                subscriptions: [] as Array<{ dispose?: () => void }>,
+                extensionPath,
+                extensionUri: { fsPath: extensionPath },
+                environmentVariableCollection: collection,
+            };
+
+            extension.activate(context as never);
+
+            const pathVariableName = Object.keys(process.env).find((variableName) => variableName.toLowerCase() === 'path') ?? (process.platform === 'win32' ? 'Path' : 'PATH');
+            expect(collection.description).toBe('CMSIS SDS terminal environment');
+            expect(collection.delete).toHaveBeenCalledWith('PATH');
+            expect(collection.delete).toHaveBeenCalledWith('Path');
+            expect(collection.prepend).toHaveBeenCalledWith(pathVariableName, `${toolsDir}${path.delimiter}`);
+        } finally {
+            fs.rmSync(extensionPath, { recursive: true, force: true });
+        }
     });
 });

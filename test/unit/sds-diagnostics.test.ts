@@ -96,7 +96,7 @@ describe('SdsDiagnostics', () => {
         expect(first).toBe(second);
         expect(diag()).toBe(first);
         expect(vscodeMockState.createOutputChannelMock).toHaveBeenCalledTimes(1);
-        expect(vscodeMockState.createOutputChannelMock).toHaveBeenCalledWith('CMSIS SDS Diagnostics');
+        expect(vscodeMockState.createOutputChannelMock).toHaveBeenCalledWith('Arm SDS');
         expect(first.outputChannel).toBe(lastOutputChannel());
     });
 
@@ -185,7 +185,7 @@ describe('SdsDiagnostics', () => {
         expect(appendedLines()).toEqual([
             expect.stringContaining('Before clear'),
             '╔═══════════════════════════════════════════════════════════════╗',
-            expect.stringContaining('CMSIS SDS Diagnostics'),
+            expect.stringContaining('Arm SDS'),
             '╚═══════════════════════════════════════════════════════════════╝',
         ]);
 
@@ -203,7 +203,7 @@ describe('SdsDiagnostics', () => {
         diagnostics.writeBanner();
 
         const lines = appendedLines();
-        expect(lines).toContain('║                   Arm SDS Diagnostics                   ║');
+        expect(lines).toContain('║                         Arm SDS                         ║');
         expect(lines).toContain('║                Server & System  Messages                ║');
         expect(lines).toContain('  VS Code: 1.118.0-test');
         expect(lines).toContain('  Extension: arm-cmsis-sds v0.11.0');
@@ -216,7 +216,7 @@ describe('SdsDiagnostics', () => {
 
         diagnostics.writeBanner();
 
-        expect(appendedLines()).toContain('  Extension: arm-cmsis-sds vunknown');
+        expect(appendedLines()).toContain('  Extension: arm-cmsis-sds v[unknown]');
     });
 
     it('keeps only the most recent history entries', () => {

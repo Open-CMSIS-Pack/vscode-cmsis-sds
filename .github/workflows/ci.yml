@@ -177,7 +177,7 @@ jobs:
 
       - name: Publish coverage report to QLTY
         if: github.repository_owner == 'Open-CMSIS-Pack' && matrix.vsce_target == 'linux-x64'
-        uses: qltysh/qlty-action/coverage@a19242102d17e497f437d7466aa01b528537e899 # v2.2.0
+        uses: qltysh/qlty-action/coverage@08a0a862c159eae9b9003081da6663d96efef637 # v2.3.0
         with:
           token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
           files: coverage/lcov.info
@@ -256,7 +256,7 @@ jobs:
           pattern: cmsis-sds-*.vsix
 
       - name: Attach packages
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: |
             **/*.vsix

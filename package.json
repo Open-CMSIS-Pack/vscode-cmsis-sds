@@ -164,7 +164,7 @@
             },
             {
                 "command": "arm-sds.sds.closeConfig",
-                "title": "Close Configuration",
+                "title": "Close Configuration…",
                 "category": "SDS"
             },
             {
@@ -195,14 +195,14 @@
                     "id": "sdsExplorer",
                     "name": "Files",
                     "icon": "media/icons/sds-icon.svg",
-                    "contextualTitle": "SDS"
+                    "contextualTitle": "SDS View"
                 }
             ]
         },
         "viewsWelcome": [
             {
                 "view": "sdsExplorer",
-                "contents": "No SDS configuration selected.\n[New SDS Configuration](command:arm-sds.sds.newConfig)\n[Open SDS Configuration](command:arm-sds.sds.openConfig)"
+                "contents": "No SDS configuration selected.\n[Open Configuration in Workspace](command:arm-sds.sds.selectConfig)\n[Open Configuration](command:arm-sds.sds.openConfig)\n[Create Configuration](command:arm-sds.sds.newConfig)"
             }
         ],
         "menus": {
@@ -336,7 +336,7 @@
             }
         ],
         "configuration": {
-            "title": "SDS",
+            "title": "Arm SDS",
             "properties": {
                 "arm-sds.viewer.defaultZoomLevel": {
                     "type": "number",
@@ -446,7 +446,7 @@
         "fs-extra": "^11.3.3",
         "glob": "^13.0.6",
         "globals": "^17.6.0",
-        "markdownlint-cli": "^0.49.0",
+        "markdownlint-cli": "^0.49.1",
         "npm-run-all": "^4.1.5",
         "semver": "^7.8.0",
         "tsx": "^4.22.4",
@@ -468,6 +468,7 @@
     "overrides": {
         "tar@>=6.1.2": "^7.5.11",
         "@tootallnate/once": "3.0.1",
+        "shell-quote": "^1.10.0",
         "@vscode/vsce": {
             "cheerio": "1.0.0-rc.12"
         },

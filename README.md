@@ -51,7 +51,7 @@ If a configuration is open, the **SDS View** shows the SDS files and related opt
 
 ### File Action Buttons
 
-![File context menu action buttons](/media/screenshots/file-context-icons.png)
+![File context menu action buttons](media/screenshots/file-context-icons.png)
 
 | Action | Description |
 |--------|-------------|
@@ -60,7 +60,7 @@ If a configuration is open, the **SDS View** shows the SDS files and related opt
 
 ### Context Menu Actions
 
-![Context menu actions](/media/screenshots/sds-file-context-menu.png)
+![Context menu actions](media/screenshots/sds-file-context-menu.png)
 
 | Action | Description |
 |--------|-------------|
