@@ -40,7 +40,7 @@ describe('schema documentation links', () => {
             'Documentation: https://arm-software.github.io/SDS-Framework/main/theory.html#sds-metadata-format',
         );
         expect(sdsioSchema.properties.sdsio.title).toContain(
-            'Documentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-yml',
+            'Documentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio',
         );
     });
 });
