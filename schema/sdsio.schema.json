@@ -9,7 +9,7 @@
     ],
     "properties": {
         "sdsio": {
-            "title": "sdsio:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-yml",
+            "title": "sdsio:\nDocumentation: https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio",
             "type": "object",
             "description": "SDSIO control file configuration",
             "properties": {
