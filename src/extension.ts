@@ -31,7 +31,6 @@ import { SdsioConfigManager } from './controller/sdsioConfigManager';
 import { SdsioServerLauncher } from './controller/sdsioServerLauncher';
 import { SdsioMonitorClient } from './recorder/sdsio/sdsIoMonitorClient';
 import { SdsDiagnostics, DiagnosticSource, diag } from './diagnostics/sdsDiagnostics';
-import { registerYamlSchemas } from './config/yamlSchemaRegistrar';
 import { setupSdsioConfigLifecycle } from './config/sdsioConfigLifecycle';
 import { registerSdsioConfigCommands } from './commands/sdsioConfigCommands';
 import { registerSdsioInterfaceCommands } from './commands/sdsioInterfaceCommands';
@@ -68,9 +67,6 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(diagnostics.outputChannel);
 
     configureTerminalPath(context, diagnostics);
-
-    // ── Register YAML Schemas for SDS Metadata/Control Files ───
-    void registerYamlSchemas(context);
 
     // ── SDSIO Monitor Client ────────────────────────────────────
     const monitor = new SdsioMonitorClient({ port: SDSIO_SERVER_MONITOR_PORT });

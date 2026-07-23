@@ -28,12 +28,20 @@ type MenuContribution = {
     when?: string;
 };
 
+type SchemaContribution = {
+    fileMatch: string[];
+    url: string;
+};
+
 describe('package.json contributions for merged explorer/flags UI', () => {
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as {
+        extensionDependencies: string[];
         contributes: {
             commands: CommandContribution[];
             views: Record<string, Array<{ id: string }>>;
+            yamlValidation: SchemaContribution[];
+            'json.schemas'?: SchemaContribution[];
             menus: {
                 'view/item/context': MenuContribution[];
             };
@@ -74,5 +82,26 @@ describe('package.json contributions for merged explorer/flags UI', () => {
         expect(commandContributions.get('arm-sds.sdsinterface.stop')?.enablement).toBe('arm-sds.sdsio.canStop');
         expect(commandContributions.get('arm-sds.sdsinterface.connect')?.enablement).toBe('arm-sds.sdsio.canConnect');
         expect(commandContributions.get('arm-sds.sdsinterface.disconnect')?.enablement).toBe('arm-sds.sdsio.canDisconnect');
+    });
+
+    it('contributes SDS YAML schemas through the YAML extension contract', () => {
+        expect(packageJson.extensionDependencies).toContain('redhat.vscode-yaml');
+        expect(packageJson.contributes['json.schemas']).toBeUndefined();
+        expect(packageJson.contributes.yamlValidation).toEqual([
+            {
+                fileMatch: [
+                    '**/*.sds.yml',
+                    '**/*.sds.yaml',
+                ],
+                url: './schema/sds.schema.json',
+            },
+            {
+                fileMatch: [
+                    '**/*.sdsio.yml',
+                    '**/*.sdsio.yaml',
+                ],
+                url: './schema/sdsio.schema.json',
+            },
+        ]);
     });
 });
