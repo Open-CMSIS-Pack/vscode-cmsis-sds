@@ -101,7 +101,25 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         ctx.putImageData(img, 0, 0);
     }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
 
-    const togglePlay = () => setPlaying(p => !p);
+    const togglePlay = useCallback(() => setPlaying(p => !p), []);
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.code !== 'Space') {
+                return;
+            }
+
+            event.preventDefault();
+            if (!event.repeat) {
+                togglePlay();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [togglePlay]);
 
     return (
         <div className="media-page">
