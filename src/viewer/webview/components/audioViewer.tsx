@@ -161,7 +161,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         });
     }, [filename]);
 
-    const stopPlayback = () => {
+    const stopPlayback = useCallback(() => {
         const source = sourceRef.current;
         if (source) {
             try {
@@ -173,17 +173,21 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             sourceRef.current = null;
         }
         setIsPlaying(false);
-    };
+    }, []);
 
-    const playLoadedSamples = async () => {
+    const playLoadedSamples = useCallback(async () => {
         if (sampleRate <= 0 || samples.length === 0) {
             return;
         }
 
+        const [start, end] = viewRange;
         const pcm: number[] = [];
         for (const frame of samples) {
-            for (const value of frame.samples) {
-                pcm.push(value);
+            for (let index = 0; index < frame.samples.length; index++) {
+                const time = frame.timestamp + (index / sampleRate);
+                if (time >= start && time <= end) {
+                    pcm.push(frame.samples[index]);
+                }
             }
         }
 
@@ -222,7 +226,31 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         sourceRef.current = source;
         setIsPlaying(true);
         source.start();
-    };
+    }, [sampleRate, samples, stopPlayback, viewRange]);
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.code !== 'Space') {
+                return;
+            }
+
+            event.preventDefault();
+            if (event.repeat) {
+                return;
+            }
+
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                void playLoadedSamples();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [isPlaying, playLoadedSamples, stopPlayback]);
 
     useEffect(() => {
         return () => {
@@ -233,7 +261,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 audioCtxRef.current = null;
             }
         };
-    }, []);
+    }, [stopPlayback]);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
