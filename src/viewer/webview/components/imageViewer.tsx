@@ -69,8 +69,13 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         const framesPerSecond = parseFloat(state.interval);
         if (!playing || !Number.isFinite(framesPerSecond) || framesPerSecond <= 0) { return; }
         timerRef.current = setInterval(() => {
-            const nextIndex = (index + 1) % Math.max(1, totalFrames);
-            changeIndex(nextIndex, { manual: false });
+            if (index >= totalFrames - 1) {
+                setPlaying(false);
+                changeIndex(0, { manual: false });
+                return;
+            }
+
+            changeIndex(index + 1, { manual: false });
         }, 1000 / framesPerSecond);
 
         return () => {
