@@ -13,6 +13,7 @@
 - Improved security handling for metadata/config file creation and webview message validation.
 - Improved CMSIS pack root discovery for SDS Check by falling back to the default pack cache location and showing clearer errors.
 - Updated README usage guidance and screenshots.
+- Improve audio playback to play only visible range
 
 ## 0.11.0
 
