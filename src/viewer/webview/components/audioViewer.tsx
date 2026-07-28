@@ -94,6 +94,14 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
 
     const resolvedDomainStart = domainStart ?? sampleDomain[0];
     const resolvedDomainEnd = domainEnd ?? sampleDomain[1];
+    const broadcastPlaybackState = useCallback((isPlaying: boolean) => {
+        broadcastMessage({
+            type: 'broadcast',
+            timeStamp: highlightedTime ?? resolvedDomainStart,
+            fileName: filename,
+            playbackState: isPlaying ? 'playing' : 'stopped',
+        });
+    }, [filename, highlightedTime, resolvedDomainStart]);
     const {
         viewRange,
         setViewRangeClamped,
@@ -161,7 +169,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         });
     }, [filename]);
 
-    const stopPlayback = () => {
+    const stopPlayback = useCallback((broadcast = true) => {
         const source = sourceRef.current;
         if (source) {
             try {
@@ -173,9 +181,12 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             sourceRef.current = null;
         }
         setIsPlaying(false);
-    };
+        if (broadcast) {
+            broadcastPlaybackState(false);
+        }
+    }, [broadcastPlaybackState]);
 
-    const playLoadedSamples = async () => {
+    const playLoadedSamples = useCallback(async (broadcast = true) => {
         if (sampleRate <= 0 || samples.length === 0) {
             return;
         }
@@ -204,7 +215,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             await audioCtx.resume();
         }
 
-        stopPlayback();
+        stopPlayback(false);
 
         const buffer = audioCtx.createBuffer(1, pcm.length, sampleRate);
         buffer.copyToChannel(Float32Array.from(pcm), 0);
@@ -216,24 +227,28 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             if (sourceRef.current === source) {
                 sourceRef.current = null;
                 setIsPlaying(false);
+                broadcastPlaybackState(false);
             }
         };
 
         sourceRef.current = source;
         setIsPlaying(true);
         source.start();
-    };
+        if (broadcast) {
+            broadcastPlaybackState(true);
+        }
+    }, [broadcastPlaybackState, sampleRate, samples, stopPlayback]);
 
     useEffect(() => {
         return () => {
-            stopPlayback();
+            stopPlayback(false);
             const audioCtx = audioCtxRef.current;
             if (audioCtx) {
                 void audioCtx.close();
                 audioCtxRef.current = null;
             }
         };
-    }, []);
+    }, [stopPlayback]);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
@@ -255,15 +270,26 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 return;
             }
 
+            const block = blockIndexFromTime(payload.timeStamp);
+            if (block === null) {
+                return;
+            }
+
+            if (payload.playbackState === 'stopped') {
+                stopPlayback(false);
+            } else if (payload.playbackState === 'playing') {
+                void playLoadedSamples(false);
+            }
+
             setHighlightedTime(payload.timeStamp);
-            setCurrentBlock(blockIndexFromTime(payload.timeStamp));
+            setCurrentBlock(block);
         };
 
         window.addEventListener('message', onMessage);
         return () => {
             window.removeEventListener('message', onMessage);
         };
-    }, [blockIndexFromTime, filename]);
+    }, [blockIndexFromTime, filename, playLoadedSamples, stopPlayback]);
 
     useEffect(() => {
         const onResize = () => {
@@ -327,7 +353,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     <Button
                         icon={isPlaying ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
                         type="text"
-                        title={isPlaying ? 'Stop Playback' : 'Play Visible Range'}
+                        title={isPlaying ? 'Pause' : 'Play Visible Range'}
                         onClick={() => {
                             if (isPlaying) {
                                 stopPlayback();
@@ -335,8 +361,9 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                                 void playLoadedSamples();
                             }
                         }}
-                        disabled={samples.length === 0}
-                    ></Button>
+                        disabled={samples.length === 0}>
+                        {isPlaying ? 'Pause' : 'Play'}
+                    </Button>
                 </Col>
                 <Col flex="auto">
                     <Slider
