@@ -290,24 +290,25 @@ export class SdsMediaViewerPanel {
                 const content = metadata.sds.content;
                 const audioMeta = content.find(c => c.audio)?.audio;
                 if (!audioMeta) { return { ...base, error: 'No audio metadata found in content.' }; }
+                const sampleRate = metadata.sds['sample-frequency'];
                 const frames: SampleFrame[] = [];
                 const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
                 for (const record of parsed.records) {
                     try {
-                        const block = decodeAudioBlock(record.data, audioMeta['sample-frequency'], audioMeta['bit-depth'], audioMeta['channels']);
+                        const block = decodeAudioBlock(record.data, sampleRate, audioMeta['bit-depth'], audioMeta['channels']);
                         frames.push({ timestamp: record.timestamp / tickFreq, samples: Array.from(block[0]) });
                     } catch { /* skip */ }
                 }
 
                 this.audioFrames = frames;
-                this.audioSampleRate = audioMeta['sample-frequency'];
+                this.audioSampleRate = sampleRate;
                 this.audioBitDepth = audioMeta['bit-depth'];
                 this.audioChannels = audioMeta['channels'];
 
                 const totalSamples = frames.reduce((sum, frame) => sum + frame.samples.length, 0);
                 const domainStart = frames.length > 0 ? frames[0].timestamp : 0;
                 const domainEnd = frames.length > 0
-                    ? frames[frames.length - 1].timestamp + (frames[frames.length - 1].samples.length / audioMeta['sample-frequency'])
+                    ? frames[frames.length - 1].timestamp + (frames[frames.length - 1].samples.length / sampleRate)
                     : 1;
                 const audioWindow = this.getAudioWindow(domainStart, domainEnd, 1200, 'high');
                 return {
@@ -320,7 +321,7 @@ export class SdsMediaViewerPanel {
                         domainStart,
                         domainEnd,
                         decimationPreset,
-                        sampleRate: audioMeta['sample-frequency'],
+                        sampleRate,
                         bitDepth: audioMeta['bit-depth'],
                         channels: audioMeta['channels'],
                         totalSamples,

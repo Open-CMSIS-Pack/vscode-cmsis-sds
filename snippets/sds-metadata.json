@@ -54,10 +54,9 @@
       "  tick-frequency: ${4:1000}",
       "  content:",
       "    - audio:",
-      "        sample-frequency: ${6:44100}",
-      "        bit-depth: ${7|16,8,24,32|}",
-      "        channels: ${8|1,2|}",
-      "        format: ${9:pcm}"
+      "        bit-depth: ${6|16,8,24,32|}",
+      "        channels: ${7|1,2|}",
+      "        format: ${8:pcm}"
     ]
   },
   "SDS Content Channel": {
