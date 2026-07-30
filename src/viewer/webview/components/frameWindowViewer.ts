@@ -35,6 +35,7 @@ type FrameWindowViewerOptions = {
     getNearEdgeMargin: (loadedFrameCount: number) => number;
     stationaryRequestQuality: Quality;
     onManualChangeStart?: () => void;
+    onPlaybackStateChange?: (state: 'playing' | 'stopped') => void;
 };
 
 const DRAG_REQUEST_THROTTLE_MS = 80;
@@ -47,6 +48,7 @@ export function useFrameWindowViewer({
     getNearEdgeMargin,
     stationaryRequestQuality,
     onManualChangeStart,
+    onPlaybackStateChange,
 }: FrameWindowViewerOptions) {
     const { frames, rangeStart = 0, totalFrames } = state;
     const [index, setIndex] = useState(rangeStart);
@@ -181,6 +183,10 @@ export function useFrameWindowViewer({
                         break;
                     }
 
+                    if (typeof broadcast.playbackState === 'string') {
+                        onPlaybackStateChange?.(broadcast.playbackState);
+                    }
+
                     const nextIndex = getNearestFrameIndexAtTimestamp(broadcast.timeStamp, windowFrames);
                     if (nextIndex === null) {
                         break;
@@ -235,7 +241,7 @@ export function useFrameWindowViewer({
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, mediaType, windowFrames]);
+    }, [filename, mediaType, onPlaybackStateChange, windowFrames]);
 
     useEffect(() => {
         const loadedStart = windowStart;
