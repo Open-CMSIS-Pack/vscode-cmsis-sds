@@ -239,16 +239,24 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         }
     }, [broadcastPlaybackState, sampleRate, samples, stopPlayback]);
 
-    useEffect(() => {
-        return () => {
-            stopPlayback(false);
-            const audioCtx = audioCtxRef.current;
-            if (audioCtx) {
-                void audioCtx.close();
-                audioCtxRef.current = null;
+    useEffect(() => () => {
+        const source = sourceRef.current;
+        if (source) {
+            try {
+                source.stop();
+            } catch {
+                // Source can already be stopped.
             }
-        };
-    }, [stopPlayback]);
+            source.disconnect();
+            sourceRef.current = null;
+        }
+
+        const audioCtx = audioCtxRef.current;
+        if (audioCtx) {
+            void audioCtx.close();
+            audioCtxRef.current = null;
+        }
+    }, []);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
