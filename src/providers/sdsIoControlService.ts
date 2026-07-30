@@ -342,9 +342,8 @@ export class SdsIoControlService {
             return;
         }
 
-        this.mode = nextMode;
+        this.setMode(nextMode);
         this.diagnostics.info(DiagnosticSource.Server, `${operationName} invoked. Control flags ${this.monitorConnected ? 'sent' : 'not sent'};`);
-        this.notifyModeChanged();
     }
 
     private findFlag(id: string): SdsFlag | undefined {
@@ -424,19 +423,11 @@ export class SdsIoControlService {
 
     private onMonitorOpen(message: SdsioMonitorOpenMessage): void {
         const mode: SdsIoMode = message.mode === 0 ? 'play' : 'record';
-        if (this.mode === mode) {
-            return;
-        }
-
-        this.mode = mode;
-        this.notifyModeChanged();
+        this.setMode(mode);
     }
 
     private onMonitorClose(): void {
-        if (this.mode !== 'idle') {
-            this.mode = 'idle';
-            this.notifyModeChanged();
-        }
+        this.setMode('idle');
         this.notifyFileUpdate();
     }
 
@@ -465,6 +456,16 @@ export class SdsIoControlService {
 
         this.monitorConnected = connected;
         this._onDidChange.fire({ event: SdsIoNotifyEvent.Connected, state: connected });
+        return true;
+    }
+
+    private setMode(mode: SdsIoMode): boolean {
+        if (this.mode === mode) {
+            return false;
+        }
+
+        this.mode = mode;
+        this.notifyModeChanged();
         return true;
     }
 
