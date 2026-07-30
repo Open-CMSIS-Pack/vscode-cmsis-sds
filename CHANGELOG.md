@@ -9,6 +9,8 @@
 - Improved decoding of truncated image data so incomplete RAW8, Bayer, and grayscale frames remain viewable.
 - Improved SDS Explorer refresh behavior so recorded file sizes and flag changes update without unnecessary full tree refreshes.
 - Disabled SDSIO record and play controls when the extension is not connected to the SDSIO server.
+- Synchronized media viewer playback controls for matching SDS recordings and timestamps.
+- Updated SDSIO play, record, and stop command state when recording or playback is started and stopped by the connected hardware.
 - Improved chart layout resizing and initial cursor synchronization in data and audio viewers.
 - Improved security handling for metadata/config file creation and webview message validation.
 - Improved CMSIS pack root discovery for SDS Check by falling back to the default pack cache location and showing clearer errors.

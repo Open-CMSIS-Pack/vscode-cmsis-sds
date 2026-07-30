@@ -15,7 +15,7 @@
  */
 
 import * as vscode from 'vscode';
-import { SdsioMonitorClient, SdsioMonitorInfo } from '../recorder/sdsio/sdsIoMonitorClient';
+import { SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
 import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS } from '../controller/sdsioConfigManager';
 import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
@@ -72,6 +72,7 @@ export class SdsIoControlService {
             monitor.on('connected', () => this.onMonitorConnected());
             monitor.on('disconnected', () => this.onMonitorDisconnected());
             monitor.on('info', (info: SdsioMonitorInfo) => this.onMonitorInfo(info));
+            monitor.on('open', (message: SdsioMonitorOpenMessage) => this.onMonitorOpen(message));
             monitor.on('close', () => this.onMonitorClose());
             monitor.on('flags', (setMask: number, unsetMask: number) => this.onMonitorFlags(setMask, unsetMask));
         }
@@ -341,9 +342,8 @@ export class SdsIoControlService {
             return;
         }
 
-        this.mode = nextMode;
+        this.setMode(nextMode);
         this.diagnostics.info(DiagnosticSource.Server, `${operationName} invoked. Control flags ${this.monitorConnected ? 'sent' : 'not sent'};`);
-        this.notifyModeChanged();
     }
 
     private findFlag(id: string): SdsFlag | undefined {
@@ -421,7 +421,13 @@ export class SdsIoControlService {
         this.diagnostics.info(DiagnosticSource.Server, `Received monitor info: sdsFlags=0x${info.sdsFlags.toString(16).toUpperCase().padStart(2, '0')}`);
     }
 
+    private onMonitorOpen(message: SdsioMonitorOpenMessage): void {
+        const mode: SdsIoMode = message.mode === 0 ? 'play' : 'record';
+        this.setMode(mode);
+    }
+
     private onMonitorClose(): void {
+        this.setMode('idle');
         this.notifyFileUpdate();
     }
 
@@ -450,6 +456,16 @@ export class SdsIoControlService {
 
         this.monitorConnected = connected;
         this._onDidChange.fire({ event: SdsIoNotifyEvent.Connected, state: connected });
+        return true;
+    }
+
+    private setMode(mode: SdsIoMode): boolean {
+        if (this.mode === mode) {
+            return false;
+        }
+
+        this.mode = mode;
+        this.notifyModeChanged();
         return true;
     }
 
