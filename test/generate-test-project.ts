@@ -420,10 +420,9 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'mic_16bit',
             description: 'Mono 16-bit PCM microphone',
-            ['sample-frequency']: blocksPerSec,
+            ['sample-frequency']: sampleRate,
             content: [{
                 audio: {
-                    'sample-frequency': sampleRate,
                     'bit-depth': 16,
                     'channels': 1,
                     format: 'pcm',
@@ -457,10 +456,9 @@ console.log(`Generating test project in: ${outDir}\n`);
         sds: {
             name: 'mic_stereo',
             description: 'Stereo 16-bit PCM',
-            ['sample-frequency']: blocksPerSec,
+            ['sample-frequency']: sampleRate,
             content: [{
                 audio: {
-                    'sample-frequency': sampleRate,
                     'bit-depth': 16,
                     'channels': channels,
                     format: 'pcm',
