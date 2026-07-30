@@ -120,6 +120,30 @@ test.describe('Media Viewer — Image', () => {
         expect(info).toContain('3 of 3');
     });
 
+    test('playback stops and resets after the final frame', async ({ page }) => {
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('.controls');
+
+        const playButton = page.locator('.controls button').first();
+        await playButton.click();
+
+        await expect(page.locator('.info-bar')).toContainText('1 of 3');
+        await expect(playButton).toContainText('Play');
+    });
+
+    test('Space toggles playback', async ({ page }) => {
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('.controls');
+
+        const playButton = page.locator('.controls button').first();
+        await page.locator('.media-page').focus();
+        await page.keyboard.press('Space');
+
+        await expect(playButton).toContainText('Pause');
+        await page.keyboard.press('Space');
+        await expect(playButton).toContainText('Play');
+    });
+
     test('toolbar zoom buttons exist', async ({ page }) => {
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');

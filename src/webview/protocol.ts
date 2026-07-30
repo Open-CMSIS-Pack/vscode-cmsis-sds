@@ -26,6 +26,7 @@ export type BroadcastMessage = WebviewMessage & {
     type: 'broadcast';
     timeStamp: number;
     fileName: string;
+    playbackState?: 'playing' | 'stopped';
 };
 
 export type InitMessage = WebviewMessage & {

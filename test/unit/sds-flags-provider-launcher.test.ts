@@ -560,6 +560,45 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canStop()).toBe(false);
     });
 
+    it('updates command state from hardware monitor open and close events', async () => {
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(
+            createConfigManager('active.sdsio.yml') as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+        await service.connectServer();
+
+        const events: SdsIoNotifyEvent[] = [];
+        service.onDidChange((event) => events.push(event.event));
+
+        monitor.emit('open', { mode: 0, fileName: 'playback.0.sds' });
+        expect(service.canPlay()).toBe(false);
+        expect(service.canRecord()).toBe(false);
+        expect(service.canStop()).toBe(true);
+
+        monitor.emit('open', { mode: 0, fileName: 'playback.0.sds' });
+        monitor.emit('close', 'playback.0.sds');
+        expect(service.canPlay()).toBe(true);
+        expect(service.canRecord()).toBe(true);
+        expect(service.canStop()).toBe(false);
+
+        monitor.emit('open', { mode: 1, fileName: 'recording.0.sds' });
+        expect(service.canPlay()).toBe(false);
+        expect(service.canRecord()).toBe(false);
+        expect(service.canStop()).toBe(true);
+
+        monitor.emit('close', 'recording.0.sds');
+        expect(events).toEqual([
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.FileUpdate,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.Mode,
+            SdsIoNotifyEvent.FileUpdate,
+        ]);
+    });
+
     it('does not transition mode when the connected monitor rejects the operation', async () => {
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');
