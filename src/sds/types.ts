@@ -72,7 +72,6 @@ export interface SdsImageMeta {
 
 /** Audio metadata within a content value */
 export interface SdsAudioMeta {
-    'sample-frequency': number;         // Sample rate in Hz (e.g., 44100)
     'bit-depth': number;           // Bits per sample (e.g., 16, 24, 32)
     'channels': number;      // Number of audio channels (1=mono, 2=stereo)
     format?: string;              // Codec identifier (e.g., 'pcm', 'wav', 'opus')

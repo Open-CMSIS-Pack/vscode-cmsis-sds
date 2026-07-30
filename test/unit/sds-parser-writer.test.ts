@@ -661,7 +661,7 @@ describe('metadata helpers', () => {
                 name: 'Mic',
                 'sample-frequency': 1,
                 content: [
-                    { audio: { 'sample-frequency': 16000, 'bit-depth': 16, 'channels': 1 } },
+                    { audio: { 'bit-depth': 16, 'channels': 1 } },
                 ],
             },
         })).toBe('audio');
@@ -805,9 +805,9 @@ describe('metadata YAML roundtrip', () => {
         const meta: SdsMetadata = {
             sds: {
                 name: 'Mic',
-                'sample-frequency': 1,
+                'sample-frequency': 16000,
                 content: [{
-                    audio: { 'sample-frequency': 16000, 'bit-depth': 16, 'channels': 1 },
+                    audio: { 'bit-depth': 16, 'channels': 1 },
                 }],
             },
         };
@@ -819,7 +819,8 @@ describe('metadata YAML roundtrip', () => {
         expect(yaml).not.toContain('value: undefined');
         expect(yaml).not.toContain('type: undefined');
         expect(parsed.sds.content[0].audio).toBeDefined();
-        expect(parsed.sds.content[0].audio!['sample-frequency']).toBe(16000);
+        expect(yaml).not.toContain('      sample-frequency:');
+        expect(parsed.sds['sample-frequency']).toBe(16000);
         expect(parsed.sds.content[0].audio!['bit-depth']).toBe(16);
         expect(parsed.sds.content[0].audio!['channels']).toBe(1);
     });
@@ -834,7 +835,7 @@ describe('metadata YAML roundtrip', () => {
                         image: { pixel_format: 'RGB888', width: 2, height: 1, stride_bytes: 8 },
                     },
                     {
-                        audio: { 'sample-frequency': 48000, 'bit-depth': 24, 'channels': 2, format: 'pcm' },
+                        audio: { 'bit-depth': 24, 'channels': 2, format: 'pcm' },
                     },
 
                 ],
@@ -866,7 +867,6 @@ sds:
       width: 2
       height: 1
   - audio:
-      sample-frequency: 48000
       bit-depth: 16
       channels: 2
   - video:
@@ -880,7 +880,8 @@ sds:
 `);
 
         expect(parsed.sds.content[0].image).toMatchObject({ pixel_format: 'RAW8', width: 2, height: 1 });
-        expect(parsed.sds.content[1].audio).toMatchObject({ 'sample-frequency': 48000, 'bit-depth': 16, 'channels': 2 });
+        expect(parsed.sds.content[1].audio).toMatchObject({ 'bit-depth': 16, 'channels': 2 });
+        expect(parsed.sds['sample-frequency']).toBe(60);
         expect(parsed.sds.content[2].video).toMatchObject({
             pixel_format: 'NV12',
             width: 640,
