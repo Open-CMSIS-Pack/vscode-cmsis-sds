@@ -47,7 +47,7 @@ export function VideoViewer({ state, filename }: VideoViewerProps) {
     const [zoom, setZoom] = useState(1);
     const [playing, setPlaying] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
-    const playbackTimestampRef = useRef(0);
+    const playbackTimestampRef = useRef(frames[0]?.timestamp ?? 0);
     const getVideoWindowSize = useCallback((quality: 'low' | 'high') => quality === 'low' ? 80 : 220, []);
     const getVideoNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(6, Math.floor(loadedFrameCount * 0.2)), []);
     const setPlaybackState = useCallback((nextPlaying: boolean, broadcast = true) => {
