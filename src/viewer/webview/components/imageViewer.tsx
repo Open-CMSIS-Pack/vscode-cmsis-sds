@@ -21,6 +21,7 @@ import { ImageFrame } from '../../../webview/protocol';
 import { decodeFrame, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
 import { useFrameWindowViewer } from './frameWindowViewer';
 import { SdsFileStats } from '../../../sds';
+import { broadcastMessage } from '../../../webview/vscode-api';
 
 export type ImageState = {
     frames: ImageFrame[];
@@ -44,9 +45,21 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const [zoom, setZoom] = useState(1);
     const [playing, setPlaying] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const playbackTimestampRef = useRef(frames[0]?.timestamp ?? 0);
     const getImageWindowSize = useCallback((quality: 'low' | 'high') => quality === 'low' ? 32 : 160, []);
     const getImageNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(8, Math.floor(loadedFrameCount * 0.2)), []);
-    const stopPlaybackOnManualChange = useCallback(() => setPlaying(false), []);
+    const setPlaybackState = useCallback((nextPlaying: boolean, broadcast = true) => {
+        setPlaying(nextPlaying);
+        if (broadcast) {
+            broadcastMessage({
+                type: 'broadcast',
+                timeStamp: playbackTimestampRef.current,
+                fileName: filename,
+                playbackState: nextPlaying ? 'playing' : 'stopped',
+            });
+        }
+    }, [filename]);
+    const stopPlaybackOnManualChange = useCallback(() => setPlaybackState(false), [setPlaybackState]);
     const {
         index,
         windowFrames,
@@ -63,19 +76,26 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         getNearEdgeMargin: getImageNearEdgeMargin,
         stationaryRequestQuality: playing ? 'low' : 'high',
         onManualChangeStart: stopPlaybackOnManualChange,
+        onPlaybackStateChange: state => setPlaybackState(state === 'playing', false),
     });
+
+    useEffect(() => {
+        const timestamp = getLoadedFrame(index)?.timestamp;
+        if (typeof timestamp === 'number') {
+            playbackTimestampRef.current = timestamp;
+        }
+    }, [getLoadedFrame, index]);
 
     useEffect(() => {
         const framesPerSecond = parseFloat(state.interval);
         if (!playing || !Number.isFinite(framesPerSecond) || framesPerSecond <= 0) { return; }
         timerRef.current = setInterval(() => {
             if (index >= totalFrames - 1) {
-                setPlaying(false);
-                changeIndex(0, { manual: false });
+                setPlaybackState(false);
                 return;
             }
-
-            changeIndex(index + 1, { manual: false });
+            const nextIndex = index + 1;
+            changeIndex(nextIndex, { manual: false });
         }, 1000 / framesPerSecond);
 
         return () => {
@@ -84,7 +104,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 timerRef.current = null;
             }
         };
-    }, [changeIndex, index, playing, state.interval, totalFrames]);
+    }, [changeIndex, index, playing, setPlaybackState, state.interval, totalFrames]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -101,7 +121,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         ctx.putImageData(img, 0, 0);
     }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
 
-    const togglePlay = useCallback(() => setPlaying(p => !p), []);
+    const togglePlay = useCallback(() => setPlaybackState(!playing), [playing, setPlaybackState]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -143,10 +163,15 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                     />
                 </Col>
             </Row>
-            <Row className="controls">
+            <Row className="controls" gutter={12}>
                 <Col flex="none" style={{ textAlign: 'center' }}>
-                    <Button icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />} type="link" title={playing ? 'Pause' : 'Play'} onClick={togglePlay}>{playing ? 'Pause' : 'Play'}</Button>
-                    <Button icon={<LeftCircleOutlined />} type="link" title="Previous Frame" onClick={() => changeIndex(Math.max(0, index - 1))} />
+                    <Button
+                        icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                        type="text"
+                        title={playing ? 'Pause' : 'Play'} onClick={togglePlay}>
+                        {playing ? 'Pause' : 'Play'}
+                    </Button>
+                    <Button icon={<LeftCircleOutlined />} type="text" title="Previous Frame" onClick={() => changeIndex(Math.max(0, index - 1))} />
                 </Col>
                 <Col flex="auto">
                     <Slider
@@ -165,7 +190,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                     />
                 </Col>
                 <Col flex="none" style={{ textAlign: 'center' }}>
-                    <Button icon={<RightCircleOutlined />} type="link" title="Next Frame" onClick={() => changeIndex(Math.min(totalFrames - 1, index + 1))} />
+                    <Button icon={<RightCircleOutlined />} type="text" title="Next Frame" onClick={() => changeIndex(Math.min(totalFrames - 1, index + 1))} />
                     <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={() => setZoom(z => Math.min(8, z * 1.5))}></Button>
                     <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={() => setZoom(z => Math.max(0.25, z / 1.5))}></Button>
                     <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={() => setZoom(1)}></Button>
