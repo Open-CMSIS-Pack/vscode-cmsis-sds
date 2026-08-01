@@ -186,6 +186,37 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         }
     }, [broadcastPlaybackState]);
 
+    const stopPlaybackOnRangeChange = useCallback(() => {
+        if (sourceRef.current) {
+            stopPlayback();
+        }
+    }, [stopPlayback]);
+
+    const setVisibleRangeClamped = useCallback((start: number, end: number) => {
+        stopPlaybackOnRangeChange();
+        setViewRangeClamped(start, end);
+    }, [setViewRangeClamped, stopPlaybackOnRangeChange]);
+
+    const onVisibleRangeSliderChange = useCallback((value: number[]) => {
+        stopPlaybackOnRangeChange();
+        onSliderChange(value);
+    }, [onSliderChange, stopPlaybackOnRangeChange]);
+
+    const onVisibleRangeZoomIn = useCallback(() => {
+        stopPlaybackOnRangeChange();
+        onZoomIn();
+    }, [onZoomIn, stopPlaybackOnRangeChange]);
+
+    const onVisibleRangeZoomOut = useCallback(() => {
+        stopPlaybackOnRangeChange();
+        onZoomOut();
+    }, [onZoomOut, stopPlaybackOnRangeChange]);
+
+    const onVisibleRangeFit = useCallback(() => {
+        stopPlaybackOnRangeChange();
+        onFit();
+    }, [onFit, stopPlaybackOnRangeChange]);
+
     const playLoadedSamples = useCallback(async (broadcast = true) => {
         if (sampleRate <= 0 || samples.length === 0) {
             return;
@@ -360,7 +391,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     highlightedX={highlightedTime}
                     xRange={viewRange}
                     onCursorChange={onCursorChange}
-                    onZoomRangeChange={(range) => setViewRangeClamped(range[0], range[1])}
+                    onZoomRangeChange={(range) => setVisibleRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
                     tooltip={{
                         showMarkers: true,
@@ -408,7 +439,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                         max={resolvedDomainEnd}
                         step={sliderStep}
                         value={viewRange}
-                        onChange={onSliderChange}
+                        onChange={onVisibleRangeSliderChange}
                         onChangeComplete={onSliderAfterChange}
                         style={sliderStyle}
                         tooltip={{ formatter: (v) => `${(v ?? 0).toFixed(3)}s` }}
@@ -416,9 +447,9 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     />
                 </Col>
                 <Col flex="none">
-                    <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={onZoomIn}></Button>
-                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onZoomOut} disabled={domainSpan === (viewRange[1] - viewRange[0])}></Button>
-                    <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={onFit}></Button>
+                    <Button icon={<ZoomInOutlined />} type="text" title="Zoom In" onClick={onVisibleRangeZoomIn}></Button>
+                    <Button icon={<ZoomOutOutlined />} type="text" title="Zoom Out" onClick={onVisibleRangeZoomOut} disabled={domainSpan === (viewRange[1] - viewRange[0])}></Button>
+                    <Button icon={<ExpandOutlined />} type="text" title="Fit to Window" onClick={onVisibleRangeFit}></Button>
                 </Col>
             </Row>
         </div>

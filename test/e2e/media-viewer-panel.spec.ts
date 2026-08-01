@@ -194,15 +194,15 @@ test.describe('Media Viewer — Audio', () => {
 
     test('plays only samples in the visible range after zooming', async ({ page }) => {
         await page.addInitScript(() => {
-            const bufferLengths: number[] = [];
-            Object.assign(window, { __audioBufferLengths: bufferLengths });
+            const audioEvents = { bufferLengths: [] as number[], stopCount: 0 };
+            Object.assign(window, { __audioEvents: audioEvents });
 
             class AudioContextMock {
                 public readonly state = 'running';
                 public readonly destination = {};
 
                 public createBuffer(_channels: number, length: number) {
-                    bufferLengths.push(length);
+                    audioEvents.bufferLengths.push(length);
                     return { copyToChannel: () => undefined };
                 }
 
@@ -213,7 +213,7 @@ test.describe('Media Viewer — Audio', () => {
                         disconnect: () => undefined,
                         onended: null,
                         start: () => undefined,
-                        stop: () => undefined,
+                        stop: () => audioEvents.stopCount++,
                     };
                 }
 
@@ -232,8 +232,15 @@ test.describe('Media Viewer — Audio', () => {
         await page.keyboard.press('Space');
 
         await expect.poll(() => page.evaluate(() => (
-            window as Window & { __audioBufferLengths: number[] }
-        ).__audioBufferLengths.at(-1))).toBe(801);
+            window as Window & { __audioEvents: { bufferLengths: number[] } }
+        ).__audioEvents.bufferLengths.at(-1))).toBe(801);
+
+        await page.locator('button[title="Zoom In"]').first().click();
+
+        await expect.poll(() => page.evaluate(() => (
+            window as Window & { __audioEvents: { stopCount: number } }
+        ).__audioEvents.stopCount)).toBe(1);
+        await expect(page.locator('button[title="Play Visible Range"]')).toContainText('Play');
     });
 });
 
