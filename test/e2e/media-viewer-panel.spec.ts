@@ -191,6 +191,50 @@ test.describe('Media Viewer — Audio', () => {
 
         expect(errors).toEqual([]);
     });
+
+    test('plays only samples in the visible range after zooming', async ({ page }) => {
+        await page.addInitScript(() => {
+            const bufferLengths: number[] = [];
+            Object.assign(window, { __audioBufferLengths: bufferLengths });
+
+            class AudioContextMock {
+                public readonly state = 'running';
+                public readonly destination = {};
+
+                public createBuffer(_channels: number, length: number) {
+                    bufferLengths.push(length);
+                    return { copyToChannel: () => undefined };
+                }
+
+                public createBufferSource() {
+                    return {
+                        buffer: null,
+                        connect: () => undefined,
+                        disconnect: () => undefined,
+                        onended: null,
+                        start: () => undefined,
+                        stop: () => undefined,
+                    };
+                }
+
+                public resume() {
+                    return Promise.resolve();
+                }
+            }
+
+            Object.assign(window, { AudioContext: AudioContextMock });
+        });
+
+        await page.goto(`${baseUrl}/audio`);
+        await page.waitForSelector('canvas');
+
+        await page.locator('button[title="Zoom In"]').first().click();
+        await page.keyboard.press('Space');
+
+        await expect.poll(() => page.evaluate(() => (
+            window as Window & { __audioBufferLengths: number[] }
+        ).__audioBufferLengths.at(-1))).toBe(801);
+    });
 });
 
 // ── Video Viewer ────────────────────────────────────────────

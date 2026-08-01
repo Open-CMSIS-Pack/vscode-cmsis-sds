@@ -241,7 +241,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         if (broadcast) {
             broadcastPlaybackState(true);
         }
-    }, [broadcastPlaybackState, sampleRate, samples, stopPlayback]);
+    }, [broadcastPlaybackState, sampleRate, samples, stopPlayback, viewRange]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
