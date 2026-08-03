@@ -9,6 +9,11 @@ updates:
       time: "02:00"
     cooldown:
       default-days: 3
+    open-pull-requests-limit: 1
+    groups:
+      all-github-actions-updates:
+        patterns:
+          - "*"
 
   # Maintain dependencies for the JavaScript package
   - package-ecosystem: "npm"
@@ -18,6 +23,11 @@ updates:
       time: "02:00"
     cooldown:
       default-days: 3
+    open-pull-requests-limit: 1
+    groups:
+      all-npm-updates:
+        patterns:
+          - "*"
     ignore:
       - dependency-name: "@types/vscode"
       - dependency-name: "react"
