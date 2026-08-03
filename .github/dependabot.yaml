@@ -10,6 +10,11 @@ updates:
     cooldown:
       default-days: 3
 
+    groups:
+      codeql-actions:
+        patterns:
+          - "github/codeql-action/*"
+
   # Maintain dependencies for the JavaScript package
   - package-ecosystem: "npm"
     directory: "/"
