@@ -31,6 +31,13 @@ import * as path from 'path';
 
 export const MAX_FLAG_INFO_FLAGS = 8;
 
+export interface SdsioPlaybackTestCase {
+    /** 1-based sequential number of the corresponding play entry. */
+    readonly testCase: number;
+    /** Descriptive step value, falling back to the sequential number. */
+    readonly name: string;
+}
+
 export interface SdsioConfigData {
     /** Resolved absolute path to workdir, or undefined if not set in the file. */
     readonly workdir: string | undefined;
@@ -38,6 +45,8 @@ export interface SdsioConfigData {
     readonly metadir: string | undefined;
     /** Custom labels for flags 0-23.  Missing indices fall back to the numeric default. */
     readonly flagNames: ReadonlyMap<number, string>;
+    /** Playback test cases in their 1-based play-list order. */
+    readonly playbackTestCases: readonly SdsioPlaybackTestCase[];
 }
 
 export class SdsioConfigManager {
@@ -153,7 +162,7 @@ export class SdsioConfigManager {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function emptyConfig(): SdsioConfigData {
-    return { workdir: undefined, metadir: undefined, flagNames: new Map() };
+    return { workdir: undefined, metadir: undefined, flagNames: new Map(), playbackTestCases: [] };
 }
 
 function parseConfigFile(configPath: string): SdsioConfigData {
@@ -165,9 +174,14 @@ function parseConfigFile(configPath: string): SdsioConfigData {
         let workdirValue: string | undefined;
         let metadirValue: string | undefined;
         const flagNames = new Map<number, string>();
+        const playbackTestCases: SdsioPlaybackTestCase[] = [];
 
         let inFlagInfo = false;
         let flagInfoIndent = -1;
+        let inPlay = false;
+        let playIndent = -1;
+        let playItemIndent: number | undefined;
+        let currentPlaybackTestCase: number | undefined;
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -175,37 +189,71 @@ function parseConfigFile(configPath: string): SdsioConfigData {
                 continue;
             }
 
-            if (!inFlagInfo) {
-                const wm = line.match(/^(\s*)workdir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                if (wm) { workdirValue = normalizeYamlScalar(wm[2]); }
+            const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
+            if (inFlagInfo && indent <= flagInfoIndent) {
+                inFlagInfo = false;
+            }
+            if (inPlay && (indent < playIndent || (indent === playIndent && !trimmed.startsWith('-')))) {
+                inPlay = false;
+                playItemIndent = undefined;
+                currentPlaybackTestCase = undefined;
+            }
 
-                const mm = line.match(/^(\s*)metadir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                if (mm) { metadirValue = normalizeYamlScalar(mm[2]); }
+            const workdirMatch = line.match(/^(\s*)workdir\s*:\s*(.+?)\s*(?:#.*)?$/);
+            if (workdirMatch) { workdirValue = normalizeYamlScalar(workdirMatch[2]); }
 
-                const fm = line.match(/^(\s*)flag-info\s*:/);
-                if (fm) {
-                    inFlagInfo = true;
-                    flagInfoIndent = fm[1].length;
-                }
-            } else {
-                const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
-                if (indent <= flagInfoIndent) {
-                    inFlagInfo = false;
-                    // Still process this line for top-level keys.
-                    const wm = line.match(/^(\s*)workdir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                    if (wm) { workdirValue = normalizeYamlScalar(wm[2]); }
-                    const mm = line.match(/^(\s*)metadir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                    if (mm) { metadirValue = normalizeYamlScalar(mm[2]); }
-                    continue;
-                }
+            const metadirMatch = line.match(/^(\s*)metadir\s*:\s*(.+?)\s*(?:#.*)?$/);
+            if (metadirMatch) { metadirValue = normalizeYamlScalar(metadirMatch[2]); }
 
-                // Parse list items of the form:  - 0: Label text
+            const flagInfoMatch = line.match(/^(\s*)flag-info\s*:/);
+            if (flagInfoMatch) {
+                inFlagInfo = true;
+                flagInfoIndent = flagInfoMatch[1].length;
+                continue;
+            }
+
+            const playMatch = line.match(/^(\s*)play\s*:/);
+            if (playMatch) {
+                inPlay = true;
+                playIndent = playMatch[1].length;
+                playItemIndent = undefined;
+                currentPlaybackTestCase = undefined;
+                continue;
+            }
+
+            if (inFlagInfo) {
                 const item = line.match(/^\s*-\s*(\d+)\s*:\s*(.+?)\s*(?:#.*)?$/);
                 if (item) {
-                    const idx = parseInt(item[1], 10);
+                    const index = parseInt(item[1], 10);
                     const label = item[2].trim();
-                    if (idx >= 0 && idx < MAX_FLAG_INFO_FLAGS && label) {
-                        flagNames.set(idx, label);
+                    if (index >= 0 && index < MAX_FLAG_INFO_FLAGS && label) {
+                        flagNames.set(index, label);
+                    }
+                }
+            }
+
+            if (inPlay) {
+                const itemMatch = line.match(/^(\s*)-\s*(.*)$/);
+                if (itemMatch && (playItemIndent === undefined || indent <= playItemIndent)) {
+                    playItemIndent = itemMatch[1].length;
+                    currentPlaybackTestCase = playbackTestCases.length + 1;
+                    playbackTestCases.push({
+                        testCase: currentPlaybackTestCase,
+                        name: String(currentPlaybackTestCase),
+                    });
+                }
+
+                if (currentPlaybackTestCase !== undefined) {
+                    const propertyText = itemMatch && indent === playItemIndent ? itemMatch[2] : trimmed;
+                    const stepMatch = propertyText.match(/^step\s*:\s*(.*?)\s*(?:#.*)?$/);
+                    if (stepMatch) {
+                        const description = normalizeYamlScalar(stepMatch[1]);
+                        if (description) {
+                            playbackTestCases[currentPlaybackTestCase - 1] = {
+                                testCase: currentPlaybackTestCase,
+                                name: description,
+                            };
+                        }
                     }
                 }
             }
@@ -215,6 +263,7 @@ function parseConfigFile(configPath: string): SdsioConfigData {
             workdir: workdirValue ? path.resolve(configDir, workdirValue) : undefined,
             metadir: metadirValue ? path.resolve(configDir, metadirValue) : undefined,
             flagNames,
+            playbackTestCases,
         };
     } catch {
         return emptyConfig();

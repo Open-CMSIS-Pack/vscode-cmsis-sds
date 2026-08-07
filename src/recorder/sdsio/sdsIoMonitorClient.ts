@@ -196,21 +196,23 @@ export class SdsioMonitorClient extends EventEmitter {
      * Send FLAGS command to update sdsFlags on the server.
      * Returns true if sent successfully, false if not connected.
      */
-    sendFlags(setMask: number, clearMask: number): boolean {
+    sendFlags(setMask: number, clearMask: number, testCase = 0): boolean {
         if (!this.isConnected) {
             return false;
         }
 
         const set = setMask >>> 0;
         const clear = clearMask >>> 0;
+        const selectedTestCase = testCase >>> 0;
 
         const header = Buffer.alloc(HEADER_SIZE);
         header.writeUInt32LE(MON_FLAGS, 0);
         header.writeUInt32LE(set, 4);
         header.writeUInt32LE(clear, 8);
-        header.writeUInt32LE(0, 12);
+        header.writeUInt32LE(selectedTestCase, 12);
 
         try {
+            // MON_FLAGS has no server response, so selection rejection cannot currently be reported to the caller.
             this.socket!.write(header);
             return true;
         } catch (err) {
@@ -227,10 +229,10 @@ export class SdsioMonitorClient extends EventEmitter {
     }
 
     /**
-     * Start playback mode: set bit31=1 and bit29=1, clear no bits.
+     * Start playback mode for the selected 1-based test case, or the legacy default when zero.
      */
-    startPlayback(): boolean {
-        return this.sendFlags((SDS_FLAG_IO_ACTIVE | SDS_FLAG_PLAYBACK) >>> 0, 0);
+    startPlayback(testCase = 0): boolean {
+        return this.sendFlags((SDS_FLAG_IO_ACTIVE | SDS_FLAG_PLAYBACK) >>> 0, 0, testCase);
     }
 
     /**

@@ -79,12 +79,28 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.play', async () => {
+            const testCases = sdsIoControlService.getPlaybackTestCases();
+            let selectedTestCase = 0;
+            if (testCases.length > 0) {
+                const selection = await vscode.window.showQuickPick(
+                    [
+                        { label: 'All', description: 'All test cases', testCase: 0 },
+                        ...testCases.map(({ testCase, name }) => ({ label: name, description: `Test case ${testCase}`, testCase })),
+                    ],
+                    { placeHolder: 'Select a playback test case' }
+                );
+                if (!selection) {
+                    return;
+                }
+                selectedTestCase = selection.testCase;
+            }
+
             const connected = await sdsIoControlService.connectServer();
             if (!connected) {
                 void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
                 return;
             }
-            sdsIoControlService.play();
+            sdsIoControlService.play(selectedTestCase);
         })
     );
 

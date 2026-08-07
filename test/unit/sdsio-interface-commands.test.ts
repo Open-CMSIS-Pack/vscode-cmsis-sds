@@ -47,6 +47,7 @@ vi.mock('vscode', () => ({
         registerCommand: commandMockState.registerCommandMock,
     },
     window: {
+        showQuickPick: vi.fn(),
         showWarningMessage: vi.fn(),
     },
 }));
@@ -77,6 +78,10 @@ function createService() {
         canStop: vi.fn(() => true),
         connectServer: vi.fn(async () => true),
         disconnectServer: vi.fn(async () => undefined),
+        getPlaybackTestCases: vi.fn(() => [
+            { testCase: 1, name: 'First case' },
+            { testCase: 2, name: 'Second case' },
+        ]),
         onDidChange: vi.fn((listener: (event: SdsIoChangeEvent) => void) => {
             changeListener = listener;
             return { dispose: vi.fn() };
@@ -139,6 +144,9 @@ function getCommand(command: string): (...args: unknown[]) => unknown {
 describe('registerSdsioInterfaceCommands', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(vscode.window.showQuickPick).mockResolvedValue(
+            { label: 'Second case', description: 'Test case 2', testCase: 2 } as vscode.QuickPickItem & { testCase: number }
+        );
         commandMockState.registeredDisposables.length = 0;
     });
 
@@ -219,6 +227,55 @@ describe('registerSdsioInterfaceCommands', () => {
         expect(vscode.window.showWarningMessage).toHaveBeenCalledWith('Unable to connect to SDSIO monitor server.');
         expect(service.play).not.toHaveBeenCalled();
         expect(service.record).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers all playback first and forwards the selected 1-based test case', async () => {
+        const { service } = registerCommands();
+
+        await getCommand('arm-sds.sdsinterface.play')();
+
+        expect(vscode.window.showQuickPick).toHaveBeenCalledWith([
+            { label: 'All', description: 'All test cases', testCase: 0 },
+            { label: 'First case', description: 'Test case 1', testCase: 1 },
+            { label: 'Second case', description: 'Test case 2', testCase: 2 },
+        ], { placeHolder: 'Select a playback test case' });
+        expect(service.connectServer).toHaveBeenCalledTimes(1);
+        expect(service.play).toHaveBeenCalledWith(2);
+    });
+
+    it('forwards zero when all playback test cases are selected', async () => {
+        const { service } = registerCommands();
+        vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce({
+            label: 'All',
+            description: 'All test cases',
+            testCase: 0,
+        } as vscode.QuickPickItem & { testCase: number });
+
+        await getCommand('arm-sds.sdsinterface.play')();
+
+        expect(service.connectServer).toHaveBeenCalledTimes(1);
+        expect(service.play).toHaveBeenCalledWith(0);
+    });
+
+    it('does not connect or play when test case selection is cancelled', async () => {
+        const { service } = registerCommands();
+        vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+
+        await getCommand('arm-sds.sdsinterface.play')();
+
+        expect(service.connectServer).not.toHaveBeenCalled();
+        expect(service.play).not.toHaveBeenCalled();
+    });
+
+    it('starts legacy playback without prompting when no test cases exist', async () => {
+        const { service } = registerCommands();
+        service.getPlaybackTestCases.mockReturnValueOnce([]);
+
+        await getCommand('arm-sds.sdsinterface.play')();
+
+        expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
+        expect(service.connectServer).toHaveBeenCalledTimes(1);
+        expect(service.play).toHaveBeenCalledWith(0);
     });
 
     it('stops and renames flags through the control service', async () => {

@@ -16,7 +16,7 @@
 
 import * as vscode from 'vscode';
 import { SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
-import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS } from '../controller/sdsioConfigManager';
+import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS, type SdsioPlaybackTestCase } from '../controller/sdsioConfigManager';
 import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 import { SdsioServerLauncher } from '../controller/sdsioServerLauncher';
@@ -77,6 +77,7 @@ export class SdsIoControlService {
             monitor.on('flags', (setMask: number, unsetMask: number) => this.onMonitorFlags(setMask, unsetMask));
         }
 
+        // Reloading the configured server preserves current lifecycle behavior; stopping and reconnecting first is another option.
         configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
         configManager.onDidChangeConfig(() => this.syncFlagNamesFromManager());
         this.syncFlagNamesFromManager();
@@ -175,8 +176,12 @@ export class SdsIoControlService {
         this.notifyFlagsChanged();
     }
 
-    play(): void {
-        this.transitionMode('play', 'Play', () => this.monitor?.startPlayback() === true);
+    getPlaybackTestCases(): readonly SdsioPlaybackTestCase[] {
+        return this.configManager.getConfig().playbackTestCases;
+    }
+
+    play(testCase = 0): void {
+        this.transitionMode('play', 'Play', () => this.monitor?.startPlayback(testCase) === true);
     }
 
     record(): void {
