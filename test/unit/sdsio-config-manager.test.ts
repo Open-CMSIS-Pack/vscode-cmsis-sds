@@ -155,6 +155,36 @@ describe('SdsioConfigManager', () => {
         manager.dispose();
     });
 
+    it('parses YAML scalar step descriptions without reading nested step properties', () => {
+        const configPath = path.join(tmpDir, '.sdsio.yml');
+        fs.writeFileSync(configPath, [
+            'play:',
+            '  - step: |',
+            '      Literal line one',
+            '      line two',
+            '  - step: >',
+            '      Folded line one',
+            '      line two',
+            '  - step: Direct step',
+            '    metadata:',
+            '      step: Nested step',
+            "  - step: '  # quoted: step  '",
+            '',
+        ].join('\n'), 'utf-8');
+
+        const manager = new SdsioConfigManager();
+        manager.setConfigFile(configPath);
+
+        expect(manager.getConfig().playbackTestCases).toEqual([
+            { testCase: 1, name: 'Literal line one\nline two\n' },
+            { testCase: 2, name: 'Folded line one line two\n' },
+            { testCase: 3, name: 'Direct step' },
+            { testCase: 4, name: '  # quoted: step  ' },
+        ]);
+
+        manager.dispose();
+    });
+
     it('re-parses and notifies on watcher content change', () => {
         const configPath = path.join(tmpDir, '.sdsio.yml');
         fs.writeFileSync(configPath, 'workdir: ./a\n', 'utf-8');

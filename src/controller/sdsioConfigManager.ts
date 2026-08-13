@@ -28,6 +28,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { parse as parseYaml } from 'yaml';
 
 export const MAX_FLAG_INFO_FLAGS = 8;
 
@@ -174,14 +175,10 @@ function parseConfigFile(configPath: string): SdsioConfigData {
         let workdirValue: string | undefined;
         let metadirValue: string | undefined;
         const flagNames = new Map<number, string>();
-        const playbackTestCases: SdsioPlaybackTestCase[] = [];
+        const playbackTestCases = parsePlaybackTestCases(raw);
 
         let inFlagInfo = false;
         let flagInfoIndent = -1;
-        let inPlay = false;
-        let playIndent = -1;
-        let playItemIndent: number | undefined;
-        let currentPlaybackTestCase: number | undefined;
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -192,11 +189,6 @@ function parseConfigFile(configPath: string): SdsioConfigData {
             const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
             if (inFlagInfo && indent <= flagInfoIndent) {
                 inFlagInfo = false;
-            }
-            if (inPlay && (indent < playIndent || (indent === playIndent && !trimmed.startsWith('-')))) {
-                inPlay = false;
-                playItemIndent = undefined;
-                currentPlaybackTestCase = undefined;
             }
 
             const workdirMatch = line.match(/^(\s*)workdir\s*:\s*(.+?)\s*(?:#.*)?$/);
@@ -212,15 +204,6 @@ function parseConfigFile(configPath: string): SdsioConfigData {
                 continue;
             }
 
-            const playMatch = line.match(/^(\s*)play\s*:/);
-            if (playMatch) {
-                inPlay = true;
-                playIndent = playMatch[1].length;
-                playItemIndent = undefined;
-                currentPlaybackTestCase = undefined;
-                continue;
-            }
-
             if (inFlagInfo) {
                 const item = line.match(/^\s*-\s*(\d+)\s*:\s*(.+?)\s*(?:#.*)?$/);
                 if (item) {
@@ -228,32 +211,6 @@ function parseConfigFile(configPath: string): SdsioConfigData {
                     const label = item[2].trim();
                     if (index >= 0 && index < MAX_FLAG_INFO_FLAGS && label) {
                         flagNames.set(index, label);
-                    }
-                }
-            }
-
-            if (inPlay) {
-                const itemMatch = line.match(/^(\s*)-\s*(.*)$/);
-                if (itemMatch && (playItemIndent === undefined || indent <= playItemIndent)) {
-                    playItemIndent = itemMatch[1].length;
-                    currentPlaybackTestCase = playbackTestCases.length + 1;
-                    playbackTestCases.push({
-                        testCase: currentPlaybackTestCase,
-                        name: String(currentPlaybackTestCase),
-                    });
-                }
-
-                if (currentPlaybackTestCase !== undefined) {
-                    const propertyText = itemMatch && indent === playItemIndent ? itemMatch[2] : trimmed;
-                    const stepMatch = propertyText.match(/^step\s*:\s*(.*?)\s*(?:#.*)?$/);
-                    if (stepMatch) {
-                        const description = normalizeYamlScalar(stepMatch[1]);
-                        if (description) {
-                            playbackTestCases[currentPlaybackTestCase - 1] = {
-                                testCase: currentPlaybackTestCase,
-                                name: description,
-                            };
-                        }
                     }
                 }
             }
@@ -268,6 +225,44 @@ function parseConfigFile(configPath: string): SdsioConfigData {
     } catch {
         return emptyConfig();
     }
+}
+
+function parsePlaybackTestCases(raw: string): SdsioPlaybackTestCase[] {
+    const parsed = parseYaml(raw);
+    const play = findPlayEntries(parsed);
+    if (!play) {
+        return [];
+    }
+
+    return play.map((entry, index) => {
+        const testCase = index + 1;
+        const step = entry && typeof entry === 'object' && !Array.isArray(entry)
+            ? (entry as Record<string, unknown>).step
+            : undefined;
+        return {
+            testCase,
+            name: typeof step === 'string' && step !== '' ? step : String(testCase),
+        };
+    });
+}
+
+function findPlayEntries(value: unknown): unknown[] | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return undefined;
+    }
+
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.play)) {
+        return record.play;
+    }
+
+    for (const child of Object.values(record)) {
+        const play = findPlayEntries(child);
+        if (play) {
+            return play;
+        }
+    }
+    return undefined;
 }
 
 function normalizeYamlScalar(value: string): string {
