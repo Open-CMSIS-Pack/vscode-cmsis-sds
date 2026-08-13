@@ -546,12 +546,12 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canRecord()).toBe(true);
         expect(service.canStop()).toBe(false);
 
-        service.play(3);
+        service.play(1);
         expect(service.canPlay()).toBe(false);
         expect(service.canRecord()).toBe(false);
         expect(service.canStop()).toBe(true);
         expect(monitor.startPlayback).toHaveBeenCalledTimes(1);
-        expect(monitor.startPlayback).toHaveBeenCalledWith(3);
+        expect(monitor.startPlayback).toHaveBeenCalledWith(1);
 
         service.stop();
         service.record();
@@ -574,6 +574,21 @@ describe('SdsIoControlService launcher delegation', () => {
         service.play();
 
         expect(monitor.startPlayback).toHaveBeenCalledWith(0);
+    });
+
+    it('rejects playback test cases missing from the current configuration', async () => {
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(
+            createConfigManager('active.sdsio.yml') as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+        await service.connectServer();
+
+        expect(service.play(2)).toBe(false);
+        expect(monitor.startPlayback).not.toHaveBeenCalled();
+        expect(service.canPlay()).toBe(true);
+        expect(service.canStop()).toBe(false);
     });
 
     it('updates command state from hardware monitor open and close events', async () => {

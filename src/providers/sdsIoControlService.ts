@@ -180,8 +180,17 @@ export class SdsIoControlService {
         return this.configManager.getConfig().playbackTestCases;
     }
 
-    play(testCase = 0): void {
-        this.transitionMode('play', 'Play', () => this.monitor?.startPlayback(testCase) === true);
+    play(testCase = 0, expectedName?: string): boolean {
+        if (testCase !== 0) {
+            const currentTestCase = this.getPlaybackTestCases().find((item) => item.testCase === testCase);
+            if (!Number.isSafeInteger(testCase) || testCase < 1 || !currentTestCase
+                || (expectedName !== undefined && currentTestCase.name !== expectedName)) {
+                this.diagnostics.warn(DiagnosticSource.Server, 'Selected playback test case is no longer present in the SDSIO configuration.');
+                return false;
+            }
+        }
+
+        return this.transitionMode('play', 'Play', () => this.monitor?.startPlayback(testCase) === true);
     }
 
     record(): void {
@@ -336,19 +345,20 @@ export class SdsIoControlService {
         this.monitor.sendFlags(setMask, unsetMask);
     }
 
-    private transitionMode(nextMode: SdsIoMode, operationName: string, sendToMonitor: () => boolean): void {
+    private transitionMode(nextMode: SdsIoMode, operationName: string, sendToMonitor: () => boolean): boolean {
         if (this.mode === nextMode) {
-            return;
+            return false;
         }
 
         const accepted = this.monitorConnected ? sendToMonitor() : true;
         if (!accepted) {
             this.diagnostics.warn(DiagnosticSource.Server, `${operationName} rejected by monitor`);
-            return;
+            return false;
         }
 
         this.setMode(nextMode);
         this.diagnostics.info(DiagnosticSource.Server, `${operationName} invoked. Control flags ${this.monitorConnected ? 'sent' : 'not sent'};`);
+        return true;
     }
 
     private findFlag(id: string): SdsFlag | undefined {

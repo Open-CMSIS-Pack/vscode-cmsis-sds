@@ -81,6 +81,7 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
         vscode.commands.registerCommand('arm-sds.sdsinterface.play', async () => {
             const testCases = sdsIoControlService.getPlaybackTestCases();
             let selectedTestCase = 0;
+            let selectedTestCaseName: string | undefined;
             if (testCases.length > 0) {
                 const selection = await vscode.window.showQuickPick(
                     [
@@ -93,6 +94,7 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
                     return;
                 }
                 selectedTestCase = selection.testCase;
+                selectedTestCaseName = selection.testCase === 0 ? undefined : selection.label;
             }
 
             const connected = await sdsIoControlService.connectServer();
@@ -100,7 +102,9 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
                 void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
                 return;
             }
-            sdsIoControlService.play(selectedTestCase);
+            if (!sdsIoControlService.play(selectedTestCase, selectedTestCaseName)) {
+                void vscode.window.showWarningMessage('The selected playback test case is no longer available. Please select it again.');
+            }
         })
     );
 

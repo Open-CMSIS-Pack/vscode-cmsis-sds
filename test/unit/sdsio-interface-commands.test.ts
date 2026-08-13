@@ -86,7 +86,7 @@ function createService() {
             changeListener = listener;
             return { dispose: vi.fn() };
         }),
-        play: vi.fn(),
+        play: vi.fn(() => true),
         record: vi.fn(),
         renameFlag: vi.fn(async () => undefined),
         setEnabledByTreeItems: vi.fn(),
@@ -240,7 +240,7 @@ describe('registerSdsioInterfaceCommands', () => {
             { label: 'Second case', description: 'Test case 2', testCase: 2 },
         ], { placeHolder: 'Select a playback test case' });
         expect(service.connectServer).toHaveBeenCalledTimes(1);
-        expect(service.play).toHaveBeenCalledWith(2);
+        expect(service.play).toHaveBeenCalledWith(2, 'Second case');
     });
 
     it('forwards zero when all playback test cases are selected', async () => {
@@ -254,7 +254,19 @@ describe('registerSdsioInterfaceCommands', () => {
         await getCommand('arm-sds.sdsinterface.play')();
 
         expect(service.connectServer).toHaveBeenCalledTimes(1);
-        expect(service.play).toHaveBeenCalledWith(0);
+        expect(service.play).toHaveBeenCalledWith(0, undefined);
+    });
+
+    it('warns when a playback test case becomes stale before playback starts', async () => {
+        const { service } = registerCommands();
+        service.play.mockReturnValueOnce(false);
+
+        await getCommand('arm-sds.sdsinterface.play')();
+
+        expect(service.play).toHaveBeenCalledWith(2, 'Second case');
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+            'The selected playback test case is no longer available. Please select it again.',
+        );
     });
 
     it('does not connect or play when test case selection is cancelled', async () => {
@@ -275,7 +287,7 @@ describe('registerSdsioInterfaceCommands', () => {
 
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
         expect(service.connectServer).toHaveBeenCalledTimes(1);
-        expect(service.play).toHaveBeenCalledWith(0);
+        expect(service.play).toHaveBeenCalledWith(0, undefined);
     });
 
     it('stops and renames flags through the control service', async () => {
