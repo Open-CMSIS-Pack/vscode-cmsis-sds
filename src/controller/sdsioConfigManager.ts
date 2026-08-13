@@ -28,8 +28,16 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { parse as parseYaml } from 'yaml';
 
 export const MAX_FLAG_INFO_FLAGS = 8;
+
+export interface SdsioPlaybackTestCase {
+    /** 1-based sequential number of the corresponding play entry. */
+    readonly testCase: number;
+    /** Descriptive step value, falling back to the sequential number. */
+    readonly name: string;
+}
 
 export interface SdsioConfigData {
     /** Resolved absolute path to workdir, or undefined if not set in the file. */
@@ -38,6 +46,8 @@ export interface SdsioConfigData {
     readonly metadir: string | undefined;
     /** Custom labels for flags 0-23.  Missing indices fall back to the numeric default. */
     readonly flagNames: ReadonlyMap<number, string>;
+    /** Playback test cases in their 1-based play-list order. */
+    readonly playbackTestCases: readonly SdsioPlaybackTestCase[];
 }
 
 export class SdsioConfigManager {
@@ -153,7 +163,7 @@ export class SdsioConfigManager {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function emptyConfig(): SdsioConfigData {
-    return { workdir: undefined, metadir: undefined, flagNames: new Map() };
+    return { workdir: undefined, metadir: undefined, flagNames: new Map(), playbackTestCases: [] };
 }
 
 function parseConfigFile(configPath: string): SdsioConfigData {
@@ -165,6 +175,7 @@ function parseConfigFile(configPath: string): SdsioConfigData {
         let workdirValue: string | undefined;
         let metadirValue: string | undefined;
         const flagNames = new Map<number, string>();
+        const playbackTestCases = parsePlaybackTestCases(raw);
 
         let inFlagInfo = false;
         let flagInfoIndent = -1;
@@ -175,37 +186,31 @@ function parseConfigFile(configPath: string): SdsioConfigData {
                 continue;
             }
 
-            if (!inFlagInfo) {
-                const wm = line.match(/^(\s*)workdir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                if (wm) { workdirValue = normalizeYamlScalar(wm[2]); }
+            const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
+            if (inFlagInfo && indent <= flagInfoIndent) {
+                inFlagInfo = false;
+            }
 
-                const mm = line.match(/^(\s*)metadir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                if (mm) { metadirValue = normalizeYamlScalar(mm[2]); }
+            const workdirMatch = line.match(/^(\s*)workdir\s*:\s*(.+?)\s*(?:#.*)?$/);
+            if (workdirMatch) { workdirValue = normalizeYamlScalar(workdirMatch[2]); }
 
-                const fm = line.match(/^(\s*)flag-info\s*:/);
-                if (fm) {
-                    inFlagInfo = true;
-                    flagInfoIndent = fm[1].length;
-                }
-            } else {
-                const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
-                if (indent <= flagInfoIndent) {
-                    inFlagInfo = false;
-                    // Still process this line for top-level keys.
-                    const wm = line.match(/^(\s*)workdir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                    if (wm) { workdirValue = normalizeYamlScalar(wm[2]); }
-                    const mm = line.match(/^(\s*)metadir\s*:\s*(.+?)\s*(?:#.*)?$/);
-                    if (mm) { metadirValue = normalizeYamlScalar(mm[2]); }
-                    continue;
-                }
+            const metadirMatch = line.match(/^(\s*)metadir\s*:\s*(.+?)\s*(?:#.*)?$/);
+            if (metadirMatch) { metadirValue = normalizeYamlScalar(metadirMatch[2]); }
 
-                // Parse list items of the form:  - 0: Label text
+            const flagInfoMatch = line.match(/^(\s*)flag-info\s*:/);
+            if (flagInfoMatch) {
+                inFlagInfo = true;
+                flagInfoIndent = flagInfoMatch[1].length;
+                continue;
+            }
+
+            if (inFlagInfo) {
                 const item = line.match(/^\s*-\s*(\d+)\s*:\s*(.+?)\s*(?:#.*)?$/);
                 if (item) {
-                    const idx = parseInt(item[1], 10);
+                    const index = parseInt(item[1], 10);
                     const label = item[2].trim();
-                    if (idx >= 0 && idx < MAX_FLAG_INFO_FLAGS && label) {
-                        flagNames.set(idx, label);
+                    if (index >= 0 && index < MAX_FLAG_INFO_FLAGS && label) {
+                        flagNames.set(index, label);
                     }
                 }
             }
@@ -215,10 +220,49 @@ function parseConfigFile(configPath: string): SdsioConfigData {
             workdir: workdirValue ? path.resolve(configDir, workdirValue) : undefined,
             metadir: metadirValue ? path.resolve(configDir, metadirValue) : undefined,
             flagNames,
+            playbackTestCases,
         };
     } catch {
         return emptyConfig();
     }
+}
+
+function parsePlaybackTestCases(raw: string): SdsioPlaybackTestCase[] {
+    const parsed = parseYaml(raw);
+    const play = findPlayEntries(parsed);
+    if (!play) {
+        return [];
+    }
+
+    return play.map((entry, index) => {
+        const testCase = index + 1;
+        const step = entry && typeof entry === 'object' && !Array.isArray(entry)
+            ? (entry as Record<string, unknown>).step
+            : undefined;
+        return {
+            testCase,
+            name: typeof step === 'string' && step !== '' ? step : String(testCase),
+        };
+    });
+}
+
+function findPlayEntries(value: unknown): unknown[] | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return undefined;
+    }
+
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.play)) {
+        return record.play;
+    }
+
+    for (const child of Object.values(record)) {
+        const play = findPlayEntries(child);
+        if (play) {
+            return play;
+        }
+    }
+    return undefined;
 }
 
 function normalizeYamlScalar(value: string): string {

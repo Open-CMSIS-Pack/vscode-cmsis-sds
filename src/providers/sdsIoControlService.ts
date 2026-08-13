@@ -16,7 +16,7 @@
 
 import * as vscode from 'vscode';
 import { SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
-import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS } from '../controller/sdsioConfigManager';
+import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS, type SdsioPlaybackTestCase } from '../controller/sdsioConfigManager';
 import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 import { SdsioServerLauncher } from '../controller/sdsioServerLauncher';
@@ -77,6 +77,7 @@ export class SdsIoControlService {
             monitor.on('flags', (setMask: number, unsetMask: number) => this.onMonitorFlags(setMask, unsetMask));
         }
 
+        // Reloading the configured server preserves current lifecycle behavior; stopping and reconnecting first is another option.
         configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
         configManager.onDidChangeConfig(() => this.syncFlagNamesFromManager());
         this.syncFlagNamesFromManager();
@@ -175,8 +176,21 @@ export class SdsIoControlService {
         this.notifyFlagsChanged();
     }
 
-    play(): void {
-        this.transitionMode('play', 'Play', () => this.monitor?.startPlayback() === true);
+    getPlaybackTestCases(): readonly SdsioPlaybackTestCase[] {
+        return this.configManager.getConfig().playbackTestCases;
+    }
+
+    play(testCase = 0, expectedName?: string): boolean {
+        if (testCase !== 0) {
+            const currentTestCase = this.getPlaybackTestCases().find((item) => item.testCase === testCase);
+            if (!Number.isSafeInteger(testCase) || testCase < 1 || !currentTestCase
+                || (expectedName !== undefined && currentTestCase.name !== expectedName)) {
+                this.diagnostics.warn(DiagnosticSource.Server, 'Selected playback test case is no longer present in the SDSIO configuration.');
+                return false;
+            }
+        }
+
+        return this.transitionMode('play', 'Play', () => this.monitor?.startPlayback(testCase) === true);
     }
 
     record(): void {
@@ -331,19 +345,20 @@ export class SdsIoControlService {
         this.monitor.sendFlags(setMask, unsetMask);
     }
 
-    private transitionMode(nextMode: SdsIoMode, operationName: string, sendToMonitor: () => boolean): void {
+    private transitionMode(nextMode: SdsIoMode, operationName: string, sendToMonitor: () => boolean): boolean {
         if (this.mode === nextMode) {
-            return;
+            return false;
         }
 
         const accepted = this.monitorConnected ? sendToMonitor() : true;
         if (!accepted) {
             this.diagnostics.warn(DiagnosticSource.Server, `${operationName} rejected by monitor`);
-            return;
+            return false;
         }
 
         this.setMode(nextMode);
         this.diagnostics.info(DiagnosticSource.Server, `${operationName} invoked. Control flags ${this.monitorConnected ? 'sent' : 'not sent'};`);
+        return true;
     }
 
     private findFlag(id: string): SdsFlag | undefined {

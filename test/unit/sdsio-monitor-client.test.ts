@@ -176,7 +176,7 @@ describe('SdsioMonitorClient flag send API', () => {
         });
 
         expect(client.startRecording()).toBe(true);
-        expect(client.startPlayback()).toBe(true);
+        expect(client.startPlayback(3)).toBe(true);
         expect(client.stopRecordingOrPlayback()).toBe(true);
         expect(client.sendUserFlagBits([true, false, 1, 0, true, false, 0, 1])).toBe(true);
 
@@ -184,12 +184,34 @@ describe('SdsioMonitorClient flag send API', () => {
         expect(writes[0].readUInt32LE(8)).toBe(0x20000000);
         expect(writes[1].readUInt32LE(4)).toBe(0xa0000000);
         expect(writes[1].readUInt32LE(8)).toBe(0);
+        expect(writes[1].readUInt32LE(12)).toBe(3);
         expect(writes[2].readUInt32LE(4)).toBe(0);
         expect(writes[2].readUInt32LE(8)).toBe(0xa0000000);
         expect(writes[3].readUInt32LE(4)).toBe(0x95);
         expect(writes[3].readUInt32LE(8)).toBe(0x6a);
         expect(() => client.sendUserFlagBits([true])).toThrow('Expected exactly 8 bits, got 1');
     });
+
+    it('starts legacy playback with test case zero when no selection is provided', () => {
+        let written: Buffer | undefined;
+        const client = connectedClientWithWrite((data) => {
+            written = data;
+        });
+
+        expect(client.startPlayback()).toBe(true);
+        expect(written?.readUInt32LE(4)).toBe(0xa0000000);
+        expect(written?.readUInt32LE(8)).toBe(0);
+        expect(written?.readUInt32LE(12)).toBe(0);
+    });
+
+    it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 0x1_0000_0000])(
+        'rejects invalid playback test case %s',
+        (testCase) => {
+            const client = connectedClientWithWrite();
+
+            expect(() => client.startPlayback(testCase)).toThrow(RangeError);
+        },
+    );
 
     it('emits an error and returns false when socket write throws', () => {
         const client = connectedClientWithWrite(() => {

@@ -119,6 +119,72 @@ describe('SdsioConfigManager', () => {
         manager.dispose();
     });
 
+    it('parses playback test cases by 1-based list order with description fallbacks', () => {
+        const configPath = path.join(tmpDir, '.sdsio.yml');
+        fs.writeFileSync(configPath, [
+            'sdsio:',
+            '  play:',
+            '  - step: First case',
+            '    labels: [one]',
+            '  - labels: [two]',
+            '    step:',
+            '  - recdir: ./recordings',
+            '    setflags: 0x02',
+            '    clearflags: 0x01',
+            '    labels:',
+            '    - rock.1',
+            '    - rock.2',
+            '  - labels: [four]',
+            '    step: Last case',
+            '  flag-info:',
+            '    - 0: Zero',
+            '',
+        ].join('\n'), 'utf-8');
+
+        const manager = new SdsioConfigManager();
+        manager.setConfigFile(configPath);
+
+        expect(manager.getConfig().playbackTestCases).toEqual([
+            { testCase: 1, name: 'First case' },
+            { testCase: 2, name: '2' },
+            { testCase: 3, name: '3' },
+            { testCase: 4, name: 'Last case' },
+        ]);
+        expect(manager.getConfig().flagNames.get(0)).toBe('Zero');
+
+        manager.dispose();
+    });
+
+    it('parses YAML scalar step descriptions without reading nested step properties', () => {
+        const configPath = path.join(tmpDir, '.sdsio.yml');
+        fs.writeFileSync(configPath, [
+            'play:',
+            '  - step: |',
+            '      Literal line one',
+            '      line two',
+            '  - step: >',
+            '      Folded line one',
+            '      line two',
+            '  - step: Direct step',
+            '    metadata:',
+            '      step: Nested step',
+            "  - step: '  # quoted: step  '",
+            '',
+        ].join('\n'), 'utf-8');
+
+        const manager = new SdsioConfigManager();
+        manager.setConfigFile(configPath);
+
+        expect(manager.getConfig().playbackTestCases).toEqual([
+            { testCase: 1, name: 'Literal line one\nline two\n' },
+            { testCase: 2, name: 'Folded line one line two\n' },
+            { testCase: 3, name: 'Direct step' },
+            { testCase: 4, name: '  # quoted: step  ' },
+        ]);
+
+        manager.dispose();
+    });
+
     it('re-parses and notifies on watcher content change', () => {
         const configPath = path.join(tmpDir, '.sdsio.yml');
         fs.writeFileSync(configPath, 'workdir: ./a\n', 'utf-8');
