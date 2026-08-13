@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
         with:
           egress-policy: audit
 
@@ -70,7 +70,7 @@ jobs:
 
       - name: Commit changes
         if: ${{ steps.report.outputs.update == 1 }}
-        uses: EndBug/add-and-commit@290ea2c423ad77ca9c62ae0f5b224379612c0321
+        uses: EndBug/add-and-commit@645ecc0dd0a57f4d86d26c0aa5fc42c0a856fbca
         with:
           message: "Update TPIP report [skip ci]"
           add: |
