@@ -203,7 +203,10 @@ export class SdsioMonitorClient extends EventEmitter {
 
         const set = setMask >>> 0;
         const clear = clearMask >>> 0;
-        const selectedTestCase = testCase >>> 0;
+        if (!Number.isSafeInteger(testCase) || testCase < 0 || testCase > 0xffffffff) {
+            throw new RangeError(`Invalid playback test case: ${testCase}`);
+        }
+        const selectedTestCase = testCase;
 
         const header = Buffer.alloc(HEADER_SIZE);
         header.writeUInt32LE(MON_FLAGS, 0);

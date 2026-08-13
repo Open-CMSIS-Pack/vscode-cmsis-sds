@@ -204,6 +204,15 @@ describe('SdsioMonitorClient flag send API', () => {
         expect(written?.readUInt32LE(12)).toBe(0);
     });
 
+    it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 0x1_0000_0000])(
+        'rejects invalid playback test case %s',
+        (testCase) => {
+            const client = connectedClientWithWrite();
+
+            expect(() => client.startPlayback(testCase)).toThrow(RangeError);
+        },
+    );
+
     it('emits an error and returns false when socket write throws', () => {
         const client = connectedClientWithWrite(() => {
             throw new Error('write failed');
