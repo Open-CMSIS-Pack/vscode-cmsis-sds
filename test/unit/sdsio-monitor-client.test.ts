@@ -204,6 +204,19 @@ describe('SdsioMonitorClient flag send API', () => {
         expect(written?.readUInt32LE(12)).toBe(0xffffffff);
     });
 
+    it('encodes zero for the selected first playback step', () => {
+        let written: Buffer | undefined;
+        const client = connectedClientWithWrite((data) => {
+            written = data;
+        });
+
+        expect(client.startPlayback(0)).toBe(true);
+        expect(written?.readUInt32LE(0)).toBe(MON_FLAGS);
+        expect(written?.readUInt32LE(4)).toBe(0xa0000000);
+        expect(written?.readUInt32LE(8)).toBe(0);
+        expect(written?.readUInt32LE(12)).toBe(0);
+    });
+
     it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 0x1_0000_0000])(
         'rejects invalid playback test case %s',
         (testCase) => {

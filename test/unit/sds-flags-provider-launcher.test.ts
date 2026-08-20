@@ -576,6 +576,19 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(monitor.startPlayback).toHaveBeenCalledWith(0xffffffff);
     });
 
+    it('accepts and forwards the configured first playback step', async () => {
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(
+            createConfigManager('active.sdsio.yml') as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+        await service.connectServer();
+
+        expect(service.play(0, 'First case')).toBe(true);
+        expect(monitor.startPlayback).toHaveBeenCalledWith(0);
+    });
+
     it('rejects playback test cases missing from the current configuration', async () => {
         const monitor = new FakeMonitor();
         const service = new SdsIoControlService(
