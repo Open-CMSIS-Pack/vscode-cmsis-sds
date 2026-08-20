@@ -33,7 +33,7 @@ import { parse as parseYaml } from 'yaml';
 export const MAX_FLAG_INFO_FLAGS = 8;
 
 export interface SdsioPlaybackTestCase {
-    /** 1-based sequential number of the corresponding play entry. */
+    /** Zero-based sequential index of the corresponding play entry. */
     readonly testCase: number;
     /** Descriptive step value, falling back to the sequential number. */
     readonly name: string;
@@ -46,7 +46,7 @@ export interface SdsioConfigData {
     readonly metadir: string | undefined;
     /** Custom labels for flags 0-23.  Missing indices fall back to the numeric default. */
     readonly flagNames: ReadonlyMap<number, string>;
-    /** Playback test cases in their 1-based play-list order. */
+    /** Playback test cases in their zero-based play-list order. */
     readonly playbackTestCases: readonly SdsioPlaybackTestCase[];
 }
 
@@ -235,7 +235,7 @@ function parsePlaybackTestCases(raw: string): SdsioPlaybackTestCase[] {
     }
 
     return play.map((entry, index) => {
-        const testCase = index + 1;
+        const testCase = index;
         const step = entry && typeof entry === 'object' && !Array.isArray(entry)
             ? (entry as Record<string, unknown>).step
             : undefined;

@@ -18,6 +18,7 @@ import * as vscode from 'vscode';
 
 import { SdsIoControlService, SdsIoNotifyEvent } from '../providers/sdsIoControlService';
 import { SdsExplorerProvider, SdsTreeItem } from '../providers/sdsExplorerProvider';
+import { SDSIO_ALL_PLAYBACK_TEST_CASE } from '../recorder/sdsio/sdsIoMonitorClient';
 
 export interface RegisterSdsioInterfaceCommandsArgs {
     context: vscode.ExtensionContext;
@@ -80,12 +81,12 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.play', async () => {
             const testCases = sdsIoControlService.getPlaybackTestCases();
-            let selectedTestCase = 0;
+            let selectedTestCase = SDSIO_ALL_PLAYBACK_TEST_CASE;
             let selectedTestCaseName: string | undefined;
             if (testCases.length > 0) {
                 const selection = await vscode.window.showQuickPick(
                     [
-                        { label: 'All', description: 'All test cases', testCase: 0 },
+                        { label: 'All', description: 'All test cases', testCase: SDSIO_ALL_PLAYBACK_TEST_CASE },
                         ...testCases.map(({ testCase, name }) => ({ label: name, description: `Test case ${testCase}`, testCase })),
                     ],
                     { placeHolder: 'Select a playback test case' }
@@ -94,7 +95,7 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
                     return;
                 }
                 selectedTestCase = selection.testCase;
-                selectedTestCaseName = selection.testCase === 0 ? undefined : selection.label;
+                selectedTestCaseName = selection.testCase === SDSIO_ALL_PLAYBACK_TEST_CASE ? undefined : selection.label;
             }
 
             const connected = await sdsIoControlService.connectServer();

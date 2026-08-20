@@ -119,7 +119,7 @@ describe('SdsioConfigManager', () => {
         manager.dispose();
     });
 
-    it('parses playback test cases by 1-based list order with description fallbacks', () => {
+    it('parses playback test cases by zero-based list order with description fallbacks', () => {
         const configPath = path.join(tmpDir, '.sdsio.yml');
         fs.writeFileSync(configPath, [
             'sdsio:',
@@ -145,10 +145,10 @@ describe('SdsioConfigManager', () => {
         manager.setConfigFile(configPath);
 
         expect(manager.getConfig().playbackTestCases).toEqual([
-            { testCase: 1, name: 'First case' },
+            { testCase: 0, name: 'First case' },
+            { testCase: 1, name: '1' },
             { testCase: 2, name: '2' },
-            { testCase: 3, name: '3' },
-            { testCase: 4, name: 'Last case' },
+            { testCase: 3, name: 'Last case' },
         ]);
         expect(manager.getConfig().flagNames.get(0)).toBe('Zero');
 
@@ -176,10 +176,10 @@ describe('SdsioConfigManager', () => {
         manager.setConfigFile(configPath);
 
         expect(manager.getConfig().playbackTestCases).toEqual([
-            { testCase: 1, name: 'Literal line one\nline two\n' },
-            { testCase: 2, name: 'Folded line one line two\n' },
-            { testCase: 3, name: 'Direct step' },
-            { testCase: 4, name: '  # quoted: step  ' },
+            { testCase: 0, name: 'Literal line one\nline two\n' },
+            { testCase: 1, name: 'Folded line one line two\n' },
+            { testCase: 2, name: 'Direct step' },
+            { testCase: 3, name: '  # quoted: step  ' },
         ]);
 
         manager.dispose();

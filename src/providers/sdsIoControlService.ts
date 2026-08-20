@@ -15,7 +15,7 @@
  */
 
 import * as vscode from 'vscode';
-import { SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
+import { SDSIO_ALL_PLAYBACK_TEST_CASE, SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
 import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS, type SdsioPlaybackTestCase } from '../controller/sdsioConfigManager';
 import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
@@ -180,10 +180,10 @@ export class SdsIoControlService {
         return this.configManager.getConfig().playbackTestCases;
     }
 
-    play(testCase = 0, expectedName?: string): boolean {
-        if (testCase !== 0) {
+    play(testCase = SDSIO_ALL_PLAYBACK_TEST_CASE, expectedName?: string): boolean {
+        if (testCase !== SDSIO_ALL_PLAYBACK_TEST_CASE) {
             const currentTestCase = this.getPlaybackTestCases().find((item) => item.testCase === testCase);
-            if (!Number.isSafeInteger(testCase) || testCase < 1 || !currentTestCase
+            if (!Number.isSafeInteger(testCase) || testCase < 0 || !currentTestCase
                 || (expectedName !== undefined && currentTestCase.name !== expectedName)) {
                 this.diagnostics.warn(DiagnosticSource.Server, 'Selected playback test case is no longer present in the SDSIO configuration.');
                 return false;
