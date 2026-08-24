@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased
+## 0.13.0
 
 - Fixed reading and saving image, audio, and video SDS metadata files that do not define scalar data channels.
 - Added playback controls to the image viewer, using the stream sample frequency as the playback frame rate.
