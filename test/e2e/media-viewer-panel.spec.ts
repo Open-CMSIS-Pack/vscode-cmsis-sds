@@ -120,7 +120,7 @@ test.describe('Media Viewer — Image', () => {
         expect(info).toContain('3 of 3');
     });
 
-    test('playback stops at the final frame', async ({ page }) => {
+    test('playback stops and resets to the first frame', async ({ page }) => {
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('.controls');
 
@@ -128,7 +128,7 @@ test.describe('Media Viewer — Image', () => {
         await playButton.click();
 
         await expect(playButton).toContainText('Play');
-        await expect(page.locator('.info-bar')).toContainText('3 of 3');
+        await expect(page.locator('.info-bar')).toContainText('1 of 3');
     });
 
     test('Space toggles playback', async ({ page }) => {

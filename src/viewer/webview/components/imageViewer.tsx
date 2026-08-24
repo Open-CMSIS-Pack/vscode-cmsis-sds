@@ -91,6 +91,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         if (!playing || !Number.isFinite(framesPerSecond) || framesPerSecond <= 0) { return; }
         timerRef.current = setInterval(() => {
             if (index >= totalFrames - 1) {
+                changeIndex(0, { manual: false });
                 setPlaybackState(false);
                 return;
             }
