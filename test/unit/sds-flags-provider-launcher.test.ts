@@ -138,7 +138,7 @@ function createConfigManager(...args: [string?]): FakeConfigManager {
         }),
         getConfig: vi.fn(() => ({
             flagNames: new Map<number, string>(),
-            playbackTestCases: [{ testCase: 1, name: 'First case' }],
+            playbackTestCases: [{ testCase: 0, name: 'First case' }],
         })),
         getConfigFile: vi.fn(() => configFile),
         setFlagName: vi.fn(),
@@ -546,12 +546,12 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canRecord()).toBe(true);
         expect(service.canStop()).toBe(false);
 
-        service.play(1);
+        service.play(0);
         expect(service.canPlay()).toBe(false);
         expect(service.canRecord()).toBe(false);
         expect(service.canStop()).toBe(true);
         expect(monitor.startPlayback).toHaveBeenCalledTimes(1);
-        expect(monitor.startPlayback).toHaveBeenCalledWith(1);
+        expect(monitor.startPlayback).toHaveBeenCalledWith(0);
 
         service.stop();
         service.record();
@@ -562,7 +562,7 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canStop()).toBe(false);
     });
 
-    it('forwards test case zero for legacy playback without a selection', async () => {
+    it('forwards the all-test-cases sentinel for playback without a selection', async () => {
         const monitor = new FakeMonitor();
         const service = new SdsIoControlService(
             createConfigManager('active.sdsio.yml') as never,
@@ -573,6 +573,19 @@ describe('SdsIoControlService launcher delegation', () => {
 
         service.play();
 
+        expect(monitor.startPlayback).toHaveBeenCalledWith(0xffffffff);
+    });
+
+    it('accepts and forwards the configured first playback step', async () => {
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(
+            createConfigManager('active.sdsio.yml') as never,
+            monitor as never,
+            'c:/workspace/ext',
+        );
+        await service.connectServer();
+
+        expect(service.play(0, 'First case')).toBe(true);
         expect(monitor.startPlayback).toHaveBeenCalledWith(0);
     });
 
@@ -646,7 +659,7 @@ describe('SdsIoControlService launcher delegation', () => {
         });
 
         monitor.startPlayback.mockReturnValueOnce(false);
-        service.play(1);
+        service.play(0);
 
         expect(events).toEqual([]);
         expect(service.canPlay()).toBe(true);
@@ -659,7 +672,7 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(service.canRecord()).toBe(true);
         expect(service.canStop()).toBe(false);
 
-        service.play(1);
+        service.play(0);
         monitor.stopRecordingOrPlayback.mockReturnValueOnce(false);
         service.stop();
 
@@ -684,8 +697,8 @@ describe('SdsIoControlService launcher delegation', () => {
             events.push(event.event);
         });
 
-        service.play(1);
-        service.play(1);
+        service.play(0);
+        service.play(0);
         service.stop();
         service.stop();
         service.record();

@@ -79,8 +79,8 @@ function createService() {
         connectServer: vi.fn(async () => true),
         disconnectServer: vi.fn(async () => undefined),
         getPlaybackTestCases: vi.fn(() => [
-            { testCase: 1, name: 'First case' },
-            { testCase: 2, name: 'Second case' },
+            { testCase: 0, name: 'First case' },
+            { testCase: 1, name: 'Second case' },
         ]),
         onDidChange: vi.fn((listener: (event: SdsIoChangeEvent) => void) => {
             changeListener = listener;
@@ -145,7 +145,7 @@ describe('registerSdsioInterfaceCommands', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(vscode.window.showQuickPick).mockResolvedValue(
-            { label: 'Second case', description: 'Test case 2', testCase: 2 } as vscode.QuickPickItem & { testCase: number }
+            { label: 'Second case', description: 'Test case 1', testCase: 1 } as vscode.QuickPickItem & { testCase: number }
         );
         commandMockState.registeredDisposables.length = 0;
     });
@@ -229,32 +229,32 @@ describe('registerSdsioInterfaceCommands', () => {
         expect(service.record).toHaveBeenCalledTimes(1);
     });
 
-    it('offers all playback first and forwards the selected 1-based test case', async () => {
+    it('offers all playback first and forwards the selected zero-based test case', async () => {
         const { service } = registerCommands();
 
         await getCommand('arm-sds.sdsinterface.play')();
 
         expect(vscode.window.showQuickPick).toHaveBeenCalledWith([
-            { label: 'All', description: 'All test cases', testCase: 0 },
-            { label: 'First case', description: 'Test case 1', testCase: 1 },
-            { label: 'Second case', description: 'Test case 2', testCase: 2 },
+            { label: 'All', description: 'All test cases', testCase: 0xffffffff },
+            { label: 'First case', description: 'Test case 0', testCase: 0 },
+            { label: 'Second case', description: 'Test case 1', testCase: 1 },
         ], { placeHolder: 'Select a playback test case' });
         expect(service.connectServer).toHaveBeenCalledTimes(1);
-        expect(service.play).toHaveBeenCalledWith(2, 'Second case');
+        expect(service.play).toHaveBeenCalledWith(1, 'Second case');
     });
 
-    it('forwards zero when all playback test cases are selected', async () => {
+    it('forwards the all-test-cases sentinel when all playback test cases are selected', async () => {
         const { service } = registerCommands();
         vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce({
             label: 'All',
             description: 'All test cases',
-            testCase: 0,
+            testCase: 0xffffffff,
         } as vscode.QuickPickItem & { testCase: number });
 
         await getCommand('arm-sds.sdsinterface.play')();
 
         expect(service.connectServer).toHaveBeenCalledTimes(1);
-        expect(service.play).toHaveBeenCalledWith(0, undefined);
+        expect(service.play).toHaveBeenCalledWith(0xffffffff, undefined);
     });
 
     it('warns when a playback test case becomes stale before playback starts', async () => {
@@ -263,7 +263,7 @@ describe('registerSdsioInterfaceCommands', () => {
 
         await getCommand('arm-sds.sdsinterface.play')();
 
-        expect(service.play).toHaveBeenCalledWith(2, 'Second case');
+        expect(service.play).toHaveBeenCalledWith(1, 'Second case');
         expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
             'The selected playback test case is no longer available. Please select it again.',
         );
@@ -279,7 +279,7 @@ describe('registerSdsioInterfaceCommands', () => {
         expect(service.play).not.toHaveBeenCalled();
     });
 
-    it('starts legacy playback without prompting when no test cases exist', async () => {
+    it('starts playback for all configured steps without prompting when no test cases exist', async () => {
         const { service } = registerCommands();
         service.getPlaybackTestCases.mockReturnValueOnce([]);
 
@@ -287,7 +287,7 @@ describe('registerSdsioInterfaceCommands', () => {
 
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
         expect(service.connectServer).toHaveBeenCalledTimes(1);
-        expect(service.play).toHaveBeenCalledWith(0, undefined);
+        expect(service.play).toHaveBeenCalledWith(0xffffffff, undefined);
     });
 
     it('stops and renames flags through the control service', async () => {

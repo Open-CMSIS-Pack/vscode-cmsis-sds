@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BroadcastMessage, ImageFrame, getIndexedSdsSuffix, getNearestFrameIndexAtTimestamp, isTimestampInFrameRange, Message } from '../../../webview/protocol';
+import { BroadcastMessage, ImageFrame, getIndexedSdsSuffix, getNearestFrameIndexAtTimestamp, isSameSdsFile, isTimestampInFrameRange, Message } from '../../../webview/protocol';
 import { broadcastMessage } from '../../../webview/vscode-api';
 
 type Quality = 'low' | 'high';
@@ -183,7 +183,7 @@ export function useFrameWindowViewer({
                         break;
                     }
 
-                    if (typeof broadcast.playbackState === 'string') {
+                    if (typeof broadcast.playbackState === 'string' && isSameSdsFile(filename, broadcast.fileName)) {
                         onPlaybackStateChange?.(broadcast.playbackState);
                     }
 
@@ -303,7 +303,7 @@ export function useFrameWindowViewer({
         };
     }, []);
 
-    const changeIndex = useCallback((nextIndex: number, { manual = true }: { manual?: boolean } = {}) => {
+    const changeIndex = useCallback((nextIndex: number, { manual = true, broadcast = true }: { manual?: boolean; broadcast?: boolean } = {}) => {
         if (manual) {
             onManualChangeStart?.();
         }
@@ -311,7 +311,7 @@ export function useFrameWindowViewer({
         const clamped = Math.max(0, Math.min(totalFrames - 1, nextIndex));
         setIndex(clamped);
         const frame = getLoadedFrame(clamped);
-        if (typeof frame?.timestamp === 'number') {
+        if (broadcast && typeof frame?.timestamp === 'number') {
             broadcastMessage({
                 type: 'broadcast',
                 timeStamp: frame.timestamp,

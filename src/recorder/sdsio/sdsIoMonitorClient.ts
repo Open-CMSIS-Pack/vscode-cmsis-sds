@@ -34,6 +34,8 @@ export const MON_CLOSE = 2;
 export const MON_FLAGS = 6;
 export const MON_INFO = 7;
 export const HEADER_SIZE = 16;
+/** MON_FLAGS TestCase value that selects every configured playback step. */
+export const SDSIO_ALL_PLAYBACK_TEST_CASE = 0xffffffff;
 
 // sdsFlags control bits from SDS-Framework issue #209
 const SDS_FLAG_IO_ACTIVE = 0x80000000; // bit 31
@@ -231,10 +233,8 @@ export class SdsioMonitorClient extends EventEmitter {
         return this.sendFlags(SDS_FLAG_IO_ACTIVE, SDS_FLAG_PLAYBACK);
     }
 
-    /**
-     * Start playback mode for the selected 1-based test case, or the legacy default when zero.
-     */
-    startPlayback(testCase = 0): boolean {
+    /** Start playback mode for a zero-based test case, or all configured steps by default. */
+    startPlayback(testCase = SDSIO_ALL_PLAYBACK_TEST_CASE): boolean {
         return this.sendFlags((SDS_FLAG_IO_ACTIVE | SDS_FLAG_PLAYBACK) >>> 0, 0, testCase);
     }
 
