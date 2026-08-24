@@ -48,12 +48,12 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const playbackTimestampRef = useRef(frames[0]?.timestamp ?? 0);
     const getImageWindowSize = useCallback((quality: 'low' | 'high') => quality === 'low' ? 32 : 160, []);
     const getImageNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(8, Math.floor(loadedFrameCount * 0.2)), []);
-    const setPlaybackState = useCallback((nextPlaying: boolean, broadcast = true) => {
+    const setPlaybackState = useCallback((nextPlaying: boolean, broadcast = true, timeStamp = playbackTimestampRef.current) => {
         setPlaying(nextPlaying);
         if (broadcast) {
             broadcastMessage({
                 type: 'broadcast',
-                timeStamp: playbackTimestampRef.current,
+                timeStamp,
                 fileName: filename,
                 playbackState: nextPlaying ? 'playing' : 'stopped',
             });
@@ -91,8 +91,10 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         if (!playing || !Number.isFinite(framesPerSecond) || framesPerSecond <= 0) { return; }
         timerRef.current = setInterval(() => {
             if (index >= totalFrames - 1) {
-                changeIndex(0, { manual: false });
-                setPlaybackState(false);
+                const firstFrameTimestamp = getLoadedFrame(0)?.timestamp ?? frames[0]?.timestamp ?? 0;
+                playbackTimestampRef.current = firstFrameTimestamp;
+                changeIndex(0, { manual: false, broadcast: false });
+                setPlaybackState(false, true, firstFrameTimestamp);
                 return;
             }
             const nextIndex = index + 1;
@@ -105,7 +107,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 timerRef.current = null;
             }
         };
-    }, [changeIndex, index, playing, setPlaybackState, state.interval, totalFrames]);
+    }, [changeIndex, frames, getLoadedFrame, index, playing, setPlaybackState, state.interval, totalFrames]);
 
     useEffect(() => {
         const canvas = canvasRef.current;

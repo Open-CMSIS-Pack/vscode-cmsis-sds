@@ -129,6 +129,12 @@ test.describe('Media Viewer — Image', () => {
 
         await expect(playButton).toContainText('Play');
         await expect(page.locator('.info-bar')).toContainText('1 of 3');
+
+        const broadcasts = await page.evaluate(() => {
+            return (window as unknown as { __messages: Array<{ type?: string; playbackState?: string; timeStamp?: number }> }).__messages
+                .filter(message => message.type === 'broadcast');
+        });
+        expect(broadcasts.at(-1)).toMatchObject({ playbackState: 'stopped', timeStamp: 0 });
     });
 
     test('Space toggles playback', async ({ page }) => {
