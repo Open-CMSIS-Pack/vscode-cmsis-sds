@@ -58,8 +58,14 @@ export function getIndexedSdsSuffix(value: unknown) {
     if (typeof value !== 'string') {
         return null;
     }
-
     return value.match(SDS_FILE_MATCHER)?.[2].toLowerCase() ?? null;
+}
+
+export function isSameSdsFile(left: unknown, right: unknown) {
+    if (typeof left !== 'string' || typeof right !== 'string') {
+        return false;
+    }
+    return left.toLowerCase() === right.toLowerCase();
 }
 
 export function isTimestampInFrameRange(timeStamp: number | undefined, frames: MediaFrame[]) {
