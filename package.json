@@ -456,7 +456,7 @@
     },
     "dependencies": {
         "@ant-design/charts": "^2.2.21",
-        "@ant-design/icons": "^6.2.3",
+        "@ant-design/icons": "^6.3.2",
         "antd": "^6.3.4",
         "debug": "^4.4.3",
         "ms": "^2.1.3",
