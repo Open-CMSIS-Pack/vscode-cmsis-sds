@@ -190,7 +190,7 @@
     },
     {
         "name": "@ant-design/icons",
-        "version": "6.2.5",
+        "version": "6.3.2",
         "spdx": "MIT",
         "url": "https://github.com/ant-design/ant-design-icons",
         "license": "https://github.com/ant-design/ant-design-icons/blob/master/LICENSE"

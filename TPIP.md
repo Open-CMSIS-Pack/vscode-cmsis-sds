@@ -31,4 +31,4 @@ Generated for release: 0.13.0
 | usb | 2.17.0 | https://github.com/node-usb/node-usb | [MIT](https://github.com/node-usb/node-usb/blob/main/LICENSE) |
 | yargs | 18.0.0 | https://github.com/yargs/yargs | [MIT](https://github.com/yargs/yargs/blob/main/LICENSE) |
 | @ant-design/charts | 2.6.7 | https://github.com/ant-design/ant-design-charts | [MIT](https://github.com/ant-design/ant-design-charts/blob/master/LICENSE) |
-| @ant-design/icons | 6.2.5 | https://github.com/ant-design/ant-design-icons | [MIT](https://github.com/ant-design/ant-design-icons/blob/master/LICENSE) |
+| @ant-design/icons | 6.3.2 | https://github.com/ant-design/ant-design-icons | [MIT](https://github.com/ant-design/ant-design-icons/blob/master/LICENSE) |
