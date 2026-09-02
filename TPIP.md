@@ -21,7 +21,7 @@ Generated for release: 0.13.0
 | @serialport/parser-slip-encoder | 13.0.0 | https://github.com/serialport/node-serialport | [MIT](https://github.com/serialport/node-serialport/blob/main/LICENSE) |
 | @serialport/parser-spacepacket | 13.0.0 | https://github.com/serialport/node-serialport | [MIT](https://github.com/serialport/node-serialport/blob/main/LICENSE) |
 | @serialport/stream | 13.0.0 | https://github.com/serialport/node-serialport | [MIT](https://github.com/serialport/node-serialport/blob/main/LICENSE) |
-| antd | 6.3.7 | https://github.com/ant-design/ant-design | [MIT](https://github.com/ant-design/ant-design/blob/master/LICENSE) |
+| antd | 6.6.2 | https://github.com/ant-design/ant-design | [MIT](https://github.com/ant-design/ant-design/blob/master/LICENSE) |
 | debug | 4.4.3 | https://github.com/debug-js/debug | [MIT](https://github.com/debug-js/debug/blob/master/LICENSE) |
 | ms | 2.1.3 | https://github.com/vercel/ms | [MIT](https://github.com/vercel/ms/blob/main/LICENSE) |
 | node-gyp-build | 4.8.4 | https://github.com/prebuild/node-gyp-build | [MIT](https://github.com/prebuild/node-gyp-build/blob/master/LICENSE) |
