@@ -6,7 +6,7 @@ Generated for release: 0.13.0
 |---|---|---|---|
 | sdsio | 3.0.0 | https://github.com/ARM-software/SDS-Framework | [Apache-2.0](https://github.com/ARM-software/SDS-Framework/blob/v3.0.0/LICENSE) |
 | xml2js | 0.5.0 | https://github.com/Leonidas-from-XIV/node-xml2js | [MIT](https://github.com/Leonidas-from-XIV/node-xml2js/blob/master/LICENSE) |
-| yaml | 2.8.2 | https://github.com/eemeli/yaml | [ISC](https://github.com/eemeli/yaml/blob/main/LICENSE) |
+| yaml | 2.9.0 | https://github.com/eemeli/yaml | [ISC](https://github.com/eemeli/yaml/blob/main/LICENSE) |
 | @serialport/binding-mock | 10.2.2 | https://github.com/serialport/binding-mock | [MIT](https://github.com/serialport/binding-mock/blob/main/LICENSE) |
 | @serialport/bindings-cpp | 13.0.1 | https://github.com/serialport/bindings-cpp | [MIT](https://github.com/serialport/bindings-cpp/blob/main/LICENSE) |
 | @serialport/bindings-interface | 1.2.2 | https://github.com/serialport/bindings-interface | [MIT](https://github.com/serialport/bindings-interface/blob/main/LICENSE) |
