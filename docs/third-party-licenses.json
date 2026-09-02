@@ -120,7 +120,7 @@
     },
     {
         "name": "antd",
-        "version": "6.3.7",
+        "version": "6.6.2",
         "spdx": "MIT",
         "url": "https://github.com/ant-design/ant-design",
         "license": "https://github.com/ant-design/ant-design/blob/master/LICENSE"
