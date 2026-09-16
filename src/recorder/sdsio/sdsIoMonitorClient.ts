@@ -316,7 +316,7 @@ export class SdsioMonitorClient extends EventEmitter {
                     this._handleFlags(header);
                     break;
                 case MON_INFO:
-                    this._handleInfo(header);
+                    this._handleInfo(header, payload);
                     break;
                 default:
                     this._safeEmit('log', `Unknown monitor message: ${header.cmd}`);
@@ -353,18 +353,22 @@ export class SdsioMonitorClient extends EventEmitter {
         this._safeEmit('close', fileName);
     }
 
-    private _handleInfo(header: SdsioMonitorHeader): void {
+    private _handleInfo(header: SdsioMonitorHeader, payload: Buffer): void {
         const sdsFlags = header.setMask;
         const sdsIdleRate = header.clearMask;
-        //const errorLen = header.arg3;
 
         const info: SdsioMonitorInfo = {
             sdsFlags,
             sdsIdleRate: sdsIdleRate === 0xffffffff ? undefined : sdsIdleRate,
         };
 
-        // TODO: Parse error data if present
-        // For now, just emit the basic info
+        if (payload.length >= 8) {
+            info.error = {
+                status: payload.readInt32LE(0),
+                line: payload.readUInt32LE(4),
+                fileName: payload.subarray(8).toString('utf-8'),
+            };
+        }
 
         this._safeEmit('info', info);
     }
