@@ -374,6 +374,15 @@ describe('SdsioMonitorClient protocol parsing', () => {
             writeHeader(MON_INFO, 0x5, 42, 3),
             Buffer.from('err'),
         ]);
+        const errorPayload = Buffer.alloc(8);
+        errorPayload.writeInt32LE(-2, 0);
+        errorPayload.writeUInt32LE(73, 4);
+        const errorFileName = Buffer.from('source.c', 'utf-8');
+        const infoFrameWithError = Buffer.concat([
+            writeHeader(MON_INFO, 0x6, 17, errorPayload.length + errorFileName.length),
+            errorPayload,
+            errorFileName,
+        ]);
         const flagsFrame = writeHeader(MON_FLAGS, 1, 2, 3);
         const unknownFrame = writeHeader(99);
         const firstChunk = openFrame.subarray(0, HEADER_SIZE + 2);
@@ -383,6 +392,7 @@ describe('SdsioMonitorClient protocol parsing', () => {
             closeFrame,
             infoFrame,
             infoFrameWithPayload,
+            infoFrameWithError,
             flagsFrame,
             unknownFrame,
         ]);
@@ -400,6 +410,11 @@ describe('SdsioMonitorClient protocol parsing', () => {
         expect(infos).toEqual([
             { sdsFlags: 0x1234, sdsIdleRate: undefined },
             { sdsFlags: 0x5, sdsIdleRate: 42 },
+            {
+                sdsFlags: 0x6,
+                sdsIdleRate: 17,
+                error: { status: -2, line: 73, fileName: 'source.c' },
+            },
         ]);
         expect(flags).toEqual([{ setMask: 1, clearMask: 2, arg3: 3 }]);
         expect(logs).toEqual(['Unknown monitor message: 99']);
