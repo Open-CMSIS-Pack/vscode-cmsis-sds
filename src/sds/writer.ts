@@ -225,6 +225,9 @@ export function serializeMetadataToYaml(metadata: SdsMetadata): string {
 
 type MediaBlockKey = 'image' | 'audio' | 'video';
 
+const scalarContentKeys = ['value', 'type', 'offset', 'scale', 'unit'] as const;
+const contentItemPrefixes = ['- value:', '- image:', '- audio:', '- video:'];
+
 function mediaBlockKeys(content: SdsContentValue): MediaBlockKey[] {
     const keys: MediaBlockKey[] = [];
     if (content.image) { keys.push('image'); }
@@ -234,11 +237,11 @@ function mediaBlockKeys(content: SdsContentValue): MediaBlockKey[] {
 }
 
 function hasScalarContentFields(content: SdsContentValue): boolean {
-    return content.value !== undefined
-        || content.type !== undefined
-        || content.offset !== undefined
-        || content.scale !== undefined
-        || content.unit !== undefined;
+    return scalarContentKeys.some(key => content[key] !== undefined);
+}
+
+function startsContentItem(trimmed: string): boolean {
+    return trimmed === '-' || contentItemPrefixes.some(prefix => trimmed.startsWith(prefix));
 }
 
 function appendMediaBlock(yaml: string, content: SdsContentValue, block: MediaBlockKey, blockIndent: string, fieldIndent: string): string {
@@ -350,13 +353,7 @@ export function parseMetadataString(text: string, options: ParseMetadataOptions 
 
         if (inContent) {
             // New content item (starts with "-" or "- value:")
-            if (
-                trimmed === '-' ||
-                trimmed.startsWith('- value:') ||
-                trimmed.startsWith('- image:') ||
-                trimmed.startsWith('- audio:') ||
-                trimmed.startsWith('- video:')
-            ) {
+            if (startsContentItem(trimmed)) {
                 if (currentContent) {
                     metadata.sds.content.push(currentContent);
                 }
