@@ -147,7 +147,10 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     }, [decimationPreset, isDragging, resolvedDomainStart, sampleRate, samples, viewRange, viewWidth]);
 
     const blockIndexFromTime = useCallback((time: number) => {
-        if (!Number.isFinite(time) || sampleRate <= 0 || totalSamples <= 0 || time < resolvedDomainStart || time > resolvedDomainEnd) {
+        if (!Number.isFinite(time) || sampleRate <= 0 || totalSamples <= 0) {
+            return null;
+        }
+        if (time < resolvedDomainStart || time > resolvedDomainEnd) {
             return null;
         }
 

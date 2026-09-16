@@ -200,7 +200,10 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     }, [plotRegion, resolveXRange]);
 
     const cursorLeftFromX = useCallback((x: number | null | undefined) => {
-        if (x === null || x === undefined || !Number.isFinite(x) || !resolveXRange || !plotRegion) {
+        if (x === null || x === undefined || !Number.isFinite(x)) {
+            return null;
+        }
+        if (!resolveXRange || !plotRegion) {
             return null;
         }
 
