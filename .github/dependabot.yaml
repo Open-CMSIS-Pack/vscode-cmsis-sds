@@ -58,3 +58,7 @@ updates:
       - dependency-name: "nock"
         update-types:
         - version-update:semver-major
+    groups:
+      typescript-eslint:
+        patterns:
+          - "@typescript-eslint/*"
