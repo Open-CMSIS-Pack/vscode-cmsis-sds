@@ -29,6 +29,6 @@ Generated for release: 0.13.0
 | react-dom | 18.3.1 | https://github.com/facebook/react | [MIT](https://github.com/facebook/react/blob/main/LICENSE) |
 | serialport | 13.0.0 | https://github.com/serialport/node-serialport | [MIT](https://github.com/serialport/node-serialport/blob/main/LICENSE) |
 | usb | 2.17.0 | https://github.com/node-usb/node-usb | [MIT](https://github.com/node-usb/node-usb/blob/main/LICENSE) |
-| yargs | 18.0.0 | https://github.com/yargs/yargs | [MIT](https://github.com/yargs/yargs/blob/main/LICENSE) |
+| yargs | 18.2.0 | https://github.com/yargs/yargs | [MIT](https://github.com/yargs/yargs/blob/main/LICENSE) |
 | @ant-design/charts | 2.6.7 | https://github.com/ant-design/ant-design-charts | [MIT](https://github.com/ant-design/ant-design-charts/blob/master/LICENSE) |
 | @ant-design/icons | 6.3.4 | https://github.com/ant-design/ant-design-icons | [MIT](https://github.com/ant-design/ant-design-icons/blob/master/LICENSE) |

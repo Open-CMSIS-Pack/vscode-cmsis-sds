@@ -176,7 +176,7 @@
     },
     {
         "name": "yargs",
-        "version": "18.0.0",
+        "version": "18.2.0",
         "spdx": "MIT",
         "url": "https://github.com/yargs/yargs",
         "license": "https://github.com/yargs/yargs/blob/main/LICENSE"
