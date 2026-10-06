@@ -451,7 +451,7 @@
         "semver": "^7.8.5",
         "tsx": "^4.23.15",
         "type-fest": "^5.10.0",
-        "typescript": "^5.9.3",
+        "typescript": "^7.0.2",
         "vitest": "^4.1.11"
     },
     "dependencies": {
