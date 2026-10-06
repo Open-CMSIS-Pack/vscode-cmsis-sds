@@ -437,7 +437,7 @@
         "@typescript-eslint/eslint-plugin": "8.68.0",
         "@typescript-eslint/parser": "8.68.0",
         "@vitest/coverage-v8": "^4.1.6",
-        "@vscode/vsce": "^3.9.1",
+        "@vscode/vsce": "^4.0.0",
         "esbuild": "^0.28.1",
         "eslint": "^9.39.3",
         "eslint-plugin-react": "^7.37.5",
