@@ -469,7 +469,7 @@
     "overrides": {
         "tar@>=6.1.2": "^7.5.11",
         "@tootallnate/once": "3.0.1",
-        "shell-quote": "^1.10.0",
+        "shell-quote": "^1.12.0",
         "@vscode/vsce": {
             "cheerio": "1.0.0-rc.12"
         },
