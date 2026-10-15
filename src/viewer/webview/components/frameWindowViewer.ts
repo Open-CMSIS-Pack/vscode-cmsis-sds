@@ -56,7 +56,10 @@ export function useFrameWindowViewer({
     const [windowStart, setWindowStart] = useState(rangeStart);
     const [isDragMode, setIsDragMode] = useState(false);
     const requestSeqRef = useRef(0);
+    const minimumValidRequestSeqRef = useRef(0);
     const latestAppliedSeqRef = useRef(0);
+    const inFlightRequestRef = useRef<number | null>(null);
+    const pendingWindowRequestRef = useRef<{ centerIndex: number; quality: Quality } | null>(null);
     const dragRequestTimerRef = useRef<NodeJS.Timeout | null>(null);
     const pendingDragRequestRef = useRef<{ centerIndex: number; quality: Quality } | null>(null);
     const lastRequestAtRef = useRef(0);
@@ -73,7 +76,12 @@ export function useFrameWindowViewer({
     }, [windowFrames, windowStart]);
 
     const requestFrameWindow = useCallback((centerIndex: number, quality: Quality) => {
+        if (inFlightRequestRef.current !== null) {
+            pendingWindowRequestRef.current = { centerIndex, quality };
+            return;
+        }
         const requestId = ++requestSeqRef.current;
+        inFlightRequestRef.current = requestId;
         broadcastMessage({
             command: 'requestMediaFrameWindow',
             requestId,
@@ -210,8 +218,16 @@ export function useFrameWindowViewer({
                     if (mediaMessage.payload?.mediaType !== mediaType) {
                         break;
                     }
+                    if (mediaMessage.requestId === inFlightRequestRef.current) {
+                        inFlightRequestRef.current = null;
+                        const pendingRequest = pendingWindowRequestRef.current;
+                        pendingWindowRequestRef.current = null;
+                        if (pendingRequest) {
+                            requestFrameWindow(pendingRequest.centerIndex, pendingRequest.quality);
+                        }
+                    }
                     if (typeof mediaMessage.requestId === 'number') {
-                        if (mediaMessage.requestId < requestSeqRef.current || mediaMessage.requestId < latestAppliedSeqRef.current) {
+                        if (mediaMessage.requestId < minimumValidRequestSeqRef.current || mediaMessage.requestId < latestAppliedSeqRef.current) {
                             break;
                         }
                     }
@@ -247,17 +263,20 @@ export function useFrameWindowViewer({
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, index, mediaType, onPlaybackStateChange, windowFrames]);
+    }, [filename, index, mediaType, onPlaybackStateChange, requestFrameWindow, windowFrames]);
 
     useEffect(() => {
         const loadedStart = windowStart;
         const loadedEnd = windowStart + windowFrames.length - 1;
+        const requestIndex = stationaryRequestQuality === 'low'
+            ? Math.min(totalFrames - 1, index + Math.floor(getWindowSize('low') / 2))
+            : index;
 
         if (windowFrames.length === 0 || index < loadedStart || index > loadedEnd) {
             if (isDragMode) {
                 scheduleDragFrameWindowRequest(index, 'low');
             } else {
-                requestFrameWindowIfNeeded(index, stationaryRequestQuality);
+                requestFrameWindowIfNeeded(requestIndex, stationaryRequestQuality);
             }
             return;
         }
@@ -267,7 +286,7 @@ export function useFrameWindowViewer({
             if (isDragMode) {
                 scheduleDragFrameWindowRequest(index, 'low');
             } else {
-                requestFrameWindowIfNeeded(index, stationaryRequestQuality);
+                requestFrameWindowIfNeeded(requestIndex, stationaryRequestQuality);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- request helpers are recreated each render; depending on them would refetch windows excessively
@@ -315,6 +334,11 @@ export function useFrameWindowViewer({
         }
 
         const clamped = Math.max(0, Math.min(totalFrames - 1, nextIndex));
+        if (manual || clamped < index) {
+            minimumValidRequestSeqRef.current = requestSeqRef.current + 1;
+            lastRequestKeyRef.current = '';
+            pendingWindowRequestRef.current = null;
+        }
         setIndex(clamped);
         const frame = getLoadedFrame(clamped);
         if (broadcast && typeof frame?.timestamp === 'number') {
@@ -324,7 +348,7 @@ export function useFrameWindowViewer({
                 fileName: filename,
             });
         }
-    }, [filename, getLoadedFrame, onManualChangeStart, totalFrames]);
+    }, [filename, getLoadedFrame, index, onManualChangeStart, totalFrames]);
 
     return {
         index,

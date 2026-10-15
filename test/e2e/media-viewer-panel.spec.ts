@@ -179,10 +179,74 @@ test.describe('Media Viewer — Image', () => {
         await expect(page.locator('.ant-slider-handle')).toHaveAttribute('aria-valuenow', '0');
         await expect(page.locator('.controls button').first()).toContainText('Play');
 
-        await sendWindow(requestId, 0, 255);
+        const resetRequestId = await page.evaluate(() => {
+            return (window as unknown as { __messages: Array<{ command?: string; requestId?: number }> }).__messages
+                .filter(message => message.command === 'requestMediaFrameWindow').at(-1)!.requestId!;
+        });
+        await sendWindow(resetRequestId, 0, 255);
         await expect.poll(() => canvas.evaluate(element => {
             return Array.from((element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 1, 1).data);
         })).toEqual([255, 255, 255, 255]);
+    });
+
+    test('playback buffers at the loaded edge and coalesces delayed window requests', async ({ page }) => {
+        await page.addInitScript(() => {
+            let initialState: unknown;
+            Object.defineProperty(window, '__INITIAL_STATE__', {
+                get: () => initialState,
+                set: (state: { image: { frames: Array<{ timestamp: number; rgbaBase64: string }>; totalFrames: number; interval: string } }) => {
+                    state.image.frames = Array.from({ length: 32 }, (_, frameIndex) => ({
+                        timestamp: frameIndex * 0.1,
+                        rgbaBase64: btoa(String.fromCharCode(...Uint8Array.from({ length: 64 }, (_, byteIndex) => byteIndex % 4 === 3 ? 255 : frameIndex))),
+                    }));
+                    state.image.totalFrames = 136;
+                    state.image.interval = '10';
+                    initialState = state;
+                },
+            });
+        });
+        await page.clock.install();
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('canvas');
+        await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1)));
+        await page.locator('.controls button').first().click();
+        await page.clock.runFor(3500);
+        const selectedIndex = Number(await page.locator('.ant-slider-handle').getAttribute('aria-valuenow'));
+        expect(selectedIndex).toBe(31);
+
+        const outstandingRequests = await page.evaluate(() => {
+            return (window as unknown as { __messages: Array<{ command?: string }> }).__messages
+                .filter(message => message.command === 'requestMediaFrameWindow').length;
+        });
+        expect(outstandingRequests).toBe(1);
+
+        await page.evaluate(() => {
+            const requests = (window as unknown as {
+                __messages: Array<{ command?: string; requestId?: number }>;
+            }).__messages.filter(message => message.command === 'requestMediaFrameWindow');
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: {
+                    command: 'mediaFrameWindowData',
+                    requestId: requests[0].requestId,
+                    payload: {
+                        mediaType: 'image', rangeStart: 12, rangeEnd: 44, quality: 'low',
+                        frames: Array.from({ length: 32 }, (_, localIndex) => ({
+                            timestamp: (12 + localIndex) * 0.1,
+                            rgbaBase64: btoa(String.fromCharCode(...Uint8Array.from({ length: 64 }, (_, byteIndex) => byteIndex % 4 === 3 ? 255 : 12 + localIndex))),
+                        })),
+                    },
+                },
+            }));
+        });
+        await page.clock.runFor(32);
+        await expect.poll(() => page.locator('canvas').evaluate(element => {
+            return (element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 1, 1).data[0];
+        })).toBe(selectedIndex);
+        await expect(page.locator('.info-bar')).toContainText(`${(selectedIndex * 0.1).toFixed(4)}s`);
+        await page.clock.runFor(100);
+        await expect(page.locator('.ant-slider-handle')).toHaveAttribute('aria-valuenow', '32');
+        await expect(page.locator('.info-bar')).toContainText('3.2000s');
     });
 
     test('Space toggles playback', async ({ page }) => {
