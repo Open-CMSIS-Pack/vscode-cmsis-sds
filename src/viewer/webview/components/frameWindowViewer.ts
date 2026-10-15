@@ -39,6 +39,7 @@ type FrameWindowViewerOptions = {
 };
 
 const DRAG_REQUEST_THROTTLE_MS = 80;
+let frameWindowRequestSequence = 0;
 
 export function useFrameWindowViewer({
     state,
@@ -55,8 +56,8 @@ export function useFrameWindowViewer({
     const [windowFrames, setWindowFrames] = useState<ImageFrame[]>(frames);
     const [windowStart, setWindowStart] = useState(rangeStart);
     const [isDragMode, setIsDragMode] = useState(false);
-    const requestSeqRef = useRef(0);
-    const minimumValidRequestSeqRef = useRef(0);
+    const requestSeqRef = useRef(frameWindowRequestSequence);
+    const minimumValidRequestSeqRef = useRef(frameWindowRequestSequence + 1);
     const latestAppliedSeqRef = useRef(0);
     const inFlightRequestRef = useRef<number | null>(null);
     const pendingWindowRequestRef = useRef<{ centerIndex: number; quality: Quality } | null>(null);
@@ -80,7 +81,8 @@ export function useFrameWindowViewer({
             pendingWindowRequestRef.current = { centerIndex, quality };
             return;
         }
-        const requestId = ++requestSeqRef.current;
+        const requestId = ++frameWindowRequestSequence;
+        requestSeqRef.current = requestId;
         inFlightRequestRef.current = requestId;
         broadcastMessage({
             command: 'requestMediaFrameWindow',

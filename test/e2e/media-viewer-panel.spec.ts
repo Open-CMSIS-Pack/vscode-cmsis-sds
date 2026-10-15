@@ -58,6 +58,75 @@ async function clickSliderAt(page: Page, sliderLocator: string, ratio: number) {
 // ── Image Viewer ────────────────────────────────────────────
 
 test.describe('Media Viewer — Image', () => {
+    test('metadata frequency updates preserve the canvas, zoom, and playback position', async ({ page }) => {
+        await page.clock.install();
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('canvas');
+        await page.clock.pauseAt(new Date());
+        const updateFrequency = (interval: string) => page.evaluate(frequency => {
+            const initial = (window as unknown as { __INITIAL_STATE__: { image: Record<string, unknown> } }).__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', reset: false, payload: { ...initial, image: { ...initial.image, interval: frequency } } },
+            }));
+        }, interval);
+        await updateFrequency('1');
+        await page.locator('button[title="Next Frame"]').click();
+        await page.locator('button[title="Zoom In"]').first().click();
+        const canvas = page.locator('canvas').first();
+        await canvas.evaluate(element => { (element as HTMLCanvasElement).dataset.instance = 'retained'; });
+        const style = await canvas.getAttribute('style');
+        await page.locator('.controls button').first().click();
+        await page.clock.runFor(200);
+        await expect(page.locator('.info-bar')).toContainText('2 of 3');
+        await updateFrequency('4');
+        await page.clock.runFor(200);
+        await expect(page.locator('.info-bar')).toContainText('2 of 3');
+        await page.clock.runFor(100);
+        await expect(page.locator('.info-bar')).toContainText('3 of 3');
+        await expect(canvas).toHaveAttribute('data-instance', 'retained');
+        await expect(canvas).toHaveAttribute('style', style!);
+    });
+
+    test('structural metadata updates reject frame responses from the previous viewer', async ({ page }) => {
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('canvas');
+        const requests = () => page.evaluate(() => (
+            window as unknown as { __messages: { command?: string; requestId?: number }[] }
+        ).__messages.filter(message => message.command === 'requestMediaFrameWindow').map(message => message.requestId!));
+        await expect.poll(async () => (await requests()).length).toBeGreaterThan(0);
+        const previousRequestId = (await requests()).at(-1)!;
+        await page.evaluate(() => {
+            const initial = (window as unknown as { __INITIAL_STATE__: { image: Record<string, unknown> } }).__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', reset: true, payload: { ...initial, image: { ...initial.image, frames: [] } } },
+            }));
+        });
+        await expect.poll(async () => (await requests()).at(-1)!).toBeGreaterThan(previousRequestId);
+        const currentRequestId = (await requests()).at(-1)!;
+        const sendFrame = (requestId: number, red: number, green: number) => page.evaluate(({ id, redValue, greenValue }) => {
+            const pixels = new Uint8Array(4 * 4 * 4);
+            for (let offset = 0; offset < pixels.length; offset += 4) {
+                pixels.set([redValue, greenValue, 0, 255], offset);
+            }
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: {
+                    command: 'mediaFrameWindowData', requestId: id,
+                    payload: { mediaType: 'image', rangeStart: 0, rangeEnd: 1, quality: 'low', frames: [{ timestamp: 0, rgbaBase64: btoa(String.fromCharCode(...pixels)) }] },
+                },
+            }));
+        }, { id: requestId, redValue: red, greenValue: green });
+        const firstPixel = () => page.locator('canvas').first().evaluate(element => Array.from(
+            (element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 1, 1).data
+        ));
+        await sendFrame(currentRequestId, 255, 0);
+        await expect.poll(firstPixel).toEqual([255, 0, 0, 255]);
+        await sendFrame(previousRequestId, 0, 255);
+        await expect.poll(firstPixel).toEqual([255, 0, 0, 255]);
+    });
+
     test('canvas renders at correct dimensions', async ({ page }) => {
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');
@@ -408,6 +477,10 @@ test.describe('Media Viewer — Audio', () => {
                 public resume() {
                     return Promise.resolve();
                 }
+
+                public close() {
+                    return Promise.resolve();
+                }
             }
 
             Object.assign(window, { AudioContext: AudioContextMock });
@@ -428,6 +501,19 @@ test.describe('Media Viewer — Audio', () => {
         await expect.poll(() => page.evaluate(() => (
             window as Window & { __audioEvents: { stopCount: number } }
         ).__audioEvents.stopCount)).toBe(1);
+        await expect(page.locator('button[title="Play Visible Range"]')).toContainText('Play');
+        await page.keyboard.press('Space');
+        await expect(page.locator('button[title="Pause"]')).toBeVisible();
+        await page.evaluate(() => {
+            const initial = (window as unknown as { __INITIAL_STATE__: { audio: Record<string, unknown> } }).__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', reset: false, payload: { ...initial, audio: { ...initial.audio, sampleRate: 32000 } } },
+            }));
+        });
+        await expect.poll(() => page.evaluate(() => (
+            window as Window & { __audioEvents: { stopCount: number } }
+        ).__audioEvents.stopCount)).toBe(2);
         await expect(page.locator('button[title="Play Visible Range"]')).toContainText('Play');
     });
 });
