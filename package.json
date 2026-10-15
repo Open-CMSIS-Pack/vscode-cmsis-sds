@@ -481,7 +481,7 @@
         "prebuild-install": "^8.0.0"
     },
     "cmsis": {
-        "sdsio": "ARM-software/SDS-Framework@3.0.0",
+        "sdsio": "ARM-software/SDS-Framework@3.1.0",
         "sdsioNightly": "ARM-software/SDS-Framework@build_sdsio-server"
     }
 }
