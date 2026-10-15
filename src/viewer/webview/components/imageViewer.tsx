@@ -63,7 +63,6 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const {
         index,
         windowFrames,
-        windowStart,
         setIsDragMode,
         getLoadedFrame,
         changeIndex,
@@ -114,7 +113,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         if (!canvas || windowFrames.length === 0) { return; }
         const ctx = canvas.getContext('2d');
         if (!ctx) { return; }
-        const frame = getLoadedFrame(index) ?? windowFrames[Math.max(0, Math.min(windowFrames.length - 1, index - windowStart))];
+        const frame = getLoadedFrame(index);
         if (!frame) { return; }
         const img = decodeFrame(frame, width, height);
         canvas.width = width;
@@ -122,7 +121,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
-    }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
+    }, [getLoadedFrame, height, index, width, zoom, windowFrames]);
 
     const togglePlay = useCallback(() => setPlaybackState(!playing), [playing, setPlaybackState]);
 

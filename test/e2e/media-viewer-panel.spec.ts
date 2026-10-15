@@ -137,6 +137,54 @@ test.describe('Media Viewer — Image', () => {
         expect(broadcasts.at(-1)).toMatchObject({ playbackState: 'stopped', timeStamp: 0 });
     });
 
+    test('late frame windows cannot repaint the image after playback resets', async ({ page }) => {
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('canvas');
+        const canvas = page.locator('canvas');
+        const initialPixels = await canvas.evaluate(element => (element as HTMLCanvasElement).toDataURL());
+        await page.locator('.controls button').first().click();
+        await expect.poll(() => page.evaluate(() => {
+            return (window as unknown as { __messages: Array<{ playbackState?: string }> }).__messages
+                .some(message => message.playbackState === 'stopped');
+        })).toBe(true);
+        await expect(page.locator('.info-bar')).toContainText('1 of 3');
+
+        const requestId = await page.evaluate(() => {
+            return (window as unknown as { __messages: Array<{ command?: string; requestId?: number }> }).__messages
+                .filter(message => message.command === 'requestMediaFrameWindow').at(-1)!.requestId!;
+        });
+        const sendWindow = async (responseId: number, rangeStart: number, color: number) => {
+            await page.evaluate(async ({ responseId, rangeStart, color }) => {
+                const rgba = new Uint8Array(4 * 4 * 4).fill(color);
+                window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        command: 'mediaFrameWindowData',
+                        requestId: responseId,
+                        payload: {
+                            mediaType: 'image', rangeStart, rangeEnd: rangeStart + 1, quality: 'high',
+                            frames: [{ timestamp: rangeStart * 0.1, rgbaBase64: btoa(String.fromCharCode(...rgba)) }],
+                        },
+                    },
+                }));
+                await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+            }, { responseId, rangeStart, color });
+        };
+
+        await sendWindow(requestId - 1, 0, 100);
+        expect(await canvas.evaluate(element => (element as HTMLCanvasElement).toDataURL())).toBe(initialPixels);
+        await sendWindow(requestId, 2, 200);
+        expect(await canvas.evaluate(element => (element as HTMLCanvasElement).toDataURL())).toBe(initialPixels);
+        await expect(page.locator('.info-bar')).toContainText('1 of 3');
+        await expect(page.locator('.ant-slider-handle')).toHaveAttribute('aria-valuenow', '0');
+        await expect(page.locator('.controls button').first()).toContainText('Play');
+
+        await sendWindow(requestId, 0, 255);
+        await expect.poll(() => canvas.evaluate(element => {
+            return Array.from((element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 1, 1).data);
+        })).toEqual([255, 255, 255, 255]);
+    });
+
     test('Space toggles playback', async ({ page }) => {
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('.controls');

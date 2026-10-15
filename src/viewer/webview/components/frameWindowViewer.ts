@@ -211,17 +211,23 @@ export function useFrameWindowViewer({
                         break;
                     }
                     if (typeof mediaMessage.requestId === 'number') {
-                        if (mediaMessage.requestId < latestAppliedSeqRef.current) {
+                        if (mediaMessage.requestId < requestSeqRef.current || mediaMessage.requestId < latestAppliedSeqRef.current) {
                             break;
                         }
-                        latestAppliedSeqRef.current = mediaMessage.requestId;
                     }
                     if (!Array.isArray(mediaMessage.payload?.frames)) {
                         break;
                     }
 
+                    const responseStart = typeof mediaMessage.payload.rangeStart === 'number' ? mediaMessage.payload.rangeStart : 0;
+                    if (index < responseStart || index >= responseStart + mediaMessage.payload.frames.length) {
+                        break;
+                    }
+                    if (typeof mediaMessage.requestId === 'number') {
+                        latestAppliedSeqRef.current = mediaMessage.requestId;
+                    }
                     setWindowFrames(mediaMessage.payload.frames);
-                    setWindowStart(typeof mediaMessage.payload.rangeStart === 'number' ? mediaMessage.payload.rangeStart : 0);
+                    setWindowStart(responseStart);
                     if (
                         typeof mediaMessage.payload.rangeStart === 'number' &&
                         typeof mediaMessage.payload.rangeEnd === 'number'
@@ -241,7 +247,7 @@ export function useFrameWindowViewer({
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, mediaType, onPlaybackStateChange, windowFrames]);
+    }, [filename, index, mediaType, onPlaybackStateChange, windowFrames]);
 
     useEffect(() => {
         const loadedStart = windowStart;
