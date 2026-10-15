@@ -48,7 +48,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const playbackTimestampRef = useRef(frames[0]?.timestamp ?? 0);
     const getImageWindowSize = useCallback((quality: 'low' | 'high') => {
         const frameBytes = Math.max(1, width * height * 4);
-        const budgetFrames = Math.max(1, Math.floor(8 * 1024 * 1024 / frameBytes));
+        const budgetFrames = Math.max(2, Math.floor(8 * 1024 * 1024 / frameBytes));
         return Math.min(quality === 'low' ? 32 : 160, budgetFrames);
     }, [height, width]);
     const getImageNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(1, Math.floor(loadedFrameCount * 0.2)), []);

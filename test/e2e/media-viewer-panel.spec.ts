@@ -249,6 +249,76 @@ test.describe('Media Viewer — Image', () => {
         await expect(page.locator('.info-bar')).toContainText('3.2000s');
     });
 
+    test('camera-sized playback completes with bounded delayed windows', async ({ page }) => {
+        await page.addInitScript(() => {
+            let initialState: unknown;
+            Object.defineProperty(window, '__INITIAL_STATE__', {
+                get: () => initialState,
+                set: (state: { image: { frames: unknown[]; width: number; height: number; totalFrames: number; interval: string } }) => {
+                    Object.assign(state.image, { frames: [], width: 416, height: 416, totalFrames: 136, interval: '25' });
+                    initialState = state;
+                },
+            });
+        });
+        await page.clock.install();
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('canvas');
+        await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1)));
+        await page.evaluate(() => {
+            type WindowRequest = {
+                command?: string;
+                requestId?: number;
+                payload?: { centerIndex: number; windowSize: number; quality: string };
+            };
+            const messages = (window as unknown as { __messages: WindowRequest[] }).__messages;
+            const respond = (message: WindowRequest) => {
+                if (message.command !== 'requestMediaFrameWindow' || !message.payload) { return; }
+                const { centerIndex, windowSize, quality } = message.payload;
+                const rangeStart = Math.max(0, Math.min(centerIndex - Math.floor(windowSize / 2), 136 - windowSize));
+                setTimeout(() => {
+                    window.dispatchEvent(new MessageEvent('message', {
+                        origin: window.location.origin,
+                        data: {
+                            command: 'mediaFrameWindowData', requestId: message.requestId,
+                            payload: {
+                                mediaType: 'image', rangeStart, rangeEnd: rangeStart + windowSize, quality,
+                                frames: Array.from({ length: windowSize }, (_, localIndex) => {
+                                    const absoluteIndex = rangeStart + localIndex;
+                                    return {
+                                        timestamp: absoluteIndex / 25,
+                                        rgbaBase64: btoa(String.fromCharCode(absoluteIndex, absoluteIndex, absoluteIndex, 255).repeat(416 * 416)),
+                                    };
+                                }),
+                            },
+                        },
+                    }));
+                }, 120);
+            };
+            messages.forEach(respond);
+            messages.push = (...newMessages) => {
+                const count = Array.prototype.push.apply(messages, newMessages);
+                newMessages.forEach(respond);
+                return count;
+            };
+        });
+        await page.clock.runFor(200);
+        await page.locator('.controls button').first().click();
+        await page.clock.runFor(3000);
+        expect(Number(await page.locator('.ant-slider-handle').getAttribute('aria-valuenow'))).toBeGreaterThan(40);
+        await page.clock.runFor(7000);
+        await expect(page.locator('.controls button').first()).toContainText('Play');
+        await expect(page.locator('.ant-slider-handle')).toHaveAttribute('aria-valuenow', '0');
+        await expect.poll(() => page.locator('canvas').evaluate(element => {
+            return (element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 1, 1).data[0];
+        })).toBe(0);
+        const windowSizes = await page.evaluate(() => {
+            return (window as unknown as { __messages: Array<{ command?: string; payload?: { windowSize: number } }> }).__messages
+                .filter(message => message.command === 'requestMediaFrameWindow').map(message => message.payload!.windowSize);
+        });
+        expect(windowSizes.length).toBeGreaterThan(1);
+        expect(Math.max(...windowSizes)).toBeLessThanOrEqual(12);
+    });
+
     test('Space toggles playback', async ({ page }) => {
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('.controls');
