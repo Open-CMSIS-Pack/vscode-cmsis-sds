@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+const monitorStartMock = vi.fn(async () => undefined);
 const createTreeViewMock = vi.fn();
 const executeCommandMock = vi.fn(async () => undefined);
 const registerCommandMock = vi.fn((_id: string, callback: (...args: unknown[]) => unknown) => callback);
@@ -124,7 +125,7 @@ vi.mock('../../src/diagnostics/sdsDiagnostics', () => {
 
 vi.mock('../../src/recorder/sdsio/sdsIoMonitorClient', () => {
     class SdsioMonitorClient {
-        start = vi.fn(async () => undefined);
+        start = monitorStartMock;
         stop = vi.fn();
     }
 
@@ -223,6 +224,7 @@ describe('activate integration wiring', () => {
             showCollapseAll: true,
         }));
         expect(createTreeViewMock).not.toHaveBeenCalledWith('sdsIOInterface', expect.anything());
+        expect(monitorStartMock).not.toHaveBeenCalled();
 
         expect(checkboxHandler).toBeTypeOf('function');
         checkboxHandler?.({

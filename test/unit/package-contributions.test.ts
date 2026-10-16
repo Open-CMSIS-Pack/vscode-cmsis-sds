@@ -39,6 +39,7 @@ describe('package.json contributions for merged explorer/flags UI', () => {
         extensionDependencies: string[];
         contributes: {
             commands: CommandContribution[];
+            configuration: { properties: Record<string, unknown> };
             views: Record<string, Array<{ id: string }>>;
             yamlValidation: SchemaContribution[];
             'json.schemas'?: SchemaContribution[];
@@ -47,6 +48,16 @@ describe('package.json contributions for merged explorer/flags UI', () => {
             };
         };
     };
+
+    it('contributes a user-only monitor port with valid TCP port bounds', () => {
+        expect(packageJson.contributes.configuration.properties['cmsis-sds.sdsio.monitorPort']).toEqual(expect.objectContaining({
+            type: 'integer',
+            default: 6060,
+            minimum: 1,
+            maximum: 65535,
+            scope: 'machine',
+        }));
+    });
 
     it('contributes only the sdsExplorer view in the Arm SDS container', () => {
         const views = packageJson.contributes.views['arm-sds-explorer'];

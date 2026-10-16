@@ -27,6 +27,7 @@
 
 import { EventEmitter } from 'events';
 import * as net from 'net';
+import { DEFAULT_SDSIO_MONITOR_PORT } from './sdsIoMonitorPort';
 
 // ── Protocol constants ──────────────────────────────────────
 export const MON_OPEN = 1;
@@ -163,7 +164,7 @@ class MonitorFrameAccumulator {
  */
 export class SdsioMonitorClient extends EventEmitter {
     private readonly host: string;
-    private readonly port: number;
+    private port: number;
     private readonly reconnectDelayMs: number;
     private socket: net.Socket | undefined;
     private readonly accumulator = new MonitorFrameAccumulator();
@@ -173,7 +174,7 @@ export class SdsioMonitorClient extends EventEmitter {
     constructor(opts?: { host?: string; port?: number; reconnectDelayMs?: number }) {
         super();
         this.host = opts?.host ?? '127.0.0.1';
-        this.port = opts?.port ?? 8181;
+        this.port = opts?.port ?? DEFAULT_SDSIO_MONITOR_PORT;
         this.reconnectDelayMs = opts?.reconnectDelayMs ?? 2000;
     }
 
@@ -181,7 +182,11 @@ export class SdsioMonitorClient extends EventEmitter {
         return !!this.socket && !this.socket.destroyed;
     }
 
-    async start(): Promise<void> {
+    async start(port = this.port): Promise<void> {
+        if (port !== this.port) {
+            this.stop();
+            this.port = port;
+        }
         if (this.running) {
             return;
         }
@@ -401,10 +406,12 @@ export class SdsioMonitorClient extends EventEmitter {
             this.reconnectTimer = undefined;
         }
 
-        if (this.socket && !this.socket.destroyed) {
+        if (this.socket) {
             try {
-                this.socket.destroy();
                 this.socket.removeAllListeners();
+                if (!this.socket.destroyed) {
+                    this.socket.destroy();
+                }
             } catch { /* ignore */ }
         }
 
