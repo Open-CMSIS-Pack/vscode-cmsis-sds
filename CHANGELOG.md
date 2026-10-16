@@ -2,6 +2,8 @@
 
 ## 0.13.0
 
+- Added a user-level SDSIO monitor port setting with automatic fallback to an OS-assigned port when the preferred port is unavailable.
+
 - Fixed reading and saving image, audio, and video SDS metadata files that do not define scalar data channels.
 - Added playback controls to the image viewer, using the stream sample frequency as the playback frame rate.
 - Aligned SDS and SDSIO schemas, snippets, generated sample projects, and metadata templates with SDS Framework 3.1.0 metadata fields.

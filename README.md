@@ -143,6 +143,14 @@ To connect to an SDSIO server running on your target, click **Connect SDSIO Moni
 [SDS View toolbar](#toolbar-actions). If an SDSIO server is available, the extension launches it with your active
 `.sdsio.yml` as the control file.
 
+The local SDSIO monitor uses TCP port `6060` by default. Set `cmsis-sds.sdsio.monitorPort` in VS Code **User Settings**
+(or **Remote Settings** when using a remote extension host) to prefer another port from `1` to `65535`.
+This machine-scoped setting cannot be overridden by workspace settings and applies on the next server connection.
+Before launching SDSIO, the extension checks whether the preferred port can be bound. If it is occupied or access is
+denied, the operating system selects an available port, which is passed to both the server and monitor client.
+The selected port is logged in the **Arm SDS** output channel. The setting itself is not changed by fallback.
+This bind check does not detect firewall filtering, and another process could claim the port between the check and server startup.
+
 Once connected, you can play back previously recorded data, record new data from the device, and toggle flags to control the behavior of the devide.
 
 Renamed flag labels appear in the SDS Explorer and persist in your `.sdsio.yml`.
