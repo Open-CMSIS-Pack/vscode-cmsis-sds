@@ -91,6 +91,28 @@ test.describe('Viewer Panel — Structure', () => {
 // ── Interactions ────────────────────────────────────────────
 
 test.describe('Viewer Panel — Interactions', () => {
+    test('metadata updates preserve the chart and its zoom range', async ({ page }) => {
+        await openViewer(page);
+        await page.locator('button[title="Zoom In"]').first().click();
+        const chart = page.locator('#chart');
+        await chart.evaluate(element => { (element as HTMLElement).dataset.instance = 'retained'; });
+        const handles = page.locator('.controls .ant-slider-handle');
+        const range = await handles.evaluateAll(elements => elements.map(element => element.getAttribute('aria-valuenow')));
+        await page.evaluate(() => {
+            const initial = (window as unknown as { __INITIAL_STATE__: { metadata: { sds: Record<string, unknown> } } }).__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: {
+                    command: 'viewerStateChanged',
+                    payload: { ...initial, metadata: { sds: { ...initial.metadata.sds, 'sample-frequency': 300 } } },
+                },
+            }));
+        });
+        await expect(page.locator('body')).toContainText('300');
+        await expect(chart).toHaveAttribute('data-instance', 'retained');
+        expect(await handles.evaluateAll(elements => elements.map(element => element.getAttribute('aria-valuenow')))).toEqual(range);
+    });
+
     test('Export button sends exportCsv message', async ({ page }) => {
         await openViewer(page);
         await page.evaluate(() => { (window as { __messages?: { command?: string }[] }).__messages = []; });

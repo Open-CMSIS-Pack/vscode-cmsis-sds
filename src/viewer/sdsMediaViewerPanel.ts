@@ -44,6 +44,7 @@ import { ImageFrame, SampleFrame, WebviewMessage } from '../webview/protocol';
 import {
     buildViewerWebviewHtml,
     registerViewerWebview,
+    registerMetadataRefresh,
     resolveMetadataPathForSdsFile,
 } from './viewerPanelUtils';
 import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
@@ -86,6 +87,7 @@ export class SdsMediaViewerPanel {
     private sdsFileStats: ReturnType<typeof getSdsFileStats> | undefined;
     private recordIndex: Array<{ timestamp: number; dataSize: number; dataOffset: number }> = [];
     private metadata: SdsMetadata | undefined;
+    private hasViewerState = false;
     private audioFrames: SampleFrame[] = [];
     private audioSampleRate = 0;
     private audioBitDepth = 0;
@@ -141,6 +143,7 @@ export class SdsMediaViewerPanel {
         this.update();
         this.webview = this.panel.webview;
         this.disposables.push(registerViewerWebview(this.webview));
+        this.disposables.push(registerMetadataRefresh(this.panel, this.metadataPath, () => this.update(true)));
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
         this.panel.webview.onDidReceiveMessage(
@@ -216,16 +219,27 @@ export class SdsMediaViewerPanel {
         }
     }
 
-    private update(): void {
+    private update(inPlace = false): void {
         try {
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
                 metadata = parseMetadataFile(this.metadataPath, { sdsFilePath: this.sdsFilePath, inferMissingSampleFrequency: true });
             }
-            this.metadata = metadata;
-
             if (!metadata) {
-                this.panel.webview.html = this.getErrorHtml('No metadata (.sds.yml) found. Media viewer requires metadata to decode frames.');
+                throw new Error('No metadata (.sds.yml) found. Media viewer requires metadata to decode frames.');
+            }
+
+            const previousMetadata = this.metadata;
+            if (inPlace && this.hasViewerState && JSON.stringify(previousMetadata) === JSON.stringify(metadata)) {
+                return;
+            }
+            const frequencyOnly = Boolean(previousMetadata && JSON.stringify({
+                ...previousMetadata,
+                sds: { ...previousMetadata.sds, 'sample-frequency': metadata.sds['sample-frequency'] },
+            }) === JSON.stringify(metadata));
+            this.metadata = metadata;
+            if (inPlace && this.hasViewerState && frequencyOnly && (this.mediaType === 'image' || this.mediaType === 'video')) {
+                void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: this.buildInitialState(), reset: false });
                 return;
             }
 
@@ -247,9 +261,20 @@ export class SdsMediaViewerPanel {
             this.panel.title = `${this.mediaType === 'image' ? 'SDS Image' : this.mediaType === 'audio' ? 'SDS Audio' : 'SDS Video'}: ${path.basename(this.sdsFilePath)}`;
 
             const initialState = this.buildInitialState();
-            this.panel.webview.html = this.getHtml(initialState);
+            if (inPlace && this.hasViewerState) {
+                void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: initialState, reset: !frequencyOnly });
+            } else {
+                this.panel.webview.html = this.getHtml(initialState);
+                this.hasViewerState = true;
+            }
         } catch (err) {
-            this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
+            const message = err instanceof Error ? err.message : String(err);
+            if (inPlace && this.hasViewerState) {
+                void vscode.window.showErrorMessage(`Media viewer metadata update failed: ${message}`);
+            } else {
+                this.panel.webview.html = this.getErrorHtml(message);
+                this.hasViewerState = false;
+            }
         }
     }
     private buildInitialState() {

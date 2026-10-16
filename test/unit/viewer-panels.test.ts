@@ -73,6 +73,7 @@ const viewerUtilsMockState = vi.hoisted(() => ({
         initialState: options.initialState,
     })),
     registerViewerWebview: vi.fn(() => ({ dispose: vi.fn() })),
+    registerMetadataRefresh: vi.fn((_panel: unknown, _metadataPath: string | undefined, _onChange: () => void) => ({ dispose: vi.fn() })),
     resolveMetadataPathForSdsFile: vi.fn(),
 }));
 
@@ -171,6 +172,7 @@ vi.mock('../../src/sds', () => ({
 vi.mock('../../src/viewer/viewerPanelUtils', () => ({
     buildViewerWebviewHtml: viewerUtilsMockState.buildViewerWebviewHtml,
     registerViewerWebview: viewerUtilsMockState.registerViewerWebview,
+    registerMetadataRefresh: viewerUtilsMockState.registerMetadataRefresh,
     resolveMetadataPathForSdsFile: viewerUtilsMockState.resolveMetadataPathForSdsFile,
 }));
 
@@ -302,6 +304,36 @@ describe('SdsViewerPanel', () => {
         });
     });
 
+    it('publishes changed data metadata in place and preserves the viewer on invalid updates', () => {
+        const sdsPath = path.join(tmpDir, 'stream.0.sds');
+        const metaPath = metadataFile(tmpDir);
+        const metadata = { sds: { name: 'stream', 'sample-frequency': 100, content: [{ value: 'x', type: 'float' }] } };
+        sdsMockState.parseMetadataFile.mockReturnValue(metadata);
+        sdsMockState.decodeAllRecords.mockReturnValue([{ timestamp: 0, timeSeconds: 0, values: { x: 1 }, index: 0 }]);
+        SdsViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
+        const panel = latestPanel();
+        const html = panel.webview.html;
+        const refreshCall = viewerUtilsMockState.registerMetadataRefresh.mock.calls.at(-1)!;
+        expect(refreshCall.slice(0, 2)).toEqual([panel, metaPath]);
+        const changedMetadata = { sds: { ...metadata.sds, 'sample-frequency': 200 } };
+        sdsMockState.parseMetadataFile.mockReturnValue(changedMetadata);
+        sdsMockState.decodeAllRecords.mockReturnValue([{ timestamp: 0, timeSeconds: 0, values: { x: 2 }, index: 0 }]);
+        refreshCall[2]();
+        expect(panel.webview.html).toBe(html);
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            command: 'viewerStateChanged',
+            payload: expect.objectContaining({ metadata: changedMetadata, samples: [expect.objectContaining({ values: { x: 2 } })] }),
+        }));
+        sdsMockState.parseMetadataFile.mockImplementation(() => { throw new Error('invalid metadata'); });
+        refreshCall[2]();
+        expect(panel.webview.html).toBe(html);
+        expect(panel.webview.postMessage).toHaveBeenCalledTimes(1);
+        expect(vscodeMockState.showErrorMessageMock).toHaveBeenCalledWith('Viewer metadata update failed: invalid metadata');
+        const subscription = viewerUtilsMockState.registerMetadataRefresh.mock.results.at(-1)!.value;
+        panel.triggerDispose();
+        expect(subscription.dispose).toHaveBeenCalledOnce();
+    });
+
     it('shows record data sizes when no metadata is available', () => {
         const sdsPath = path.join(tmpDir, 'raw.0.sds');
         sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([
@@ -423,6 +455,42 @@ describe('SdsMediaViewerPanel', () => {
             panel.triggerDispose();
         }
         fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it.each(['image', 'video', 'audio'])('updates %s frequency in place without replacing the webview', mediaType => {
+        const sdsPath = path.join(tmpDir, 'stream.0.sds');
+        const metaPath = metadataFile(tmpDir);
+        const content = mediaType === 'audio'
+            ? [{ audio: { 'bit-depth': 16, channels: 1 } }]
+            : mediaType === 'image'
+                ? [{ image: { width: 1, height: 1, pixel_format: 'RAW8' } }]
+                : [{ video: { width: 1, height: 1, pixel_format: 'RAW8', fps: 25, codec: 'raw' } }];
+        const metadata = { sds: { name: 'stream', 'sample-frequency': 25, content } };
+        sdsMockState.parseMetadataFile.mockReturnValue(metadata);
+        sdsMockState.detectMediaType.mockReturnValue(mediaType);
+        sdsMockState.indexSdsRecords.mockReturnValue([{ timestamp: 0, dataSize: 4, dataOffset: 0 }]);
+        sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([{ timestamp: 0, dataSize: 4, data: Buffer.alloc(4) }]));
+        sdsMockState.decodeAudioBlock.mockReturnValue([Float32Array.from([0.1, 0.2])]);
+        SdsMediaViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
+        const panel = latestPanel();
+        const html = panel.webview.html;
+        const refresh = viewerUtilsMockState.registerMetadataRefresh.mock.calls.at(-1)![2];
+        sdsMockState.parseMetadataFile.mockReturnValue({ sds: { ...metadata.sds, 'sample-frequency': 50 } });
+        refresh();
+        expect(panel.webview.html).toBe(html);
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            command: 'viewerStateChanged', reset: false,
+            payload: expect.objectContaining({
+                mediaType,
+                [mediaType]: expect.objectContaining(mediaType === 'audio' ? { sampleRate: 50 } : { interval: '50' }),
+            }),
+        }));
+        expect(sdsMockState.parseSdsFile).toHaveBeenCalledTimes(mediaType === 'audio' ? 2 : 1);
+        sdsMockState.parseMetadataFile.mockImplementation(() => { throw new Error('invalid metadata'); });
+        refresh();
+        expect(panel.webview.html).toBe(html);
+        expect(panel.webview.postMessage).toHaveBeenCalledTimes(1);
+        expect(vscodeMockState.showErrorMessageMock).toHaveBeenCalledWith('Media viewer metadata update failed: invalid metadata');
     });
 
     it('shows an error when media metadata is missing and reuses existing media panels', () => {
