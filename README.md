@@ -17,6 +17,12 @@ control file to define the active SDS workspace.
 
 This README contains a description of the [SDS View](#sds-view) and explains [how to use](#usage) the extension with the SDS framework.
 
+## Windows on Arm
+
+Use the `win32-arm64` VSIX with the Arm64 version of VS Code on Windows 11. CI and nightly builds produce this
+package alongside the existing platform packages. The bundled SDSIO server is an x64 executable and requires
+Windows 11's x64 emulation; it is not a native Arm64 server.
+
 ## SDS View
 
 The **SDS View** shows the active SDS configuration, SDSIO controls, stream labels, SDS groups, metadata files, and

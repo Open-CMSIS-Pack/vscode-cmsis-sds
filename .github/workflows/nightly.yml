@@ -46,6 +46,8 @@ jobs:
             vsce_target: linux-arm64
           - os: windows-2025
             vsce_target: win32-x64
+          - os: windows-11-arm
+            vsce_target: win32-arm64
           - os: macos-15
             vsce_target: darwin-arm64
     runs-on: ${{ matrix.os }}
@@ -188,6 +190,7 @@ jobs:
       matrix:
         target:
           - win32-x64
+          - win32-arm64
           - linux-x64
           - linux-arm64
           - darwin-arm64
