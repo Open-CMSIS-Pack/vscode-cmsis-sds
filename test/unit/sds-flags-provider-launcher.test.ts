@@ -268,6 +268,79 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(monitor.stop).toHaveBeenCalled();
     });
 
+    it.each(['disconnect', 'shutdown'] as const)(
+        'does not resume a config reconnect after %s cancels pending startup', async (operation) => {
+            let resolvePort!: (port: number) => void;
+            vi.mocked(selectSdsioMonitorPort).mockReturnValueOnce(new Promise((resolve) => { resolvePort = resolve; }));
+            const monitor = new FakeMonitor();
+            const configManager = createConfigManager();
+            const service = new SdsIoControlService(configManager as never, monitor as never, 'extension');
+
+            const connection = service.connectServer();
+            const reconnect = configManager.triggerConfigFileChange();
+            const stopping = operation === 'disconnect' ? service.disconnectServer() : service.shutdown();
+            resolvePort(49152);
+
+            await Promise.all([connection, reconnect, stopping]);
+            expect(selectSdsioMonitorPort).toHaveBeenCalledTimes(1);
+            expect(launcherMock.start).not.toHaveBeenCalled();
+            expect(monitor.start).not.toHaveBeenCalled();
+            expect(launcherMock.stop).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it.each(['disconnect', 'shutdown'] as const)(
+        'does not resume a config reconnect after %s while awaiting server stop', async (operation) => {
+            launcherState.hasTerminal = true;
+            let resolveStop!: () => void;
+            launcherMock.stop.mockReturnValueOnce(new Promise((resolve) => { resolveStop = resolve; }));
+            const monitor = new FakeMonitor();
+            const configManager = createConfigManager();
+            const service = new SdsIoControlService(configManager as never, monitor as never, 'extension');
+
+            const reconnect = configManager.triggerConfigFileChange();
+            const stopping = operation === 'disconnect' ? service.disconnectServer() : service.shutdown();
+            await stopping;
+            resolveStop();
+            await reconnect;
+
+            expect(selectSdsioMonitorPort).not.toHaveBeenCalled();
+            expect(launcherMock.start).not.toHaveBeenCalled();
+            expect(monitor.start).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['disconnect', 'shutdown'] as const)(
+        'rejects new connections and config reconnects during %s', async (operation) => {
+            launcherState.hasTerminal = true;
+            let resolveStop!: () => void;
+            launcherMock.stop.mockReturnValueOnce(new Promise((resolve) => { resolveStop = resolve; }));
+            const monitor = new FakeMonitor();
+            const configManager = createConfigManager();
+            const service = new SdsIoControlService(configManager as never, monitor as never, 'extension');
+
+            const stopping = operation === 'disconnect' ? service.disconnectServer() : service.shutdown();
+            expect(service.canConnect()).toBe(false);
+            await expect(service.connectServer()).resolves.toBe(false);
+            await configManager.triggerConfigFileChange();
+            expect(launcherMock.stop).toHaveBeenCalledTimes(1);
+            expect(launcherMock.start).not.toHaveBeenCalled();
+            expect(monitor.start).not.toHaveBeenCalled();
+
+            launcherState.hasTerminal = false;
+            resolveStop();
+            await stopping;
+            expect(service.canConnect()).toBe(operation === 'disconnect');
+            await expect(service.connectServer()).resolves.toBe(operation === 'disconnect');
+            expect(launcherMock.start).toHaveBeenCalledTimes(operation === 'disconnect' ? 1 : 0);
+            expect(monitor.start).toHaveBeenCalledTimes(operation === 'disconnect' ? 1 : 0);
+            if (operation === 'shutdown') {
+                await service.shutdown();
+                expect(launcherMock.dispose).toHaveBeenCalledTimes(1);
+            }
+        },
+    );
+
     it('stops a retrying, disconnected monitor on shutdown', async () => {
         const monitor = new FakeMonitor();
         const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
