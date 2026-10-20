@@ -81,7 +81,13 @@ export class SdsioServerLauncher {
         this.terminal = vscode.window.createTerminal({
             name: `SDSIO Server ${new Date().toLocaleTimeString()}`,
             cwd: configDir,
+            shellPath: serverBinary,
+            shellArgs: [
+                '--control', options.configFile,
+                '--mon-port', String(options.monitorPort),
+            ],
             iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
+            hideFromUser: true,
         });
 
         this.diagnostics.info(
@@ -90,7 +96,6 @@ export class SdsioServerLauncher {
         );
 
         this.terminal.show(true);
-        this.terminal.sendText(this.buildLaunchCommand(serverBinary, options.configFile, options.monitorPort), true);
         this.diagnostics.info(DiagnosticSource.Server, 'SDSIO server process started, waiting for monitor connection...');
         return true;
     }
@@ -114,20 +119,5 @@ export class SdsioServerLauncher {
 
     private resolveServerBinary(basePath: string): string | undefined {
         return SdsioServerLauncher.resolveServerBinary(basePath, this.diagnostics);
-    }
-
-    private buildLaunchCommand(serverBinary: string, configFile: string, monitorPort: number): string {
-        const isPowerShell = this.isPowerShellProfile();
-        if (isPowerShell) {
-            return `& "${serverBinary}" "--control" "${configFile}" "--mon-port" "${monitorPort}"`;
-        }
-        return `"${serverBinary}" "--control" "${configFile}" "--mon-port" "${monitorPort}"`;
-    }
-
-    private isPowerShellProfile(): boolean {
-        const terminalConfig = vscode.workspace.getConfiguration('terminal.integrated');
-        const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
-        const defaultProfile = terminalConfig.get<string>(`defaultProfile.${platform}`)?.toLowerCase() ?? (platform === 'windows' ? 'powershell' : '');
-        return defaultProfile.includes('powershell') || defaultProfile.includes('pwsh');
     }
 }
