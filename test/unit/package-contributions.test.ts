@@ -37,6 +37,7 @@ describe('package.json contributions for merged explorer/flags UI', () => {
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as {
         extensionDependencies: string[];
+        activationEvents: string[];
         contributes: {
             commands: CommandContribution[];
             views: Record<string, Array<{ id: string }>>;
@@ -47,6 +48,10 @@ describe('package.json contributions for merged explorer/flags UI', () => {
             };
         };
     };
+
+    it.each(['arm-sds.viewer', 'arm-sds.mediaViewer'])('activates when VS Code restores %s', viewType => {
+        expect(packageJson.activationEvents).toContain(`onWebviewPanel:${viewType}`);
+    });
 
     it('contributes only the sdsExplorer view in the Arm SDS container', () => {
         const views = packageJson.contributes.views['arm-sds-explorer'];

@@ -2,6 +2,7 @@
 
 ## 0.13.0
 
+- Restore data, image, audio, and video viewer tabs with their recording and metadata files after reloading the workspace.
 - Fixed reading and saving image, audio, and video SDS metadata files that do not define scalar data channels.
 - Added playback controls to the image viewer, using the stream sample frequency as the playback frame rate.
 - Aligned SDS and SDSIO schemas, snippets, generated sample projects, and metadata templates with SDS Framework 3.1.0 metadata fields.

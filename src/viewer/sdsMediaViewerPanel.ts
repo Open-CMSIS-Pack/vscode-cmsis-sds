@@ -124,6 +124,25 @@ export class SdsMediaViewerPanel {
         return viewer;
     }
 
+    public static revive(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        state: unknown,
+        configManager?: SdsioConfigManager
+    ): void {
+        if (!state || typeof state !== 'object' || !('sdsFilePath' in state)
+            || typeof state.sdsFilePath !== 'string' || !state.sdsFilePath) {
+            panel.dispose();
+            return;
+        }
+
+        const metadataPath = 'metadataPath' in state && typeof state.metadataPath === 'string'
+            ? state.metadataPath
+            : undefined;
+        const viewer = new SdsMediaViewerPanel(panel, extensionUri, state.sdsFilePath, configManager, metadataPath);
+        SdsMediaViewerPanel.panels.set(state.sdsFilePath, viewer);
+    }
+
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
@@ -137,6 +156,10 @@ export class SdsMediaViewerPanel {
         this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION, configManager);
         this.mediaType = 'sensor';
 
+        this.panel.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [extensionUri],
+        };
         this.panel.iconPath = new vscode.ThemeIcon('device-camera');
         this.update();
         this.webview = this.panel.webview;
@@ -483,7 +506,11 @@ export class SdsMediaViewerPanel {
             styleFile: 'mediaViewerWebview.css',
             scriptFile: 'mediaViewerWebview.js',
             title,
-            initialState,
+            initialState: {
+                ...initialState,
+                sdsFilePath: this.sdsFilePath,
+                metadataPath: this.metadataPath,
+            },
         });
     }
 

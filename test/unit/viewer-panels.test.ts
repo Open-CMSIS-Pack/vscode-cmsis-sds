@@ -24,6 +24,7 @@ import * as path from 'path';
 type MessageHandler = (message: unknown) => unknown;
 
 type MockWebview = {
+    options?: vscode.WebviewOptions;
     html: string;
     cspSource: string;
     asWebviewUri: ReturnType<typeof vi.fn>;
@@ -384,9 +385,10 @@ describe('SdsViewerPanel', () => {
             throw new Error('cannot parse');
         });
 
-        SdsViewerPanel.createOrShow(vscode.Uri.file('/extension'), path.join(tmpDir, 'broken.0.sds'));
+        const sdsPath = path.join(tmpDir, 'broken.0.sds');
+        SdsViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath);
 
-        expect(initialState(latestPanel())).toEqual({ error: 'cannot parse' });
+        expect(initialState(latestPanel())).toEqual({ error: 'cannot parse', sdsFilePath: sdsPath });
     });
 });
 
@@ -423,6 +425,53 @@ describe('SdsMediaViewerPanel', () => {
             panel.triggerDispose();
         }
         fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it.each(['image', 'video', 'audio'])('restores a %s tab with its original recording and metadata', mediaType => {
+        const sdsPath = path.join(tmpDir, 'stream.0.sds');
+        const metaPath = metadataFile(tmpDir);
+        sdsMockState.detectMediaType.mockReturnValue(mediaType);
+        sdsMockState.parseMetadataFile.mockReturnValue({
+            sds: {
+                name: 'stream',
+                'sample-frequency': 25,
+                content: [
+                    { image: { width: 1, height: 1, pixel_format: 'RAW8' } },
+                    { video: { width: 1, height: 1, pixel_format: 'RAW8', fps: 25, codec: 'raw' } },
+                    { audio: { 'bit-depth': 16, channels: 1 } },
+                ],
+            },
+        });
+        const extensionUri = vscode.Uri.file('/extension');
+        SdsMediaViewerPanel.createOrShow(extensionUri, sdsPath, undefined, metaPath);
+        const original = latestPanel();
+        const { sdsFilePath, metadataPath } = initialState(original);
+        expect({ sdsFilePath, metadataPath }).toEqual({ sdsFilePath: sdsPath, metadataPath: metaPath });
+        original.triggerDispose();
+
+        const restored = vscodeMockState.createWebviewPanelMock('arm-sds.mediaViewer', 'Restoring') as MockPanel;
+        const panelCount = vscodeMockState.createdPanels.length;
+        SdsMediaViewerPanel.revive(restored as unknown as vscode.WebviewPanel, extensionUri, { sdsFilePath, metadataPath });
+
+        expect(vscodeMockState.createdPanels).toHaveLength(panelCount);
+        expect(restored.webview.options).toEqual({ enableScripts: true, localResourceRoots: [extensionUri] });
+        expect(initialState(restored)).toMatchObject({ sdsFilePath: sdsPath, metadataPath: metaPath, mediaType });
+        expect(sdsMockState.parseSdsFile).toHaveBeenLastCalledWith(sdsPath, { strict: false });
+        expect(sdsMockState.parseMetadataFile).toHaveBeenLastCalledWith(metaPath, {
+            sdsFilePath: sdsPath,
+            inferMissingSampleFrequency: true,
+        });
+        SdsMediaViewerPanel.createOrShow(extensionUri, sdsPath);
+        expect(restored.reveal).toHaveBeenCalled();
+        expect(vscodeMockState.createdPanels).toHaveLength(panelCount);
+        expect(restored.webview.messageHandlers).not.toHaveLength(0);
+    });
+
+    it.each([undefined, null, {}, { sdsFilePath: 42 }, { sdsFilePath: '' }])('disposes a tab with invalid saved state: %j', state => {
+        const panel = vscodeMockState.createWebviewPanelMock('arm-sds.mediaViewer', 'Restoring') as MockPanel;
+        SdsMediaViewerPanel.revive(panel as unknown as vscode.WebviewPanel, vscode.Uri.file('/extension'), state);
+        expect(panel.dispose).toHaveBeenCalledOnce();
+        expect(panel.webview.html).toBe('');
     });
 
     it('shows an error when media metadata is missing and reuses existing media panels', () => {

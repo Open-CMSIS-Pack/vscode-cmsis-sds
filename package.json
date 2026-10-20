@@ -25,6 +25,8 @@
     ],
     "icon": "media/arm.png",
     "activationEvents": [
+        "onWebviewPanel:arm-sds.mediaViewer",
+        "onWebviewPanel:arm-sds.viewer",
         "onLanguage:yaml",
         "workspaceContains:**/*.sds",
         "workspaceContains:**/*.sds.yml",
