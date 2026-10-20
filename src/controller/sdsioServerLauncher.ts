@@ -81,7 +81,13 @@ export class SdsioServerLauncher {
         this.terminal = vscode.window.createTerminal({
             name: `SDSIO Server ${new Date().toLocaleTimeString()}`,
             cwd: configDir,
+            shellPath: serverBinary,
+            shellArgs: [
+                '--control', options.configFile,
+                '--mon-port', String(options.monitorPort),
+            ],
             iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
+            hideFromUser: true,
         });
 
         this.diagnostics.info(
@@ -90,7 +96,6 @@ export class SdsioServerLauncher {
         );
 
         this.terminal.show(true);
-        this.terminal.sendText(this.buildLaunchCommand(serverBinary, options.configFile, options.monitorPort), true);
         this.diagnostics.info(DiagnosticSource.Server, 'SDSIO server process started, waiting for monitor connection...');
         return true;
     }
