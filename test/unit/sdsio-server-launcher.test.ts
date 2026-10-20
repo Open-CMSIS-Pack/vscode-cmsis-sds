@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { SdsioServerLauncher } from '../../src/controller/sdsioServerLauncher';
 import { SdsDiagnostics } from '../../src/diagnostics/sdsDiagnostics';
 
@@ -60,6 +61,7 @@ describe('SdsioServerLauncher', () => {
     let diagnostics: SdsDiagnostics;
 
     beforeEach(() => {
+        vi.clearAllMocks();
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sdsio-launcher-'));
         mockTerminal = {
             sendText: vi.fn(),
@@ -78,46 +80,39 @@ describe('SdsioServerLauncher', () => {
         vi.useRealTimers();
     });
 
-    it('starts server in terminal with CMD-style command', async () => {
-        const toolsDir = path.join(tmpDir, 'tools');
+    it.each([
+        ['Command Prompt', 'sdsio-server.exe'],
+        ['PowerShell', 'sdsio-server.exe'],
+        ['bash', 'sdsio-server'],
+    ])('starts server directly without auto-activation for %s profiles', async (profile, binaryName) => {
+        const basePath = path.join(tmpDir, 'extension with spaces');
+        const toolsDir = path.join(basePath, 'tools');
         fs.mkdirSync(toolsDir, { recursive: true });
-        const serverBinary = path.join(toolsDir, 'sdsio-server.exe');
+        const serverBinary = path.join(toolsDir, binaryName);
         fs.writeFileSync(serverBinary, '');
+        const configFile = path.join(tmpDir, 'workspace with spaces', 'sample config.sdsio.yml');
+        defaultProfile = profile;
 
         const launcher = new SdsioServerLauncher(diagnostics);
         const started = await launcher.start({
-            basePath: tmpDir,
-            configFile: 'sample.sdsio.yml',
+            basePath,
+            configFile,
             monitorPort: 6060,
         });
 
         expect(started).toBe(true);
         expect(launcher.hasTerminal()).toBe(true);
-        expect(mockTerminal.show).toHaveBeenCalledWith(true);
-        expect(mockTerminal.sendText).toHaveBeenCalledWith(
-            `"${serverBinary}" "--control" "sample.sdsio.yml" "--mon-port" "6060"`,
-            true,
-        );
-    });
-
-    it('uses PowerShell call operator for PowerShell profiles', async () => {
-        const toolsDir = path.join(tmpDir, 'tools');
-        fs.mkdirSync(toolsDir, { recursive: true });
-        const serverBinary = path.join(toolsDir, 'sdsio-server.exe');
-        fs.writeFileSync(serverBinary, '');
-        defaultProfile = 'PowerShell';
-
-        const launcher = new SdsioServerLauncher(diagnostics);
-        await launcher.start({
-            basePath: tmpDir,
-            configFile: 'sample.sdsio.yml',
-            monitorPort: 6060,
+        expect(vscode.window.createTerminal).toHaveBeenCalledExactlyOnceWith({
+            name: expect.stringMatching(/^SDSIO Server /),
+            cwd: path.dirname(configFile),
+            shellPath: serverBinary,
+            shellArgs: ['--control', configFile, '--mon-port', '6060'],
+            iconPath: expect.objectContaining({ id: 'arm-sds-sds-icon' }),
+            hideFromUser: true,
         });
-
-        expect(mockTerminal.sendText).toHaveBeenCalledWith(
-            `& "${serverBinary}" "--control" "sample.sdsio.yml" "--mon-port" "6060"`,
-            true,
-        );
+        expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
+        expect(mockTerminal.show).toHaveBeenCalledExactlyOnceWith(true);
+        expect(mockTerminal.sendText).not.toHaveBeenCalled();
     });
 
     it('logs an error and returns false when server binary is missing', async () => {
