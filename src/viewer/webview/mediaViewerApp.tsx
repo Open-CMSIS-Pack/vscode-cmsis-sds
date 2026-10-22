@@ -24,6 +24,7 @@ import { AudioState, AudioViewer } from './components/audioViewer';
 import { ImageViewer, ImageState } from './components/imageViewer';
 import { VideoState, VideoViewer } from './components/videoViewer';
 import { getIsDarkTheme } from '../../webview/utilities';
+import { ViewerStateChangedMessage } from '../../webview/protocol';
 
 
 type InitialState = {
@@ -51,7 +52,28 @@ function renderMediaViewer(initial: InitialState): ReactNode {
 }
 
 function MediaViewerApp() {
-    const initial = getInitialState<InitialState>({});
+    const [initial, setInitial] = useState(() => getInitialState<InitialState>({}));
+    const [revision, setRevision] = useState(0);
+
+    useEffect(() => {
+        const onMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) { return; }
+            const message = event.data as ViewerStateChangedMessage<InitialState>;
+            if (message.command !== 'viewerStateChanged' || !message.payload) { return; }
+            const next = message.payload;
+            setInitial(current => {
+                if (message.reset || current.mediaType !== next.mediaType) { return next; }
+                return {
+                    ...next,
+                    ...(next.image && current.image ? { image: { ...next.image, frames: current.image.frames, rangeStart: current.image.rangeStart ?? 0 } } : {}),
+                    ...(next.video && current.video ? { video: { ...next.video, frames: current.video.frames, rangeStart: current.video.rangeStart ?? 0 } } : {}),
+                };
+            });
+            if (message.reset) { setRevision(current => current + 1); }
+        };
+        window.addEventListener('message', onMessage);
+        return () => window.removeEventListener('message', onMessage);
+    }, []);
 
     if (initial.error) {
         return (
@@ -67,7 +89,7 @@ function MediaViewerApp() {
     const applet = renderMediaViewer(initial) ?? <div style={{ padding: 16 }}>No media content available.</div>;
 
     return (
-        <div className="page">
+        <div className="page" key={revision}>
             {applet}
         </div>
     );

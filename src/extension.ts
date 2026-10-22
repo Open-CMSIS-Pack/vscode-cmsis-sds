@@ -39,7 +39,6 @@ import { registerWorkspaceCommands } from './commands/workspaceCommands';
 import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
 import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 
-export const SDSIO_SERVER_MONITOR_PORT = 6060;
 const SDSIO_CONFIG_EXTENSION = '.sdsio.yml';
 const SDSIO_TEMPLATE = [
     'sdsio:',
@@ -71,15 +70,11 @@ export function activate(context: vscode.ExtensionContext) {
     configureTerminalPath(context, diagnostics);
 
     // ── SDSIO Monitor Client ────────────────────────────────────
-    const monitor = new SdsioMonitorClient({ port: SDSIO_SERVER_MONITOR_PORT });
+    const monitor = new SdsioMonitorClient();
     context.subscriptions.push({
         dispose: () => {
             monitor.stop();
         },
-    });
-    // Start monitor in background
-    monitor.start().catch((err) => {
-        diagnostics.error(DiagnosticSource.Extension, `Failed to start monitor: ${err instanceof Error ? err.message : String(err)}`);
     });
 
     // ── Config Manager ──────────────────────────────────────────

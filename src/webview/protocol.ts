@@ -51,6 +51,11 @@ export type WebviewMessage = {
 };
 
 export type MediaFrame = { timestamp: number; };
+export type ViewerStateChangedMessage<T> = WebviewMessage & {
+    command: 'viewerStateChanged';
+    payload: T;
+    reset?: boolean;
+};
 export type ImageFrame = MediaFrame & { rgbaBase64: string };
 export type SampleFrame = MediaFrame & { samples: number[] };
 

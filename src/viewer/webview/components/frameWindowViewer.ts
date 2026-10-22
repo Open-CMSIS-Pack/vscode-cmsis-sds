@@ -39,6 +39,7 @@ type FrameWindowViewerOptions = {
 };
 
 const DRAG_REQUEST_THROTTLE_MS = 80;
+let frameWindowRequestSequence = 0;
 
 export function useFrameWindowViewer({
     state,
@@ -55,8 +56,11 @@ export function useFrameWindowViewer({
     const [windowFrames, setWindowFrames] = useState<ImageFrame[]>(frames);
     const [windowStart, setWindowStart] = useState(rangeStart);
     const [isDragMode, setIsDragMode] = useState(false);
-    const requestSeqRef = useRef(0);
+    const requestSeqRef = useRef(frameWindowRequestSequence);
+    const minimumValidRequestSeqRef = useRef(frameWindowRequestSequence + 1);
     const latestAppliedSeqRef = useRef(0);
+    const inFlightRequestRef = useRef<number | null>(null);
+    const pendingWindowRequestRef = useRef<{ centerIndex: number; quality: Quality } | null>(null);
     const dragRequestTimerRef = useRef<NodeJS.Timeout | null>(null);
     const pendingDragRequestRef = useRef<{ centerIndex: number; quality: Quality } | null>(null);
     const lastRequestAtRef = useRef(0);
@@ -73,7 +77,13 @@ export function useFrameWindowViewer({
     }, [windowFrames, windowStart]);
 
     const requestFrameWindow = useCallback((centerIndex: number, quality: Quality) => {
-        const requestId = ++requestSeqRef.current;
+        if (inFlightRequestRef.current !== null) {
+            pendingWindowRequestRef.current = { centerIndex, quality };
+            return;
+        }
+        const requestId = ++frameWindowRequestSequence;
+        requestSeqRef.current = requestId;
+        inFlightRequestRef.current = requestId;
         broadcastMessage({
             command: 'requestMediaFrameWindow',
             requestId,
@@ -210,18 +220,32 @@ export function useFrameWindowViewer({
                     if (mediaMessage.payload?.mediaType !== mediaType) {
                         break;
                     }
+                    if (mediaMessage.requestId === inFlightRequestRef.current) {
+                        inFlightRequestRef.current = null;
+                        const pendingRequest = pendingWindowRequestRef.current;
+                        pendingWindowRequestRef.current = null;
+                        if (pendingRequest) {
+                            requestFrameWindow(pendingRequest.centerIndex, pendingRequest.quality);
+                        }
+                    }
                     if (typeof mediaMessage.requestId === 'number') {
-                        if (mediaMessage.requestId < latestAppliedSeqRef.current) {
+                        if (mediaMessage.requestId < minimumValidRequestSeqRef.current || mediaMessage.requestId < latestAppliedSeqRef.current) {
                             break;
                         }
-                        latestAppliedSeqRef.current = mediaMessage.requestId;
                     }
                     if (!Array.isArray(mediaMessage.payload?.frames)) {
                         break;
                     }
 
+                    const responseStart = typeof mediaMessage.payload.rangeStart === 'number' ? mediaMessage.payload.rangeStart : 0;
+                    if (index < responseStart || index >= responseStart + mediaMessage.payload.frames.length) {
+                        break;
+                    }
+                    if (typeof mediaMessage.requestId === 'number') {
+                        latestAppliedSeqRef.current = mediaMessage.requestId;
+                    }
                     setWindowFrames(mediaMessage.payload.frames);
-                    setWindowStart(typeof mediaMessage.payload.rangeStart === 'number' ? mediaMessage.payload.rangeStart : 0);
+                    setWindowStart(responseStart);
                     if (
                         typeof mediaMessage.payload.rangeStart === 'number' &&
                         typeof mediaMessage.payload.rangeEnd === 'number'
@@ -241,17 +265,20 @@ export function useFrameWindowViewer({
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [filename, mediaType, onPlaybackStateChange, windowFrames]);
+    }, [filename, index, mediaType, onPlaybackStateChange, requestFrameWindow, windowFrames]);
 
     useEffect(() => {
         const loadedStart = windowStart;
         const loadedEnd = windowStart + windowFrames.length - 1;
+        const requestIndex = stationaryRequestQuality === 'low'
+            ? Math.min(totalFrames - 1, index + Math.floor(getWindowSize('low') / 2))
+            : index;
 
         if (windowFrames.length === 0 || index < loadedStart || index > loadedEnd) {
             if (isDragMode) {
                 scheduleDragFrameWindowRequest(index, 'low');
             } else {
-                requestFrameWindowIfNeeded(index, stationaryRequestQuality);
+                requestFrameWindowIfNeeded(requestIndex, stationaryRequestQuality);
             }
             return;
         }
@@ -261,7 +288,7 @@ export function useFrameWindowViewer({
             if (isDragMode) {
                 scheduleDragFrameWindowRequest(index, 'low');
             } else {
-                requestFrameWindowIfNeeded(index, stationaryRequestQuality);
+                requestFrameWindowIfNeeded(requestIndex, stationaryRequestQuality);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- request helpers are recreated each render; depending on them would refetch windows excessively
@@ -309,6 +336,11 @@ export function useFrameWindowViewer({
         }
 
         const clamped = Math.max(0, Math.min(totalFrames - 1, nextIndex));
+        if (manual || clamped < index) {
+            minimumValidRequestSeqRef.current = requestSeqRef.current + 1;
+            lastRequestKeyRef.current = '';
+            pendingWindowRequestRef.current = null;
+        }
         setIndex(clamped);
         const frame = getLoadedFrame(clamped);
         if (broadcast && typeof frame?.timestamp === 'number') {
@@ -318,7 +350,7 @@ export function useFrameWindowViewer({
                 fileName: filename,
             });
         }
-    }, [filename, getLoadedFrame, onManualChangeStart, totalFrames]);
+    }, [filename, getLoadedFrame, index, onManualChangeStart, totalFrames]);
 
     return {
         index,

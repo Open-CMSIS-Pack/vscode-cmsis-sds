@@ -2,6 +2,9 @@
 
 ## 0.13.0
 
+- Added a user-level SDSIO monitor port setting with automatic fallback to an OS-assigned port when the preferred port is unavailable.
+
+- Added a user-level SDSIO monitor port setting with automatic fallback to an OS-assigned port when the preferred port is unavailable.
 - Restore data, image, audio, and video viewer tabs with their recording and metadata files after reloading the workspace.
 - Fixed reading and saving image, audio, and video SDS metadata files that do not define scalar data channels.
 - Added playback controls to the image viewer, using the stream sample frequency as the playback frame rate.

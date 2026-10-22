@@ -364,6 +364,14 @@
                     ],
                     "description": "Default decimation preset for SDS charts (accuracy keeps more points, performance uses fewer points)."
                 },
+                "cmsis-sds.sdsio.monitorPort": {
+                    "type": "integer",
+                    "default": 6060,
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Preferred local SDSIO monitor TCP port. If unavailable, an OS-assigned port is used for both server and client. Changes apply on the next server connection.",
+                    "scope": "machine"
+                },
                 "cmsis-sds.sdsio.configFile": {
                     "type": "string",
                     "default": "",
