@@ -43,7 +43,11 @@ vi.mock('net', async () => {
         });
 
         removeAllListeners = vi.fn((eventName?: string) => {
-            EventEmitter.prototype.removeAllListeners.call(this, eventName);
+            if (eventName === undefined) {
+                EventEmitter.prototype.removeAllListeners.call(this);
+            } else {
+                EventEmitter.prototype.removeAllListeners.call(this, eventName);
+            }
             return this;
         });
     }
@@ -261,6 +265,39 @@ describe('SdsioMonitorClient socket lifecycle', () => {
         expect(netMockState.createConnection).toHaveBeenCalledWith({ host: 'localhost', port: 9000 });
         expect(client.isConnected).toBe(true);
         expect(events).toEqual(['Monitor connected to localhost:9000', 'connected']);
+    });
+
+    it('defaults to port 6060', async () => {
+        const client = new SdsioMonitorClient();
+        await client.start();
+        expect(netMockState.createConnection).toHaveBeenCalledWith({ host: '127.0.0.1', port: 6060 });
+        client.stop();
+    });
+
+    it.each([false, true])('changes ports without retaining old sockets or retries (destroyed: %s)', async (destroyed) => {
+        vi.useFakeTimers();
+        const client = new SdsioMonitorClient({ reconnectDelayMs: 25 });
+        try {
+            await client.start();
+            const oldSocket = netMockState.sockets[0];
+            oldSocket.emit('close');
+            oldSocket.destroyed = destroyed;
+            await client.start(49152);
+            oldSocket.emit('close');
+            await vi.advanceTimersByTimeAsync(25);
+
+            expect(oldSocket.removeAllListeners).toHaveBeenCalled();
+            expect(netMockState.createConnection).toHaveBeenCalledTimes(2);
+            expect(netMockState.createConnection).toHaveBeenLastCalledWith({ host: '127.0.0.1', port: 49152 });
+
+            netMockState.sockets[1].emit('close');
+            await vi.advanceTimersByTimeAsync(25);
+            expect(netMockState.createConnection).toHaveBeenCalledTimes(3);
+            expect(netMockState.createConnection).toHaveBeenLastCalledWith({ host: '127.0.0.1', port: 49152 });
+        } finally {
+            client.stop();
+            vi.useRealTimers();
+        }
     });
 
     it('schedules a reconnect after socket errors and close events while running', async () => {
