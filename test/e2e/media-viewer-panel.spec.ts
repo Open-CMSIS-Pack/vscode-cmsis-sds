@@ -138,8 +138,11 @@ test.describe('Media Viewer — Image', () => {
     });
 
     test('Space toggles playback', async ({ page }) => {
+        await page.clock.install();
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('.controls');
+        // Keep the short recording from ending before the playback assertions.
+        await page.clock.pauseAt(await page.evaluate(() => Date.now()));
 
         const playButton = page.locator('.controls button').first();
         await page.locator('.media-page').focus();
