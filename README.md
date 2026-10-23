@@ -49,6 +49,8 @@ If a configuration is open, the **SDS View** shows the SDS files and related opt
 | Collapse All | Hides all data. |
 | Views and More Actions... | Offers **Open Configuration**, **Create Configuration**, and **Close  Configuration** for SDS configuration. |
 
+**Create Configuration** prompts for a configuration name, then opens a **Select Folder** dialog at the workspace root (the first folder in a multi-root workspace). Select the destination folder to create `<name>.sdsio.yml`; the configuration is then activated and opened. Cancelling the folder dialog uses the workspace root instead. Cancelling the name prompt creates no file.
+
 ### File Action Buttons
 
 ![File context menu action buttons](media/screenshots/file-context-icons.png)

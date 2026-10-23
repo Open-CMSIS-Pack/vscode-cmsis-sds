@@ -141,7 +141,10 @@ describe('registerSdsioConfigCommands', () => {
         expect(context.subscriptions).toEqual(commandMockState.registeredDisposables);
     });
 
-    it('creates a new workspace config file and activates it', async () => {
+    it('creates a config in the selected folder and activates it', async () => {
+        const selectedFolder = path.join(tmpDir, 'configurations');
+        fs.mkdirSync(selectedFolder);
+        vi.mocked(vscode.window.showOpenDialog).mockResolvedValueOnce([vscode.Uri.file(selectedFolder)]);
         const { args } = registerCommands();
         (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> }).workspaceFolders = [{ uri: { fsPath: tmpDir } }];
         vi.mocked(vscode.window.showInputBox).mockImplementationOnce(async (options: unknown) => {
@@ -154,7 +157,18 @@ describe('registerSdsioConfigCommands', () => {
 
         await getCommand('arm-sds.sds.newConfig')();
 
-        const targetPath = path.join(tmpDir, 'target-a.sdsio.yml');
+        expect(vscode.window.showOpenDialog).toHaveBeenCalledWith({
+            title: 'Select Folder',
+            openLabel: 'Select Folder',
+            defaultUri: vscode.workspace.workspaceFolders![0].uri,
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+        });
+        expect(vi.mocked(vscode.window.showInputBox).mock.invocationCallOrder[0])
+            .toBeLessThan(vi.mocked(vscode.window.showOpenDialog).mock.invocationCallOrder[0]);
+        const targetPath = path.join(selectedFolder, 'target-a.sdsio.yml');
+        expect(fs.existsSync(path.join(tmpDir, 'target-a.sdsio.yml'))).toBe(false);
         expect(fs.readFileSync(targetPath, 'utf-8')).toBe('sdsio:\n  workdir: .\n');
         expect(args.setActiveConfig).toHaveBeenCalledWith(targetPath, true);
         expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(vscode.Uri.file(targetPath));
@@ -167,6 +181,7 @@ describe('registerSdsioConfigCommands', () => {
         const targetPath = path.join(tmpDir, 'existing.sdsio.yml');
         fs.writeFileSync(targetPath, 'already here\n', 'utf-8');
         vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('existing');
+        vi.mocked(vscode.window.showOpenDialog).mockResolvedValueOnce([vscode.Uri.file(tmpDir)]);
 
         await getCommand('arm-sds.sds.newConfig')();
 
@@ -174,6 +189,35 @@ describe('registerSdsioConfigCommands', () => {
         expect(vscode.window.showWarningMessage).toHaveBeenCalledWith('Configuration already exists: existing.sdsio.yml');
         expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(vscode.Uri.file(targetPath));
         expect(args.setActiveConfig).toHaveBeenCalledWith(targetPath, true);
+    });
+
+    it('does not open a folder picker when the name prompt is cancelled', async () => {
+        const { args } = registerCommands();
+        (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> }).workspaceFolders = [{ uri: { fsPath: tmpDir } }];
+        vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce(undefined);
+
+        await getCommand('arm-sds.sds.newConfig')();
+
+        expect(vscode.window.showOpenDialog).not.toHaveBeenCalled();
+        expect(fs.readdirSync(tmpDir)).toEqual([]);
+        expect(args.setActiveConfig).not.toHaveBeenCalled();
+        expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, []])('creates a config in the workspace root when no folder is selected: %j', async selection => {
+        const { args } = registerCommands();
+        (vscode.workspace as unknown as { workspaceFolders: Array<{ uri: { fsPath: string } }> }).workspaceFolders = [{ uri: { fsPath: tmpDir } }];
+        vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('target');
+        vi.mocked(vscode.window.showOpenDialog).mockResolvedValueOnce(selection);
+
+        await getCommand('arm-sds.sds.newConfig')();
+
+        expect(vscode.window.showOpenDialog).toHaveBeenCalledOnce();
+        const targetPath = path.join(tmpDir, 'target.sdsio.yml');
+        expect(fs.readFileSync(targetPath, 'utf-8')).toBe('sdsio:\n  workdir: .\n');
+        expect(args.setActiveConfig).toHaveBeenCalledWith(targetPath, true);
+        expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(vscode.Uri.file(targetPath));
+        expect(vscode.window.showTextDocument).toHaveBeenCalledWith({ uri: vscode.Uri.file(targetPath) });
     });
 
     it('reports when new config is requested without a workspace folder', async () => {
