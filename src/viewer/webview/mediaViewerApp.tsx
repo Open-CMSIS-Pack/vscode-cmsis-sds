@@ -18,6 +18,7 @@ import './components/viewer.css';
 import { type ReactNode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getInitialState } from '../../webview/bridge';
+import { setState } from '../../webview/vscode-api';
 import { ConfigProvider, theme } from 'antd';
 import { AudioState, AudioViewer } from './components/audioViewer';
 import { ImageViewer, ImageState } from './components/imageViewer';
@@ -32,6 +33,8 @@ type InitialState = {
     audio?: AudioState;
     video?: VideoState;
     fileName?: string;
+    sdsFilePath?: string;
+    metadataPath?: string;
     error?: string;
 };
 
@@ -113,6 +116,9 @@ function ThemedViewerApp() {
         </ConfigProvider>
     );
 }
+
+const { sdsFilePath, metadataPath } = getInitialState<InitialState>({});
+setState({ sdsFilePath, metadataPath });
 
 const container = document.getElementById('root');
 if (container) {

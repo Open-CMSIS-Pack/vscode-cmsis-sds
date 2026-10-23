@@ -165,7 +165,7 @@ export function getImageViewerHtml(): string {
             width,
             height,
             totalFrames: 3,
-            interval: '100',
+            interval: '10',
             fileStats: {
                 recordingIntervalMs: 100,
                 totalSizeBytes: 4800,
