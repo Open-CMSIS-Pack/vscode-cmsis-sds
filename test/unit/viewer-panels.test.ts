@@ -258,6 +258,63 @@ describe('SdsViewerPanel', () => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
+    it('restores a data tab with its original recording and explicit metadata and reuses the revived panel', () => {
+        const sdsPath = path.join(tmpDir, 'stream.0.sds');
+        const metaPath = metadataFile(tmpDir, 'custom-metadata.sds.yml');
+        const metadata = {
+            sds: {
+                name: 'stream',
+                'sample-frequency': 100,
+                content: [{ value: 'x', type: 'float' }],
+            },
+        };
+        sdsMockState.parseMetadataFile.mockReturnValue(metadata);
+        sdsMockState.decodeAllRecords.mockReturnValue([]);
+        const extensionUri = vscode.Uri.file('/extension');
+        SdsViewerPanel.createOrShow(extensionUri, sdsPath, undefined, metaPath);
+        const original = latestPanel();
+        const { sdsFilePath, metadataPath } = initialState(original);
+        expect({ sdsFilePath, metadataPath }).toEqual({ sdsFilePath: sdsPath, metadataPath: metaPath });
+        original.triggerDispose();
+        sdsMockState.parseSdsFile.mockClear();
+        sdsMockState.parseMetadataFile.mockClear();
+
+        const restored = vscodeMockState.createWebviewPanelMock(SdsViewerPanel.viewType, 'Restoring') as MockPanel;
+        const panelCount = vscodeMockState.createdPanels.length;
+        SdsViewerPanel.revive(restored as unknown as vscode.WebviewPanel, extensionUri, { sdsFilePath, metadataPath });
+
+        expect(vscodeMockState.createdPanels).toHaveLength(panelCount);
+        expect(restored.webview.options).toEqual({ enableScripts: true, localResourceRoots: [extensionUri] });
+        expect(initialState(restored)).toMatchObject({ sdsFilePath: sdsPath, metadataPath: metaPath, metadata, channelNames: ['x'] });
+        expect(sdsMockState.parseSdsFile).toHaveBeenCalledExactlyOnceWith(sdsPath, { strict: false });
+        expect(sdsMockState.parseMetadataFile).toHaveBeenCalledExactlyOnceWith(metaPath, {
+            sdsFilePath: sdsPath,
+            inferMissingSampleFrequency: true,
+        });
+        expect(viewerUtilsMockState.resolveMetadataPathForSdsFile).not.toHaveBeenCalled();
+        expect(viewerUtilsMockState.registerViewerWebview).toHaveBeenLastCalledWith(restored.webview);
+        expect(restored.webview.messageHandlers).toHaveLength(1);
+        expect(restored.dispose).not.toHaveBeenCalled();
+
+        vscodeMockState.activeTextEditor = { viewColumn: 2 };
+        const revived = SdsViewerPanel.createOrShow(extensionUri, sdsPath);
+        expect(SdsViewerPanel.createOrShow(extensionUri, sdsPath)).toBe(revived);
+        expect(restored.reveal).toHaveBeenCalledWith(2);
+        expect(vscodeMockState.createdPanels).toHaveLength(panelCount);
+    });
+
+    it.each([undefined, null, {}, { sdsFilePath: 42 }, { sdsFilePath: '' }])('disposes a data tab with invalid saved state: %j', state => {
+        const panel = vscodeMockState.createWebviewPanelMock(SdsViewerPanel.viewType, 'Restoring') as MockPanel;
+        SdsViewerPanel.revive(panel as unknown as vscode.WebviewPanel, vscode.Uri.file('/extension'), state);
+
+        expect(panel.dispose).toHaveBeenCalledOnce();
+        expect(panel.webview.html).toBe('');
+        expect(panel.webview.messageHandlers).toHaveLength(0);
+        expect(sdsMockState.parseSdsFile).not.toHaveBeenCalled();
+        expect(sdsMockState.parseMetadataFile).not.toHaveBeenCalled();
+        expect(viewerUtilsMockState.registerViewerWebview).not.toHaveBeenCalled();
+    });
+
     it('creates a data viewer, decodes metadata-backed samples, and reuses existing panels', () => {
         const sdsPath = path.join(tmpDir, 'stream.0.sds');
         const metaPath = metadataFile(tmpDir);
