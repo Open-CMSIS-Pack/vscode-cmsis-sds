@@ -105,6 +105,25 @@ export class SdsViewerPanel {
         return viewer;
     }
 
+    public static revive(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        state: unknown,
+        configManager?: SdsioConfigManager
+    ): void {
+        if (!state || typeof state !== 'object' || !('sdsFilePath' in state)
+            || typeof state.sdsFilePath !== 'string' || !state.sdsFilePath) {
+            panel.dispose();
+            return;
+        }
+
+        const metadataPath = 'metadataPath' in state && typeof state.metadataPath === 'string'
+            ? state.metadataPath
+            : undefined;
+        const viewer = new SdsViewerPanel(panel, extensionUri, state.sdsFilePath, configManager, metadataPath);
+        SdsViewerPanel.panels.set(state.sdsFilePath, viewer);
+    }
+
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
@@ -117,6 +136,10 @@ export class SdsViewerPanel {
         this.sdsFilePath = sdsFilePath;
         this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION, configManager);
         this.webview = panel.webview;
+        this.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [extensionUri],
+        };
         this.disposables.push(registerViewerWebview(this.webview));
 
         this.panel.iconPath = new vscode.ThemeIcon('graph-line');
@@ -368,7 +391,11 @@ export class SdsViewerPanel {
             styleFile: 'dataViewerWebview.css',
             scriptFile: 'dataViewerWebview.js',
             title: 'SDS Viewer',
-            initialState,
+            initialState: {
+                ...initialState,
+                sdsFilePath: this.sdsFilePath,
+                metadataPath: this.metadataPath,
+            },
         });
     }
 

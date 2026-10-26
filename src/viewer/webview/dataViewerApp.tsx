@@ -22,7 +22,7 @@ import { SdsFileStats, SdsMetadata } from '../../sds';
 import { Button, Col, ConfigProvider, Row, Slider, theme } from 'antd';
 import { ExpandOutlined, ExportOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { BroadcastMessage, getIndexedSdsSuffix, Message, ViewerStateChangedMessage, WebviewMessage } from '../../webview/protocol';
-import { broadcastMessage } from '../../webview/vscode-api';
+import { broadcastMessage, setState } from '../../webview/vscode-api';
 import { decimateExtremaSeries, DecimationPreset } from './components/decimation';
 import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '../../webview/utilities';
 import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
@@ -39,6 +39,8 @@ type InitialState = {
     domainEnd?: number;
     decimationPreset?: DecimationPreset;
     fileName?: string;
+    sdsFilePath?: string;
+    metadataPath?: string;
     error?: string;
 };
 
@@ -427,6 +429,9 @@ function ThemedViewerApp() {
         </ConfigProvider>
     );
 }
+
+const { sdsFilePath, metadataPath } = getInitialState<InitialState>({});
+setState({ sdsFilePath, metadataPath });
 
 const container = document.getElementById('root');
 if (container) {

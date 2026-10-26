@@ -36,6 +36,8 @@ import { registerSdsioConfigCommands } from './commands/sdsioConfigCommands';
 import { registerSdsioInterfaceCommands } from './commands/sdsioInterfaceCommands';
 import { registerSdsFileCommands } from './commands/sdsFileCommands';
 import { registerWorkspaceCommands } from './commands/workspaceCommands';
+import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
+import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 
 const SDSIO_CONFIG_EXTENSION = '.sdsio.yml';
 const SDSIO_TEMPLATE = [
@@ -78,6 +80,13 @@ export function activate(context: vscode.ExtensionContext) {
     // ── Config Manager ──────────────────────────────────────────
     const configManager = new SdsioConfigManager();
     context.subscriptions.push({ dispose: () => configManager.dispose() });
+    for (const viewer of [SdsViewerPanel, SdsMediaViewerPanel]) {
+        context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(viewer.viewType, {
+            async deserializeWebviewPanel(panel, state: unknown) {
+                viewer.revive(panel, context.extensionUri, state, configManager);
+            },
+        }));
+    }
 
     // ── Tree Views ──────────────────────────────────────────────
     const sdsIoControlService = new SdsIoControlService(configManager, monitor, context.extensionPath);
