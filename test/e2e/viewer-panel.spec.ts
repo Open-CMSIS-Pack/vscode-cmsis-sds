@@ -49,9 +49,58 @@ async function getMessages(page: Page): Promise<{ command?: string }[]> {
     return page.evaluate(() => (window as { __messages?: { command?: string }[] }).__messages || []);
 }
 
+async function captureCanvasLabels(page: Page): Promise<void> {
+    await page.addInitScript(() => {
+        type Label = { text: string; x: number; y: number };
+        const labels = new WeakMap<HTMLCanvasElement, Label[]>();
+        const originalFillText = CanvasRenderingContext2D.prototype.fillText;
+        const originalClearRect = CanvasRenderingContext2D.prototype.clearRect;
+        CanvasRenderingContext2D.prototype.clearRect = function (...args) {
+            labels.set(this.canvas, []);
+            return originalClearRect.apply(this, args);
+        };
+        CanvasRenderingContext2D.prototype.fillText = function (...args) {
+            const point = new DOMPoint(args[1], args[2]).matrixTransform(this.getTransform());
+            const entries = labels.get(this.canvas) ?? [];
+            entries.push({ text: args[0], x: point.x / devicePixelRatio, y: point.y / devicePixelRatio });
+            labels.set(this.canvas, entries);
+            return originalFillText.apply(this, args);
+        };
+        (window as unknown as { chartLabels: typeof labels }).chartLabels = labels;
+    });
+}
+
+async function getXAxisLabels(page: Page): Promise<string[]> {
+    return page.locator('#chart canvas').evaluate(canvas => {
+        const cursor = document.querySelector<HTMLElement>('#chart + div');
+        if (!cursor) { return []; }
+        const bottom = parseFloat(cursor.style.top) + parseFloat(cursor.style.height);
+        const labels = (window as unknown as {
+            chartLabels: WeakMap<HTMLCanvasElement, { text: string; x: number; y: number }[]>;
+        }).chartLabels.get(canvas as HTMLCanvasElement) ?? [];
+        return labels.filter(label => label.y > bottom && /^\d+$/.test(label.text))
+            .sort((left, right) => left.x - right.x).map(label => label.text);
+    });
+}
+
 // ── Structure ───────────────────────────────────────────────
 
 test.describe('Viewer Panel — Structure', () => {
+    test('selects the first block when opened', async ({ page }) => {
+        await openViewer(page);
+
+        await expect(page.locator('.info-bar')).toContainText('1 of 3');
+        await expect(page.locator('.info-bar')).toContainText('0.0000 s');
+        await expect(page.locator('#chart + div')).toBeVisible();
+    });
+
+    test('labels only the three data positions on a sparse x-axis', async ({ page }) => {
+        await captureCanvasLabels(page);
+        await openViewer(page);
+
+        await expect.poll(() => getXAxisLabels(page)).toEqual(['1', '2', '3']);
+    });
+
     test('toolbar buttons exist', async ({ page }) => {
         await openViewer(page);
 

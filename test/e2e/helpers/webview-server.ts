@@ -93,9 +93,9 @@ export function getViewerHtml(): string {
     assertWebviewAssetsExist(['out/dataViewerWebview.css', 'out/dataViewerWebview.js']);
 
     const sampleData = [
-        { timestamp: 0, timeSeconds: 0.0, values: { x: 1.0, y: 2.0, z: 3.0 } },
-        { timestamp: 10, timeSeconds: 0.01, values: { x: 1.5, y: 2.5, z: 3.5 } },
-        { timestamp: 20, timeSeconds: 0.02, values: { x: 2.0, y: 3.0, z: 4.0 } },
+        { timestamp: 0, timeSeconds: 0.0, index: 0, values: { x: 1.0, y: 2.0, z: 3.0 } },
+        { timestamp: 10, timeSeconds: 0.01, index: 1, values: { x: 1.5, y: 2.5, z: 3.5 } },
+        { timestamp: 20, timeSeconds: 0.02, index: 2, values: { x: 2.0, y: 3.0, z: 4.0 } },
     ];
     const channelNames = ['x', 'y', 'z'];
     const stats = {
