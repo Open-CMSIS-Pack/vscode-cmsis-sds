@@ -84,6 +84,10 @@ export function setupSdsioConfigLifecycle(
             return undefined;
         }
 
+        if (path.isAbsolute(configured)) {
+            return fs.existsSync(configured) ? configured : undefined;
+        }
+
         const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
         for (const folder of workspaceFolders) {
             const direct = path.join(folder.uri.fsPath, configured);

@@ -213,6 +213,43 @@ describe('setupSdsioConfigLifecycle', () => {
         );
     });
 
+    it.each([0, 1, 2])('restores a persisted external config with %i workspace folders after reload', async (folderCount) => {
+        const configPath = path.join(tmpDir, 'external.sdsio.yml');
+        fs.writeFileSync(configPath, 'sdsio:\n', 'utf-8');
+        vscodeMockState.workspaceFolders = Array.from({ length: folderCount }, (_, index) => {
+            const folderName = `workspace-${index}`;
+            const folderPath = path.join(tmpDir, folderName);
+            fs.mkdirSync(folderPath);
+            return createWorkspaceFolder(folderName, folderPath);
+        });
+        const { lifecycle } = createHarness();
+        await flushPromises();
+
+        await lifecycle.setActiveConfig(configPath, true);
+
+        expect(vscodeMockState.updateMock).toHaveBeenLastCalledWith(
+            'configFile',
+            configPath,
+            vscode.ConfigurationTarget.Workspace
+        );
+        const savedSetting = vi.mocked(vscode.workspace.getConfiguration('cmsis-sds.sdsio').update).mock.lastCall;
+        vscodeMockState.configValue = savedSetting?.[1] as string;
+        const reloaded = createHarness();
+        await flushPromises();
+
+        expect(reloaded.lifecycle.resolveConfigPathFromSettings()).toBe(configPath);
+        expect(reloaded.configManager.setConfigFile).toHaveBeenLastCalledWith(configPath);
+        expect(reloaded.explorerTreeView.title).toBe('external');
+
+        fs.unlinkSync(configPath);
+        const missing = createHarness();
+        await flushPromises();
+
+        expect(missing.lifecycle.resolveConfigPathFromSettings()).toBeUndefined();
+        expect(missing.configManager.setConfigFile).toHaveBeenLastCalledWith(undefined);
+        expect(missing.explorerTreeView.title).toBe('Files');
+    });
+
     it('resolves multi-root folder-prefixed settings and returns undefined for missing files', async () => {
         const appRoot = path.join(tmpDir, 'app');
         const docsRoot = path.join(tmpDir, 'docs');
