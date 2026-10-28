@@ -165,11 +165,6 @@
                 "category": "SDS"
             },
             {
-                "command": "arm-sds.sds.openConfig",
-                "title": "Open Configuration…",
-                "category": "SDS"
-            },
-            {
                 "command": "arm-sds.sds.closeConfig",
                 "title": "Close Configuration…",
                 "category": "SDS"
