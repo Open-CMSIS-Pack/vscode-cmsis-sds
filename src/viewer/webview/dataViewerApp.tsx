@@ -75,6 +75,7 @@ function DataViewerApp() {
     const [activeChannels, setActiveChannels] = useState(() => new Set(initial.channelNames));
     const [samples, setSamples] = useState<Sample[]>(() => initial.samples ?? []);
     const [currentBlock, setCurrentBlock] = useState<number | null>(null);
+    const [resetKey, setResetKey] = useState(0);
     const channelNames = useMemo(() => initial.channelNames ?? [], [initial.channelNames]);
     const stats = initial.stats ?? ({} as SdsFileStats);
     const metadata = initial.metadata ?? null;
@@ -93,7 +94,7 @@ function DataViewerApp() {
         onFit,
         onSliderChange,
         onSliderAfterChange,
-    } = useViewportRange({ domainStart, domainEnd });
+    } = useViewportRange({ domainStart, domainEnd, resetKey });
 
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
@@ -164,12 +165,15 @@ function DataViewerApp() {
                 if (!update.payload) { return; }
                 latestAppliedSeqRef.current = requestSeqRef.current + 1;
                 setInitial(update.payload);
-                setSamples(update.payload.samples ?? []);
+                if (update.reset) { setResetKey(current => current + 1); }
+                if (!update.live) { setSamples(update.payload.samples ?? []); }
                 setActiveChannels(current => new Set((update.payload.channelNames ?? []).filter(channel => {
                     return !channelNames.includes(channel) || current.has(channel);
                 })));
-                setHighlightedTime(null);
-                setCurrentBlock(null);
+                if (!update.live) {
+                    setHighlightedTime(null);
+                    setCurrentBlock(null);
+                }
                 return;
             }
 

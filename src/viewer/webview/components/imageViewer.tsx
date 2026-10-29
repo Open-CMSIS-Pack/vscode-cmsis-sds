@@ -78,6 +78,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         getWindowSize: getImageWindowSize,
         getNearEdgeMargin: getImageNearEdgeMargin,
         stationaryRequestQuality: playing ? 'low' : 'high',
+        followLatest: !playing,
         onManualChangeStart: stopPlaybackOnManualChange,
         onPlaybackStateChange: state => setPlaybackState(state === 'playing', false),
     });

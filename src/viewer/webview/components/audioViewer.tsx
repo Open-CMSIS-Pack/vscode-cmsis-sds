@@ -24,6 +24,7 @@ import { decimateExtremaSeries, DecimationPreset } from './decimation';
 import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '../../../webview/utilities';
 import { useViewportRange } from './useViewportRange';
 import { SdsFileStats } from '../../../sds';
+import { useAudioPlayback } from './useAudioPlayback';
 
 export type AudioState = {
     samples: SampleFrame[];
@@ -45,9 +46,11 @@ type AudioViewerProps = {
     filename?: string | undefined;
 };
 
+let audioWindowSequence = 0;
+
 export function AudioViewer({ state, filename }: AudioViewerProps) {
     const {
-        samples,
+        samples: initialSamples,
         sampleRate,
         totalSamples,
         domainStart,
@@ -55,13 +58,12 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         decimationPreset: initialDecimationPreset,
     } = state;
 
-    const [isPlaying, setIsPlaying] = useState(false);
     const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
     const [decimationPreset] = useState<DecimationPreset>(initialDecimationPreset ?? 'accuracy');
     const [currentBlock, setCurrentBlock] = useState<number | null>(null);
-    const audioCtxRef = useRef<AudioContext | null>(null);
-    const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+    const [samples, setSamples] = useState(initialSamples);
+    const windowRequestRef = useRef(0);
 
     const sampleDomain = useMemo<[number, number]>(() => {
         if (sampleRate <= 0 || samples.length === 0) {
@@ -94,14 +96,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
 
     const resolvedDomainStart = domainStart ?? sampleDomain[0];
     const resolvedDomainEnd = domainEnd ?? sampleDomain[1];
-    const broadcastPlaybackState = useCallback((isPlaying: boolean) => {
-        broadcastMessage({
-            type: 'broadcast',
-            timeStamp: highlightedTime ?? resolvedDomainStart,
-            fileName: filename,
-            playbackState: isPlaying ? 'playing' : 'stopped',
-        });
-    }, [filename, highlightedTime, resolvedDomainStart]);
+    const { isPlaying, play, stopPlayback } = useAudioPlayback(sampleRate, state.bitDepth, state.channels, resolvedDomainEnd, filename);
     const {
         viewRange,
         setViewRangeClamped,
@@ -114,6 +109,35 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         onSliderChange,
         onSliderAfterChange,
     } = useViewportRange({ domainStart: resolvedDomainStart, domainEnd: resolvedDomainEnd });
+
+    useEffect(() => {
+        const requestId = ++audioWindowSequence;
+        windowRequestRef.current = requestId;
+        const timer = setTimeout(() => {
+            broadcastMessage({
+                command: 'requestMediaAudioWindow', requestId,
+                payload: {
+                    rangeStart: viewRange[0], rangeEnd: viewRange[1],
+                    plotWidth: viewWidth, quality: isDragging ? 'low' : 'high', purpose: 'waveform',
+                },
+            });
+        }, isDragging ? 12 : 60);
+        return () => {
+            clearTimeout(timer);
+            windowRequestRef.current = 0;
+        };
+    }, [isDragging, state, viewRange, viewWidth]);
+
+    useEffect(() => {
+        const onWindow = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) { return; }
+            const message = event.data;
+            if (message.command !== 'mediaAudioWindowData' || message.requestId !== windowRequestRef.current) { return; }
+            if (Array.isArray(message.payload?.samples)) { setSamples(message.payload.samples); }
+        };
+        window.addEventListener('message', onWindow);
+        return () => window.removeEventListener('message', onWindow);
+    }, []);
 
     const chartData = useMemo<ChartSample[]>(() => {
         const data: ChartSample[] = [];
@@ -172,28 +196,11 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         });
     }, [filename]);
 
-    const stopPlayback = useCallback((broadcast = true) => {
-        const source = sourceRef.current;
-        if (source) {
-            try {
-                source.stop();
-            } catch {
-                // Source can already be stopped.
-            }
-            source.disconnect();
-            sourceRef.current = null;
-        }
-        setIsPlaying(false);
-        if (broadcast) {
-            broadcastPlaybackState(false);
-        }
-    }, [broadcastPlaybackState]);
-
     const stopPlaybackOnRangeChange = useCallback(() => {
-        if (sourceRef.current) {
+        if (isPlaying) {
             stopPlayback();
         }
-    }, [stopPlayback]);
+    }, [isPlaying, stopPlayback]);
 
     const setVisibleRangeClamped = useCallback((start: number, end: number) => {
         stopPlaybackOnRangeChange();
@@ -221,61 +228,8 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     }, [onFit, stopPlaybackOnRangeChange]);
 
     const playLoadedSamples = useCallback(async (broadcast = true) => {
-        if (sampleRate <= 0 || samples.length === 0) {
-            return;
-        }
-
-        const [start, end] = viewRange;
-        const pcm: number[] = [];
-        for (const frame of samples) {
-            for (let index = 0; index < frame.samples.length; index++) {
-                const time = frame.timestamp + (index / sampleRate);
-                if (time >= start && time <= end) {
-                    pcm.push(frame.samples[index]);
-                }
-            }
-        }
-
-        if (pcm.length === 0) {
-            return;
-        }
-
-        if (!audioCtxRef.current) {
-            audioCtxRef.current = new AudioContext({ sampleRate });
-        }
-
-        const audioCtx = audioCtxRef.current;
-        if (!audioCtx) {
-            return;
-        }
-
-        if (audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-        }
-
-        stopPlayback(false);
-
-        const buffer = audioCtx.createBuffer(1, pcm.length, sampleRate);
-        buffer.copyToChannel(Float32Array.from(pcm), 0);
-
-        const source = audioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioCtx.destination);
-        source.onended = () => {
-            if (sourceRef.current === source) {
-                sourceRef.current = null;
-                setIsPlaying(false);
-                broadcastPlaybackState(false);
-            }
-        };
-
-        sourceRef.current = source;
-        setIsPlaying(true);
-        source.start();
-        if (broadcast) {
-            broadcastPlaybackState(true);
-        }
-    }, [broadcastPlaybackState, sampleRate, samples, stopPlayback, viewRange]);
+        await play(viewRange, broadcast);
+    }, [play, viewRange]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -300,28 +254,6 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             window.removeEventListener('keydown', onKeyDown);
         };
     }, [isPlaying, playLoadedSamples, stopPlayback]);
-
-    useEffect(() => {
-        setIsPlaying(false);
-        return () => {
-            const source = sourceRef.current;
-            if (source) {
-                try {
-                    source.stop();
-                } catch {
-                    // Source can already be stopped.
-                }
-                source.disconnect();
-                sourceRef.current = null;
-            }
-
-            const audioCtx = audioCtxRef.current;
-            if (audioCtx) {
-                void audioCtx.close();
-                audioCtxRef.current = null;
-            }
-        };
-    }, [sampleRate, state.bitDepth, state.channels]);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
@@ -434,7 +366,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                                 void playLoadedSamples();
                             }
                         }}
-                        disabled={samples.length === 0}>
+                        disabled={totalSamples === 0}>
                         {isPlaying ? 'Pause' : 'Play'}
                     </Button>
                 </Col>

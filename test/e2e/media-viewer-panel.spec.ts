@@ -58,6 +58,74 @@ async function clickSliderAt(page: Page, sliderLocator: string, ratio: number) {
 // ── Image Viewer ────────────────────────────────────────────
 
 test.describe('Media Viewer — Image', () => {
+    test('follows appended images only at the last frame and retains spatial zoom and scroll', async ({ page }) => {
+        await page.goto(`${baseUrl}/image`);
+        await page.waitForSelector('canvas');
+        await page.evaluate(() => {
+            const target = window as unknown as {
+                __INITIAL_STATE__: { image: { frames: unknown[] } };
+                __messages: { command?: string; requestId?: number }[];
+            };
+            const respond = (message: { command?: string; requestId?: number }) => {
+                if (message.command !== 'requestMediaFrameWindow') { return; }
+                setTimeout(() => window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        command: 'mediaFrameWindowData', requestId: message.requestId,
+                        payload: {
+                            mediaType: 'image', quality: 'high', rangeStart: 0,
+                            rangeEnd: target.__INITIAL_STATE__.image.frames.length, frames: target.__INITIAL_STATE__.image.frames
+                        }
+                    }
+                })), 0);
+            };
+            target.__messages.forEach(respond);
+            const push = target.__messages.push.bind(target.__messages);
+            target.__messages.push = (...messages) => { const length = push(...messages); messages.forEach(respond); return length; };
+        });
+        await page.locator('button[title="Next Frame"]').click();
+        await page.locator('button[title="Zoom In"]').first().click();
+        const canvas = page.locator('canvas').first();
+        await canvas.evaluate(element => { element.setAttribute('data-instance', 'retained'); });
+        const zoomStyle = await canvas.getAttribute('style');
+        await page.locator('.canvas-area').evaluate(element => {
+            Object.assign((element as HTMLElement).style, { width: '2px', height: '2px', flex: 'none', overflow: 'scroll' });
+            element.scrollLeft = 2;
+            element.scrollTop = 2;
+        });
+        const scrollPosition = () => page.locator('.canvas-area').evaluate(element => [element.scrollLeft, element.scrollTop]);
+        const scroll = await scrollPosition();
+        expect(scroll[0]).toBeGreaterThan(0);
+        const appendFrames = (count: number) => page.evaluate(number => {
+            const target = window as unknown as { __INITIAL_STATE__: { image: { frames: { timestamp: number; rgbaBase64: string }[]; totalFrames: number } } };
+            const initial = target.__INITIAL_STATE__;
+            const image = initial.image;
+            const pixels = new Uint8Array(4 * 4 * 4);
+            for (let offset = 0; offset < pixels.length; offset += 4) { pixels.set([255, 0, 0, 255], offset); }
+            for (let index = 0; index < number; index++) {
+                image.frames.push({ timestamp: image.frames.length / 10, rgbaBase64: btoa(String.fromCharCode(...pixels)) });
+            }
+            image.totalFrames = image.frames.length;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', reset: false, live: true, payload: { ...initial, image: { ...image } } }
+            }));
+        }, count);
+        await appendFrames(1);
+        await expect(page.locator('.info-bar')).toContainText('2 of 4');
+        await page.locator('button[title="Next Frame"]').click();
+        await page.locator('button[title="Next Frame"]').click();
+        await expect(page.locator('.info-bar')).toContainText('4 of 4');
+        await appendFrames(2);
+        await expect(page.locator('.info-bar')).toContainText('6 of 6');
+        await expect.poll(() => canvas.evaluate(element => Array.from(
+            (element as HTMLCanvasElement).getContext('2d')!.getImageData(0, 0, 1, 1).data
+        ))).toEqual([255, 0, 0, 255]);
+        await expect(canvas).toHaveAttribute('data-instance', 'retained');
+        await expect(canvas).toHaveAttribute('style', zoomStyle!);
+        expect(await scrollPosition()).toEqual(scroll);
+    });
+
     test('metadata frequency updates preserve the canvas, zoom, and playback position', async ({ page }) => {
         await page.clock.install();
         await page.goto(`${baseUrl}/image`);
@@ -417,6 +485,127 @@ test.describe('Media Viewer — Image', () => {
 // ── Audio Viewer ────────────────────────────────────────────
 
 test.describe('Media Viewer — Audio', () => {
+    test('continues into arriving audio and stops when playback catches the writer', async ({ page }) => {
+        test.setTimeout(45000);
+        await page.clock.install();
+        await page.addInitScript(() => {
+            Object.defineProperty(window, '__INITIAL_STATE__', {
+                configurable: true,
+                set(initial) {
+                    const audio = {
+                        ...initial.audio, sampleRate: 100, domainStart: 0, domainEnd: 10,
+                        totalSamples: 1000, samples: [{ timestamp: 0, samples: Array(1000).fill(0.25) }]
+                    };
+                    Object.defineProperty(window, '__INITIAL_STATE__', { configurable: true, writable: true, value: { ...initial, audio } });
+                },
+            });
+            const events = { starts: [] as number[], lengths: [] as number[] };
+            Object.assign(window, { __audioEvents: events });
+            class AudioContextMock {
+                public readonly state = 'running';
+                public readonly destination = {};
+                private readonly epoch = Date.now();
+                public get currentTime() { return (Date.now() - this.epoch) / 1000; }
+                public createBuffer(_channels: number, length: number, rate: number) {
+                    events.lengths.push(length);
+                    return { duration: length / rate, copyToChannel: () => undefined };
+                }
+                public createBufferSource() {
+                    const context = this;
+                    let timer = 0;
+                    return {
+                        buffer: null as { duration: number } | null,
+                        onended: null as (() => void) | null,
+                        connect: () => undefined,
+                        disconnect: () => undefined,
+                        start(when: number) {
+                            events.starts.push(when);
+                            timer = window.setTimeout(() => this.onended?.(), (when - context.currentTime + this.buffer!.duration) * 1000);
+                        },
+                        stop() { clearTimeout(timer); },
+                    };
+                }
+                public resume() { return Promise.resolve(); }
+                public close() { return Promise.resolve(); }
+            }
+            Object.assign(window, { AudioContext: AudioContextMock });
+        });
+        await page.goto(`${baseUrl}/audio`);
+        await page.waitForSelector('canvas');
+        await page.clock.pauseAt(new Date(Date.now() + 1000));
+        await page.locator('button[title="Play Visible Range"]').click();
+        await page.clock.runFor(100);
+        await expect(page.locator('button[title="Pause"]')).toBeVisible();
+        await page.clock.runFor(4900);
+        for (let batch = 1; batch <= 5; batch++) {
+            await page.evaluate(end => {
+                const target = window as unknown as { __INITIAL_STATE__: { audio: Record<string, unknown> } };
+                const initial = target.__INITIAL_STATE__;
+                initial.audio = {
+                    ...initial.audio, domainEnd: end, totalSamples: end * 100,
+                    samples: [{ timestamp: 0, samples: Array(end * 100).fill(0.25) }]
+                };
+                window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: { command: 'viewerStateChanged', live: true, reset: false, payload: initial }
+                }));
+            }, 10 + batch * 9);
+            await page.clock.runFor(1);
+            await expect(page.locator('button[title="Pause"]')).toBeVisible();
+            await page.clock.runFor(9999);
+        }
+        await page.clock.runFor(100);
+        await expect(page.locator('button[title="Play Visible Range"]')).toBeVisible();
+        const events = await page.evaluate(() => (window as unknown as {
+            __audioEvents: { starts: number[]; lengths: number[] };
+        }).__audioEvents);
+        expect(events.starts.length).toBeGreaterThan(10);
+        expect(Math.max(...events.lengths)).toBeLessThanOrEqual(200);
+        expect(events.lengths.reduce((total, length) => total + length, 0)).toBe(5500);
+        for (let index = 1; index < events.starts.length; index++) {
+            expect(events.starts[index]).toBeCloseTo(events.starts[index - 1] + events.lengths[index - 1] / 100, 5);
+        }
+        await page.evaluate(() => {
+            const target = window as unknown as { __INITIAL_STATE__: { audio: Record<string, unknown> } };
+            const initial = target.__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: {
+                    command: 'viewerStateChanged', live: true, reset: false,
+                    payload: { ...initial, audio: { ...initial.audio, domainEnd: 100 } }
+                }
+            }));
+        });
+        await page.clock.runFor(1000);
+        await expect(page.locator('button[title="Play Visible Range"]')).toBeVisible();
+    });
+
+    test('requests audio windows after zoom and accepts only the latest response', async ({ page }) => {
+        await page.goto(`${baseUrl}/audio`);
+        await page.waitForSelector('canvas');
+        const requests = () => page.evaluate(() => (window as unknown as {
+            __messages: Array<{ command: string; requestId: number; payload: { rangeStart: number; rangeEnd: number } }>;
+        }).__messages.filter(message => message.command === 'requestMediaAudioWindow'));
+        await expect.poll(async () => (await requests()).length).toBeGreaterThan(0);
+        const first = (await requests()).at(-1)!;
+        await page.locator('button[title="Zoom In"]').click();
+        await expect.poll(async () => (await requests()).at(-1)?.requestId).not.toBe(first.requestId);
+        const latest = (await requests()).at(-1)!;
+        expect(latest.payload.rangeEnd - latest.payload.rangeStart).toBeLessThan(0.1);
+        await page.evaluate(({ first, latest }) => {
+            for (const request of [latest, first]) {
+                window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        command: 'mediaAudioWindowData', requestId: request.requestId,
+                        payload: { samples: request === latest ? [{ timestamp: 0.025, samples: [0.5, 0.7] }] : [] }
+                    },
+                }));
+            }
+        }, { first, latest });
+        await expect(page.locator('button[title="Play Visible Range"]')).toBeEnabled();
+    });
+
     test('waveform canvas renders', async ({ page }) => {
         await page.goto(`${baseUrl}/audio`);
         await page.waitForSelector('canvas');
@@ -460,6 +649,7 @@ test.describe('Media Viewer — Audio', () => {
             class AudioContextMock {
                 public readonly state = 'running';
                 public readonly destination = {};
+                public readonly currentTime = 0;
 
                 public createBuffer(_channels: number, length: number) {
                     audioEvents.bufferLengths.push(length);
@@ -497,7 +687,7 @@ test.describe('Media Viewer — Audio', () => {
 
         await expect.poll(() => page.evaluate(() => (
             window as Window & { __audioEvents: { bufferLengths: number[] } }
-        ).__audioEvents.bufferLengths.at(-1))).toBe(801);
+        ).__audioEvents.bufferLengths.at(-1))).toBe(800);
 
         await page.locator('button[title="Zoom In"]').first().click();
 
