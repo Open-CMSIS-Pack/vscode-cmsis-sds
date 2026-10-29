@@ -1,5 +1,5 @@
 [![Releases](https://img.shields.io/github/v/tag/Open-CMSIS-Pack/vscode-cmsis-sds.svg?sort=semver)](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/releases)
-[![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-green?label=LICENSE)](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/blob/main/LICENSE)
+[![License Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-green?label=LICENSE)](LICENSE)
 [![CI Build and Test](https://img.shields.io/github/actions/workflow/status/Open-CMSIS-Pack/vscode-cmsis-sds/ci.yml?logo=arm&logoColor=0091bd&label=CI%20Build%20and%20Test)](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/actions/workflows/ci.yml?query=branch:main)
 [![Markdown Lint](https://img.shields.io/github/actions/workflow/status/Open-CMSIS-Pack/vscode-cmsis-sds/markdown.yml?logo=arm&logoColor=0091bd&label=Markdown%20Lint)](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/actions/workflows/markdown.yml?query=branch:main)
 [![CodeQL Analysis](https://img.shields.io/github/actions/workflow/status/Open-CMSIS-Pack/vscode-cmsis-sds/codeql.yml?logo=arm&logoColor=0091bd&label=CodeQL%20Analysis)](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/actions/workflows/codeql.yml?query=branch:main)
@@ -10,93 +10,94 @@
 
 # Arm SDS
 
-The Arm SDS extension for VS Code simplifies data capture, inspection, and regression testing with the
-[SDS-Framework](https://www.keil.arm.com/packs/sds-arm). The extension provides a VS Code user interface for an
-[SDSIO Server](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-server) and uses an `*.sdsio.yml`
-control file to define the active SDS workspace.
+Arm SDS is a VS Code extension for capturing, replaying, inspecting, and validating synchronous data streams
+from embedded systems. It provides a graphical interface for the
+[Synchronous Data Stream (SDS) Framework](https://www.keil.arm.com/packs/sds-arm/overview/), which brings reproducible
+real-world sensor, audio, image, video, and algorithm data into DSP, ML, and Edge AI development. Captured streams can
+be reviewed, labeled, and exported for offline analysis, DSP development, and ML training and testing.
 
-This README contains a description of the [SDS View](#sds-view) and explains [how to use](#usage) the extension with the SDS framework.
+SDS recordings turn real-world observations into reusable datasets and repeatable test cases. Use them to train or
+optimize ML models, reproduce a problem, compare algorithm or model versions, and verify a change on target hardware or
+an FVP simulation model. Arm SDS lets you review SDS data from both environments; its built-in SDSIO-Server connects
+only to physical targets to record and play back data.
 
-## SDS View
+> **Demo video coming soon:** Load an existing [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml), show recorded images, connect to a target, record images, and play the recorded images back to the target.
 
-The **SDS View** shows the active SDS configuration, SDSIO controls, stream labels, SDS groups, metadata files, and
-recorded SDS data files in one view.
+<!-- Replace this placeholder with the final linked video thumbnail. -->
+<!-- [![Get started with Arm SDS](media/get-started-thumbnail.png)](VIDEO_URL) -->
 
-If no configuration is selected, the view offers actions to create or open an
-`*.sdsio.yml` file:
+## What you can do
 
-![SDS View context menu](media/screenshots/sds-context-menu.png "SDS View context menu")
+- Capture real-world sensor and media data from an embedded target and preserve it as a reusable engineering asset.
+- Explore synchronized inputs and algorithm results together to understand system behavior and identify problems.
+- Replay the same inputs to reproduce issues and compare algorithms, models, parameters, targets, or software versions.
+- Turn recordings into repeatable test cases and datasets for DSP and ML development, validation, regression testing,
+  and CI workflows.
 
-If a configuration is open, the **SDS View** shows the SDS files and related options:
+## How it works
 
-![SDS View open configuration context menu](media/screenshots/sds-view-open-configuration.png)
+The [SDS Framework](https://www.keil.arm.com/packs/sds-arm/overview/) manages periodic fixed-size data
+blocks as well as variable-size or irregularly timed streams. An SDS-enabled application can record sensor, audio,
+image, and video input streams together with algorithm output. During playback, it feeds previously captured streams
+into the application while recording new output, enabling repeatable validation and optimization.
 
-1. The [toolbar](#toolbar-actions) offers different actions.
-2. Some files offer dedicated [file action buttons](#file-action-buttons).
-3. A [context menu](#context-menu-actions) might be available.
+The diagram below shows a target connected through USB. A physical
+target can also connect through a serial port, a TCP/IP socket, or an RTT connection. See
+the [SDS template application](https://arm-software.github.io/SDS-Framework/main/template.html) for the target-side
+application structure and instructions for configuring these interfaces.
 
-### Toolbar Actions
+![How Arm SDS connects to target hardware](media/diagrams/top-level-architecture.svg)
 
-![Toolbar](media/screenshots/toolbar.png)
+The Arm SDS VS Code extension provides a user interface for the SDSIO-Server and SDS data file viewers. It uses the following files:
 
-| Action | Description |
-|--------|-------------|
-| Play   | Starts playback using the `play:` steps defined in the active `*.sdsio.yml` control file. |
-| Record | Captures new SDS data files from the target. |
-| Stop | Stops the current recording or playback session. |
-| Connect/Disconnect | Starts/stops the SDSIO monitor connection. |
-| Open sdsio.yml file | manage the active SDS configuration. |
-| Collapse All | Hides all data. |
-| Views and More Actions... | Offers **Open Configuration**, **Create Configuration**, and **Close  Configuration** for SDS configuration. |
+| File | Purpose |
+|------|---------|
+| [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) | Controls the SDSIO interface, working directories, playback test cases, and flag labels. |
+| `*.sds` | SDS data file that stores a recorded synchronous data stream. |
+| `*.sds.yml` or `*.sds.yaml` | Describes stream names, data types, sample rates, scaling, units, and media formats. |
 
-### File Action Buttons
+## Prerequisites
 
-![File context menu action buttons](media/screenshots/file-context-icons.png)
+Recording data from or playing data back to a target requires:
 
-| Action | Description |
-|--------|-------------|
-| Open Metadata Information | Open the corresponding *.sds.yml file. |
-| Open SDS Viewer | Open file in the SDS Viewer window. |
+- A physical target running an application that integrates the SDS Framework and an SDSIO Client interface. The
+  application defines the streams to record or play and transfers them through USB, serial, a TCP/IP socket, or an RTT
+  connection exposed as a local socket. The
+  [SDS template application](https://arm-software.github.io/SDS-Framework/main/template.html) provides a starting point
+  for integrating SDS with target hardware and an algorithm.
+- An [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) that matches the SDSIO interface implemented by the target. It configures the target
+  connection, directories for SDS data and metadata files, and optional playback steps. You can create this file with
+  **Create Configuration** or open one supplied with an [SDS example](https://github.com/Arm-Examples/SDS-Examples).
 
-### Context Menu Actions
+The target application must be running and its configured USB, serial, network, or debug connection must be available
+before Arm SDS can connect through the SDSIO-Server. Existing SDS recordings can be inspected without a
+connected target.
 
-![Context menu actions](media/screenshots/sds-file-context-menu.png)
+## Workflow
 
-| Action | Description |
-|--------|-------------|
-| Check Data File   | Run SDS Check on a selected `.sds` file. |
-| Create / Edit Metadata (YAML) | Create or open the corresponding `*.sds.yml` metadata file. |
-| Open Media Viewer | View image, video, or audio streams. |
-| Export SDS to CSV | Export functions for decoded sensor data. |
-| Open SDS Viewer   | View sensor data and line charts. |
+1. Open the matching [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) and connect Arm SDS to the SDS-enabled target.
+2. Capture changing real-world sensor, audio, image, or video input streams, optionally together with algorithm output.
+3. Inspect and label the recording, then preserve it as a reusable engineering asset.
+4. Replay the captured input streams on hardware or an FVP simulation model while recording new algorithm output.
+5. Compare results across models, parameter sets, targets, or software versions and add the test to regression or CI.
 
-When an SDS data file is opened, the corresponding
-[metadata file](https://arm-software.github.io/SDS-Framework/main/theory.html#yaml-metadata-format) provides stream
-names, data types, scaling, units, and media information. The data, audio, image, and video viewers synchronize their
-cursors so related streams can be inspected together.
+This workflow makes failures reproducible and provides evidence that an algorithm change fixes the original condition.
+[Making Edge AI development more productive](https://developer.arm.com/community/arm-community-blogs/b/tools-software-ides-blog/posts/making-edge-ai-development-more-productive) exemplifies the overall development flow for ML applications.
 
-### Video Stream Examples
+## Connect to a target
 
-![SDS video telemetry view](./media/screenshots/data-video-telemtry.png)
+The SDSIO-Server records and plays SDS data through a physical target connection. It supports USB, serial,
+and TCP/IP socket interfaces; RTT connections use a local socket exposed by the debug adapter. FVP simulation does not
+use the SDSIO-Server, but connects through the VSI3 interface using the same [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml).
 
-### Audio Stream Example
+1. Open the **SDS** view and select **Open SDS Configuration** to load an existing [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml). Use
+   **New SDS Configuration** only when starting a new configuration.
+2. Select **Connect SDSIO Monitor**. Arm SDS starts the server with the active [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) and connects the monitor to it.
+3. Use **Record**, **Play**, **Stop**, and the user flags to interact with the target.
 
-![SDS audio data view](./media/screenshots/data-audio.png)
+## Configure an SDS workspace
 
-## Usage
-
-### Create or Open an SDS Configuration
-
-![SDS View with no active configuration](./media/screenshots/file-explorer-empty.png)
-
-1. Open the [SDS View](#sds-view) from the Activity Bar.
-2. Click **New SDS Configuration** and enter a name for your project, for example `target-a`.
-3. This creates a `target-a.sdsio.yml` file in your workspace root and selects it as the active SDS configuration.
-
-Alternatively, you can use **Open SDS Configuration** to open an existing `*.sdsio.yml` file. If the file is outside
-the current workspace, the extension opens that folder and remembers the selected configuration.
-
-**Example**
+The [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) configures both the extension UI and the data workflow. For a target connection, it selects the SDSIO-Server interface. A new USB target configuration looks like this:
 
 ```yaml
 sdsio:
@@ -104,72 +105,147 @@ sdsio:
     usb:
   workdir: .
   metadir: .
+  play:
+    - step: Baseline test
+      labels:
+        - 0
   flag-info:
-    - 0: Flag 0
-    - 1: Flag 1
-    - 2: Flag 2
-    - 3: Flag 3
-    - 4: Flag 4
-    - 5: Flag 5
-    - 6: Flag 6
-    - 7: Flag 7
+    - 0: Enable preprocessing
+    - 1: Input variant B
+    - 2: Record camera input
 ```
 
-Edit your `.sdsio.yml` to set:
+| Property | Description |
+|----------|-------------|
+| `interface` | Selects the USB, serial, or socket connection between a target and SDSIO-Server. Ignored by the VSI3 interface of FVP simulation models. |
+| `workdir` | Directory containing recorded `.sds` files, relative to the [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml). |
+| `metadir` | Directory containing `*.sds.yml` metadata, relative to the [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml). |
+| `play` | Defines files and test cases available for playback. |
+| `flag-info` | Labels for the eight application flags shown in the SDS View. |
 
-| Property    | Description |
-|-------------|-------------|
-| `workdir`   | Directory where SDS recording files are saved (`.sds` files) |
-| `metadir`   | Directory containing metadata files (`.sds.yml` files) |
-| `flag-info` | Custom labels for flags 0-7 |
+## User interface
 
-**Example**
+Open the **SDS** view from the VS Code Activity Bar. It combines the active [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml), target connection controls,
+user flags, stream groups, metadata, and SDS recordings.
 
-```yaml
-workdir: ./recordings
-metadir: ./metadata
-flag-info:
-  - 0: Start
-  - 1: Trigger
-  - 2: Error
-```
+![SDS View with an active configuration](media/screenshots/sds-view-open-configuration.png)
 
-The extension provides validation and editor completion for SDS configuration and metadata files, including
-`*.sdsio.yml`, `*.sds.yml`, and `*.sds.yaml`.
+1. The **SDS View Toolbar** contains **Actions** for playback, recording, target connection, configuration-file
+   access, and other commands.
+2. **Tree View item inline actions** provide frequently used commands for a specific SDS stream or file, such as
+   editing its metadata or opening it in the SDS Viewer.
+3. The **Tree View item context menu** provides all commands available for the selected item, including validation,
+   metadata editing, viewing, CSV export, and deletion.
 
-### Connect and Control SDSIO
+### Commands
 
-To connect to an SDSIO server running on your target, click **Connect SDSIO Monitor** in the
-[SDS View toolbar](#toolbar-actions). If an SDSIO server is available, the extension launches it with your active
-`.sdsio.yml` as the control file.
+The View Actions and item menus provide commands for target control, configuration management, and SDS files. You can
+also open the VS Code [Command Palette](https://code.visualstudio.com/docs/getstarted/userinterface#_command-palette)
+and type **SDS** to find commands that apply without a selected Tree View item.
 
-The local SDSIO monitor uses TCP port `6060` by default. Set `cmsis-sds.sdsio.monitorPort` in VS Code **User Settings**
-(or **Remote Settings** when using a remote extension host) to prefer another port from `1` to `65535`.
-This machine-scoped setting cannot be overridden by workspace settings and applies on the next server connection.
-Before launching SDSIO, the extension checks whether the preferred port can be bound. If it is occupied or access is
-denied, the operating system selects an available port, which is passed to both the server and monitor client.
-The selected port is logged in the **Arm SDS** output channel. The setting itself is not changed by fallback.
-This bind check does not detect firewall filtering, and another process could claim the port between the check and server startup.
+![SDS View actions and More Actions menu](media/screenshots/toolbar.png)
 
-Once connected, you can play back previously recorded data, record new data from the device, and toggle flags to control the behavior of the devide.
+Command | What it does
+--- | ---
+Start Playback | Connect to the SDSIO-Server if necessary, select a configured playback test case, and start playback to the target.
+Start Recording | Connect to the SDSIO-Server if necessary and start recording SDS streams from the target.
+Stop IO (Playback/Recording) | Stop the active recording or playback operation.
+(Dis-)Connect SDSIO Monitor | Start or stop the SDSIO-Server using the target information in the active [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml).
+Open sdsio.yml file | Open the active [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) in the editor.
+Open Configuration in Workspace | Select an [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) found in the current workspace and make it active.
+Create Configuration | Create an [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) from the default template, make it active, and open it in the editor.
+Open SDS Configuration | Select an [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) with a file picker. If it is outside the workspace, open its folder as the workspace.
+Close Configuration | Close the active [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml).
+Refresh | Refresh the SDS View.
+Open SDS Viewer | Open an SDS file in the interactive data viewer; prompt for a file when none is selected.
+Open Media Viewer | Open image, audio, or video content from an SDS file in the media viewer.
+Check Data File | Run SDS Check from the installed SDS pack on the selected SDS file.
+Export SDS to CSV | Decode the selected SDS file using its metadata and save the data as CSV.
+Create / Edit Metadata (YAML) | Create a metadata template when needed and open the stream's metadata file in the editor.
+Open Metadata Information | Open the existing metadata file associated with an SDS stream group.
+Delete SDS File | Confirm and permanently delete the selected SDS file, then refresh the SDS View.
+Quick Open SDS File | Find SDS files in the workspace, select one with Quick Pick, and open it in the SDS Viewer.
+Initialize SDS Workspace | Open or create a workspace and ensure that it contains an `sds_recordings` directory.
+Show Diagnostics | Show the **Arm SDS** output channel.
+Clear Diagnostics Log | Clear the **Arm SDS** output channel.
 
-Renamed flag labels appear in the SDS Explorer and persist in your `.sdsio.yml`.
+### View SDS data
 
-![Renaming an SDS flag label](media/screenshots/sdsio-flags-rename.png)
+Open an `.sds` file from the SDS View. Its
+[`*.sds.yml` metadata](https://arm-software.github.io/SDS-Framework/main/theory.html#yaml-metadata-format) defines how
+the stream is decoded and displayed. The SDS Viewer shows values and charts, while the Media Viewer handles audio,
+image, and video. Related viewers synchronize by timestamp so you can correlate algorithm input and output streams.
 
-### View and Export Your Data
+![Synchronized data and video](media/screenshots/data-video-telemetry.png)
 
-The SDS View groups SDS files by stream name and shows associated metadata where available. Select a `.sds` file to
-open it, or use the context menu for more actions.
+![Synchronized data and audio](media/screenshots/data-audio.png)
 
-- Sensor data opens in the SDS Viewer with interactive line charts, zooming, panning, block labels, and CSV export.
-- Audio streams open in the Audio Viewer with the same chart cursor and playback controls.
-- Image and video streams open in media viewers with frame navigation and file statistics.
-- Cursor synchronization keeps data, audio, image, and video views aligned by timestamp.
-- **Check Data File** runs SDS Check for a selected `.sds` file.
+### User flags
+
+User flags are application-defined bits in the target's `sdsFlags` value. Arm SDS can set or clear these bits through
+the SDSIO-Server monitor interface; the target application decides what each bit does. A single firmware image can
+therefore select algorithm options, run A/B tests, or inject test conditions without rebuilding the application.
+
+The `flag-info:` section of the [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) assigns meaningful labels to the flags displayed by Arm SDS. These
+labels are for the user interface and do not define the target behavior. Playback steps can also set or clear flags to
+apply the required application state before replaying a stream. See
+[User flags in the SDSIO documentation](https://arm-software.github.io/SDS-Framework/main/utilities.html#flag-info)
+for the related `flag-info:`, `setflags:`, and `clearflags:` properties.
+
+You can rename a flag in the SDS View; the label is saved in the active [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml).
+
+![Renaming an SDS flag](media/screenshots/sdsio-flags-rename.png)
+
+## Settings
+
+Configure Arm SDS under **Extensions > Arm SDS** in the VS Code Settings editor, which describes each option and its
+default value. The SDSIO monitor-port setting is machine-scoped; when using a remote extension host, change it in
+**Remote Settings**. Changes apply on the next connection.
+
+## Troubleshooting
+
+### The SDSIO-Server does not connect
+
+- Make sure an [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) is active and its `interface` matches the target firmware and connection.
+- Confirm that the target application is running and its USB, Ethernet, or RTT connection is available.
+- Open **View > Output**, select **Arm SDS**, and review the executable, [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml), monitor port, and errors.
+- Disconnect before changing the [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml) or connection interface, then connect again.
+
+### The preferred monitor port is unavailable
+
+The local monitor uses TCP port `6060` by default. Before starting SDSIO, the extension checks the preferred port. If
+it is occupied or access is denied, the operating system selects an available port, which is passed to both server and
+client. The selected port appears in the **Arm SDS** output channel; the setting itself is not changed.
+
+This check cannot detect firewall filtering, and another process could claim the port before server startup. If
+problems persist, allow the SDSIO-Server through the local firewall or choose another
+`cmsis-sds.sdsio.monitorPort` in VS Code User or Remote Settings.
+
+### Recordings or metadata do not appear
+
+- Check that `workdir` and `metadir` are valid paths relative to the active [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml).
+- Refresh the SDS View after files are created outside VS Code.
+- Check that metadata uses the stream-group base name and ends in `.sds.yml` or `.sds.yaml`.
+
+### A viewer cannot decode a file
+
+- Verify the data type, sample rate, block layout, and media properties in the associated metadata.
+- Use **Check Data File** to verify the recording.
+- Use **Open SDS Viewer** for sensor data and **Open Media Viewer** for audio, image, or video data.
+
+### Check Data File cannot find SDS Check
+
+SDS Check is provided by the SDS software pack. Install the
+[Arm SDS pack](https://www.keil.arm.com/packs/sds-arm/overview/) and make sure its pack root is available through the
+standard location or the `CMSIS_PACK_ROOT` environment variable. Restart VS Code after changing the environment.
 
 ## Links
 
-- [SDS-Framework](https://arm-software.github.io/SDS-Framework/main/index.html)
-- [SDS-YAML Metadata Formoat](https://arm-software.github.io/SDS-Framework/main/theory.html#yaml-metadata-format)
-- [SDSIO Control File](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml)
+- [Arm SDS pack overview](https://www.keil.arm.com/packs/sds-arm/overview/)
+- [SDS Framework documentation](https://arm-software.github.io/SDS-Framework/main/index.html)
+- [SDS template application](https://arm-software.github.io/SDS-Framework/main/template.html)
+- [SDS data-file format](https://arm-software.github.io/SDS-Framework/main/theory.html)
+- [SDS YAML metadata format](https://arm-software.github.io/SDS-Framework/main/theory.html#yaml-metadata-format)
+- [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml)
+- [SDS examples](https://github.com/Arm-Examples/SDS-Examples)
+- [Report an Arm SDS extension issue](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/issues)
