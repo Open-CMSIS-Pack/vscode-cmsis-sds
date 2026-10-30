@@ -91,6 +91,57 @@ test.describe('Viewer Panel — Structure', () => {
 // ── Interactions ────────────────────────────────────────────
 
 test.describe('Viewer Panel — Interactions', () => {
+    for (const viewer of ['viewer', 'audio']) {
+        test(`${viewer} live growth preserves fit, history, and a following tail`, async ({ page }) => {
+            await page.goto(`${baseUrl}/${viewer}`);
+            await page.waitForSelector('#chart');
+            const updateDomain = (end: number, reset = false) => page.evaluate(({ endTime, isReset, kind }) => {
+                const initial = (window as unknown as { __INITIAL_STATE__: Record<string, unknown> }).__INITIAL_STATE__;
+                const content = { ...((kind === 'audio' ? initial.audio : initial) as Record<string, unknown>), domainStart: 0, domainEnd: endTime };
+                window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        command: 'viewerStateChanged', live: !isReset, reset: isReset,
+                        payload: kind === 'audio' ? { ...initial, audio: content } : content
+                    }
+                }));
+            }, { endTime: end, isReset: reset, kind: viewer });
+            const handles = page.locator('.controls .ant-slider-handle');
+            const range = () => page.evaluate(kind => {
+                const command = kind === 'audio' ? 'requestMediaAudioWindow' : 'requestVisibleRangeData';
+                const request = (window as unknown as {
+                    __messages: { command?: string; payload?: { rangeStart: number; rangeEnd: number } }[];
+                }).__messages.filter(message => message.command === command).at(-1);
+                return request?.payload ? [request.payload.rangeStart, request.payload.rangeEnd] : [];
+            }, viewer);
+            await updateDomain(10, true);
+            await expect.poll(range).toEqual([0, 10]);
+            await updateDomain(19);
+            await expect.poll(range).toEqual([0, 19]);
+            await page.locator('button[title="Zoom In"]').first().click();
+            await expect.poll(async () => (await range())[1]).toBeLessThan(19);
+            const historicalRange = await range();
+            expect(historicalRange[0]).toBeGreaterThan(0);
+            expect(historicalRange[1]).toBeLessThan(19);
+            const count = await page.evaluate(() => (window as unknown as { __messages: unknown[] }).__messages.length);
+            await updateDomain(28);
+            await expect.poll(() => page.evaluate(() => (window as unknown as { __messages: unknown[] }).__messages.length)).toBeGreaterThan(count);
+            await expect.poll(range).toEqual(historicalRange);
+            await handles.nth(1).focus();
+            await page.keyboard.press('End');
+            await expect.poll(async () => (await range())[1]).toBe(28);
+            const tailRange = await range();
+            await updateDomain(37);
+            await expect.poll(async () => (await range())[1]).toBe(37);
+            expect((await range())[0]).toBeCloseTo(tailRange[0] + 9, 9);
+            await updateDomain(46);
+            await expect.poll(async () => (await range())[1]).toBe(46);
+            expect((await range())[0]).toBeCloseTo(tailRange[0] + 18, 9);
+            await updateDomain(55, true);
+            await expect.poll(range).toEqual([0, 55]);
+        });
+    }
+
     test('metadata updates preserve the chart and its zoom range', async ({ page }) => {
         await openViewer(page);
         await page.locator('button[title="Zoom In"]').first().click();

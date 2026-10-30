@@ -55,6 +55,7 @@ export type ViewerStateChangedMessage<T> = WebviewMessage & {
     command: 'viewerStateChanged';
     payload: T;
     reset?: boolean;
+    live?: boolean;
 };
 export type ImageFrame = MediaFrame & { rgbaBase64: string };
 export type SampleFrame = MediaFrame & { samples: number[] };

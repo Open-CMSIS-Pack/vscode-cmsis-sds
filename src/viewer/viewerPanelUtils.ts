@@ -21,6 +21,39 @@ import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { SDS_FILE_MATCHER } from '../webview/utilities';
 import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
+import { parseSdsBuffer } from '../sds/parser';
+import type { SdsParsedFile } from '../sds/types';
+
+export function registerSdsRefresh(filePath: string, onChange: (reset: boolean) => void): vscode.Disposable {
+    const listener = (current: fs.Stats, previous: fs.Stats) => {
+        if (!current.nlink || (current.size === previous.size && current.mtimeMs === previous.mtimeMs)) { return; }
+        const reset = !previous.nlink || current.ino !== previous.ino || current.birthtimeMs !== previous.birthtimeMs
+            || current.size <= previous.size;
+        onChange(reset);
+    };
+    fs.watchFile(filePath, { interval: 500, persistent: false }, listener);
+    return new vscode.Disposable(() => fs.unwatchFile(filePath, listener));
+}
+
+export function readSdsAppend(filePath: string, previous: SdsParsedFile): SdsParsedFile {
+    const offset = previous.totalDataSize + previous.records.length * 8;
+    const descriptor = fs.openSync(filePath, 'r');
+    try {
+        const length = Math.max(0, fs.fstatSync(descriptor).size - offset);
+        const buffer = Buffer.alloc(length);
+        const bytesRead = fs.readSync(descriptor, buffer, 0, length, offset);
+        const appended = parseSdsBuffer(buffer.subarray(0, bytesRead), filePath, { strict: false });
+        if (!appended.records.length) { return previous; }
+        const records = previous.records.concat(appended.records);
+        return {
+            filePath, records, totalRecords: records.length,
+            totalDataSize: previous.totalDataSize + appended.totalDataSize,
+            durationMs: records[records.length - 1].timestamp - records[0].timestamp,
+        };
+    } finally {
+        fs.closeSync(descriptor);
+    }
+}
 
 /**
  * Resolve the metadata (.sds.yml) file path for a given .sds file.

@@ -325,13 +325,10 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         // Ensure multi-series line colors follow the provided palette.
         colorField: seriesField,
         color,
-        scale: color && color.length > 0
-            ? {
-                color: {
-                    range: color,
-                },
-            }
-            : undefined,
+        scale: {
+            ...(color && color.length > 0 ? { color: { range: color } } : {}),
+            ...(xRange && resolveXRange ? { x: { domain: resolveXRange, nice: false } } : {}),
+        },
         ...otherRest,
         axis: {
             ...(restAxis ?? {}),

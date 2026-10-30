@@ -21,6 +21,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+vi.mock('fs', async importOriginal => {
+    const actual = await importOriginal<typeof fs>();
+    return { ...actual, watchFile: vi.fn(actual.watchFile), unwatchFile: vi.fn(actual.unwatchFile) };
+});
+
 const vscodeMockState = vi.hoisted(() => ({
     decimationPreset: 'accuracy',
     onDidSaveTextDocument: vi.fn(),
@@ -82,6 +87,8 @@ import {
     generateNonce,
     registerViewerWebview,
     registerMetadataRefresh,
+    registerSdsRefresh,
+    readSdsAppend,
     resolveMetadataPathForSdsFile,
 } from '../../src/viewer/viewerPanelUtils';
 
@@ -102,6 +109,53 @@ describe('viewerPanelUtils', () => {
 
     afterEach(() => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('reads only complete appended records and retries incomplete tails', () => {
+        const filePath = path.join(tmpDir, 'live.sds');
+        const record = Buffer.alloc(12);
+        record.writeUInt32LE(4, 4);
+        fs.writeFileSync(filePath, record.subarray(0, 6));
+        const empty = { filePath, records: [], totalRecords: 0, totalDataSize: 0, durationMs: 0 };
+        expect(readSdsAppend(filePath, empty)).toBe(empty);
+        fs.appendFileSync(filePath, record.subarray(6, 10));
+        expect(readSdsAppend(filePath, empty)).toBe(empty);
+        fs.appendFileSync(filePath, record.subarray(10));
+        const first = readSdsAppend(filePath, empty);
+        expect(first.records).toHaveLength(1);
+        record.writeUInt32LE(1000, 0);
+        fs.appendFileSync(filePath, record);
+        const second = readSdsAppend(filePath, first);
+        expect(second.records).toHaveLength(2);
+        expect(second.records[0]).toBe(first.records[0]);
+        expect(second.durationMs).toBe(1000);
+        expect(readSdsAppend(filePath, second)).toBe(second);
+    });
+
+    it('classifies file appends and resets and disposes its external-file poller', () => {
+        const watch = vi.spyOn(fs, 'watchFile').mockImplementation(() => undefined as never);
+        const unwatch = vi.spyOn(fs, 'unwatchFile').mockImplementation(() => undefined);
+        try {
+            const refresh = vi.fn();
+            const subscription = registerSdsRefresh('external.sds', refresh);
+            const listener = watch.mock.calls[0][2] as (current: fs.Stats, previous: fs.Stats) => void;
+            const previous = { nlink: 1, ino: 1, birthtimeMs: 1, size: 12, mtimeMs: 1 } as fs.Stats;
+            listener({ ...previous, size: 24, mtimeMs: 2 } as fs.Stats, previous);
+            expect(refresh).toHaveBeenLastCalledWith(false);
+            listener({ ...previous, size: 0, mtimeMs: 2 } as fs.Stats, previous);
+            expect(refresh).toHaveBeenLastCalledWith(true);
+            listener({ ...previous, ino: 2, size: 24 } as fs.Stats, previous);
+            expect(refresh).toHaveBeenLastCalledWith(true);
+            refresh.mockClear();
+            listener(previous, previous);
+            listener({ ...previous, nlink: 0 } as fs.Stats, previous);
+            expect(refresh).not.toHaveBeenCalled();
+            subscription.dispose();
+            expect(unwatch).toHaveBeenCalledWith('external.sds', listener);
+        } finally {
+            watch.mockRestore();
+            unwatch.mockRestore();
+        }
     });
 
     it('resolves metadata from mirrored metadir, direct metadir, same directory, and invalid names', () => {

@@ -176,6 +176,20 @@ Open an `.sds` file from the SDS View. Its
 the stream is decoded and displayed. The SDS Viewer shows values and charts, while the Media Viewer handles audio,
 image, and video. Related viewers synchronize by timestamp so you can correlate algorithm input and output streams.
 
+Open viewers refresh automatically as complete records are appended to the recording. For data and audio charts:
+
+- A view fitted to the entire recording expands to include new data.
+- A zoomed historical range keeps its zoom and position.
+- A zoomed range at the end follows incoming data while keeping the same time span.
+
+Audio waveforms and playback use windowed requests. Playback starts at the left edge of the visible range. When that
+range reaches the recording's end, playback can continue into arriving audio while enough data is available. Playback
+stops when it catches up with the recording and does not restart automatically. A historical range plays only to its
+selected end.
+
+A paused image viewer follows new frames only when its last frame is selected. Selecting an older frame keeps that
+selection, and incoming frames preserve spatial zoom and scroll.
+
 ![Synchronized data and video](media/screenshots/data-video-telemetry.png)
 
 ![Synchronized data and audio](media/screenshots/data-audio.png)
