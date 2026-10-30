@@ -46,7 +46,7 @@ target can also connect through a serial port, a TCP/IP socket, or an RTT connec
 the [SDS template application](https://arm-software.github.io/SDS-Framework/main/template.html) for the target-side
 application structure and instructions for configuring these interfaces.
 
-![How Arm SDS connects to target hardware](media/diagrams/top-level-architecture.svg)
+![How Arm SDS connects to target hardware](media/diagrams/top-level-architecture.png)
 
 The Arm SDS VS Code extension provides a user interface for the SDSIO-Server and SDS data file viewers. It uses the following files:
 
