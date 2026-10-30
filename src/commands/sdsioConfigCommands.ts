@@ -70,7 +70,17 @@ export function registerSdsioConfigCommands(args: RegisterSdsioConfigCommandsArg
                 return;
             }
 
-            const targetPath = path.join(workspaceFolder.uri.fsPath, `${baseName.trim()}${configExtension}`);
+            const folders = await vscode.window.showOpenDialog({
+                title: 'Select Folder',
+                openLabel: 'Select Folder',
+                defaultUri: workspaceFolder.uri,
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+            });
+            const selectedFolder = folders?.[0] ?? workspaceFolder.uri;
+
+            const targetPath = path.join(selectedFolder.fsPath, `${baseName.trim()}${configExtension}`);
             try {
                 fs.writeFileSync(targetPath, configTemplate, { encoding: 'utf-8', flag: 'wx' });
             } catch (err) {
