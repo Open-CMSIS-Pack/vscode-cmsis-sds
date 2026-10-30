@@ -21,8 +21,8 @@ import { WebviewMessenger, getInitialState } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
 import { Button, Col, ConfigProvider, Row, Slider, theme } from 'antd';
 import { ExpandOutlined, ExportOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
-import { BroadcastMessage, getIndexedSdsSuffix, Message, WebviewMessage } from '../../webview/protocol';
-import { broadcastMessage } from '../../webview/vscode-api';
+import { BroadcastMessage, getIndexedSdsSuffix, Message, ViewerStateChangedMessage, WebviewMessage } from '../../webview/protocol';
+import { broadcastMessage, setState } from '../../webview/vscode-api';
 import { decimateExtremaSeries, DecimationPreset } from './components/decimation';
 import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '../../webview/utilities';
 import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
@@ -39,6 +39,8 @@ type InitialState = {
     domainEnd?: number;
     decimationPreset?: DecimationPreset;
     fileName?: string;
+    sdsFilePath?: string;
+    metadataPath?: string;
     error?: string;
 };
 
@@ -69,7 +71,7 @@ type OutboundMessage = ({ command: 'exportCsv' } & WebviewMessage) | VisibleRang
 const messenger = new WebviewMessenger<WebviewMessage, OutboundMessage>();
 
 function DataViewerApp() {
-    const initial = getInitialState<InitialState>({});
+    const [initial, setInitial] = useState(() => getInitialState<InitialState>({}));
     const [activeChannels, setActiveChannels] = useState(() => new Set(initial.channelNames));
     const [samples, setSamples] = useState<Sample[]>(() => initial.samples ?? []);
     const [currentBlock, setCurrentBlock] = useState<number | null>(null);
@@ -157,6 +159,20 @@ function DataViewerApp() {
 
             const msg = event.data as Message;
 
+            if (msg.command === 'viewerStateChanged') {
+                const update = msg as ViewerStateChangedMessage<InitialState>;
+                if (!update.payload) { return; }
+                latestAppliedSeqRef.current = requestSeqRef.current + 1;
+                setInitial(update.payload);
+                setSamples(update.payload.samples ?? []);
+                setActiveChannels(current => new Set((update.payload.channelNames ?? []).filter(channel => {
+                    return !channelNames.includes(channel) || current.has(channel);
+                })));
+                setHighlightedTime(null);
+                setCurrentBlock(null);
+                return;
+            }
+
             if (msg.type === 'broadcast') {
                 const payload = msg as BroadcastMessage;
                 if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix(payload.fileName)) {
@@ -193,7 +209,7 @@ function DataViewerApp() {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [blockIndexFromTime, filename]);
+    }, [blockIndexFromTime, channelNames, filename]);
 
     useEffect(() => {
         if (initial.error) {
@@ -209,7 +225,7 @@ function DataViewerApp() {
         return () => {
             window.clearTimeout(handle);
         };
-    }, [initial.error, isDragging, requestVisibleRangeData, viewRange]);
+    }, [initial, isDragging, requestVisibleRangeData, viewRange]);
 
     useEffect(() => {
         if (initial.error) {
@@ -413,6 +429,9 @@ function ThemedViewerApp() {
         </ConfigProvider>
     );
 }
+
+const { sdsFilePath, metadataPath } = getInitialState<InitialState>({});
+setState({ sdsFilePath, metadataPath });
 
 const container = document.getElementById('root');
 if (container) {

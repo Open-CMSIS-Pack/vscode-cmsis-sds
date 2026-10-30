@@ -4,7 +4,7 @@
 
 - Added Windows on Arm (`win32-arm64`) build/test jobs and VSIX packages to CI and nightly builds; the bundled SDSIO server uses Windows 11's x64 emulation.
 - Added a user-level SDSIO monitor port setting with automatic fallback to an OS-assigned port when the preferred port is unavailable.
-
+- Restore data, image, audio, and video viewer tabs with their recording and metadata files after reloading the workspace.
 - Fixed reading and saving image, audio, and video SDS metadata files that do not define scalar data channels.
 - Added playback controls to the image viewer, using the stream sample frequency as the playback frame rate.
 - Aligned SDS and SDSIO schemas, snippets, generated sample projects, and metadata templates with SDS Framework 3.1.0 metadata fields.

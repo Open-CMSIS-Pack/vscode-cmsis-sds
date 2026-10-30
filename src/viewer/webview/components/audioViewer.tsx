@@ -301,24 +301,27 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         };
     }, [isPlaying, playLoadedSamples, stopPlayback]);
 
-    useEffect(() => () => {
-        const source = sourceRef.current;
-        if (source) {
-            try {
-                source.stop();
-            } catch {
-                // Source can already be stopped.
+    useEffect(() => {
+        setIsPlaying(false);
+        return () => {
+            const source = sourceRef.current;
+            if (source) {
+                try {
+                    source.stop();
+                } catch {
+                    // Source can already be stopped.
+                }
+                source.disconnect();
+                sourceRef.current = null;
             }
-            source.disconnect();
-            sourceRef.current = null;
-        }
 
-        const audioCtx = audioCtxRef.current;
-        if (audioCtx) {
-            void audioCtx.close();
-            audioCtxRef.current = null;
-        }
-    }, []);
+            const audioCtx = audioCtxRef.current;
+            if (audioCtx) {
+                void audioCtx.close();
+                audioCtxRef.current = null;
+            }
+        };
+    }, [sampleRate, state.bitDepth, state.channels]);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {

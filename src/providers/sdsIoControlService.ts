@@ -63,6 +63,8 @@ export class SdsIoControlService {
     private monitorConnected = false;
     private readonly serverLauncher: SdsioServerLauncher;
     private shutdownPromise?: Promise<void> | undefined;
+    private shutdownRequested = false;
+    private disconnectPromise?: Promise<void> | undefined;
     private connectionPromise?: Promise<boolean> | undefined;
     private connectionGeneration = 0;
 
@@ -216,7 +218,7 @@ export class SdsIoControlService {
     }
 
     canConnect(): boolean {
-        return !this.monitorConnected;
+        return !this.monitorConnected && !this.shutdownRequested && !this.disconnectPromise;
     }
 
     canDisconnect(): boolean {
@@ -224,15 +226,31 @@ export class SdsIoControlService {
     }
 
     async disconnectServer(): Promise<void> {
-        this.stop();
-        this.cancelConnection();
-        if (this.connectionPromise) {
-            await this.connectionPromise;
+        if (this.disconnectPromise) {
+            await this.disconnectPromise;
+            return;
         }
-        await this.serverLauncher.stop('Disconnecting SDSIO server terminal on user request');
+
+        this.disconnectPromise = (async () => {
+            this.stop();
+            this.cancelConnection();
+            if (this.connectionPromise) {
+                await this.connectionPromise;
+            }
+            await this.serverLauncher.stop('Disconnecting SDSIO server terminal on user request');
+        })();
+
+        try {
+            await this.disconnectPromise;
+        } finally {
+            this.disconnectPromise = undefined;
+        }
     }
 
     connectServer(): Promise<boolean> {
+        if (this.shutdownRequested || this.disconnectPromise) {
+            return Promise.resolve(false);
+        }
         if (this.connectionPromise) {
             return this.connectionPromise;
         }
@@ -324,6 +342,11 @@ export class SdsIoControlService {
             return;
         }
 
+        if (this.shutdownRequested) {
+            return;
+        }
+        this.shutdownRequested = true;
+
         this.shutdownPromise = (async () => {
             this.stop();
             this.cancelConnection();
@@ -353,12 +376,22 @@ export class SdsIoControlService {
     }
 
     private async reConnectServer(): Promise<void> {
+        if (this.shutdownRequested || this.disconnectPromise) {
+            return;
+        }
         if (this.serverLauncher.hasTerminal() || this.connectionPromise) {
             this.cancelConnection();
+            const generation = this.connectionGeneration;
             if (this.connectionPromise) {
                 await this.connectionPromise;
             }
+            if (generation !== this.connectionGeneration) {
+                return;
+            }
             await this.serverLauncher.stop('Terminating existing SDSIO server terminal due to config file change');
+            if (generation !== this.connectionGeneration) {
+                return;
+            }
             await this.connectServer();
         }
     }
