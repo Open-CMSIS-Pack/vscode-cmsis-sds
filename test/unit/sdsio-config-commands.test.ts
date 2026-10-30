@@ -239,7 +239,7 @@ describe('registerSdsioConfigCommands', () => {
 
         await getCommand('arm-sds.sds.selectConfig')();
 
-        expect(vscode.window.showInformationMessage).toHaveBeenCalledWith('No .sdsio.yml files found in the current workspace.');
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('No SDS Configuration (*.sdsio.yml file) in Workspace found');
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
     });
 

@@ -126,7 +126,7 @@ export function registerSdsioConfigCommands(args: RegisterSdsioConfigCommandsArg
         vscode.commands.registerCommand('arm-sds.sds.selectConfig', async () => {
             const configFiles = await vscode.workspace.findFiles('**/*.sdsio.yml', '**/node_modules/**');
             if (configFiles.length === 0) {
-                void vscode.window.showInformationMessage('No .sdsio.yml files found in the current workspace.');
+                void vscode.window.showErrorMessage('No SDS Configuration (*.sdsio.yml file) in Workspace found');
                 return;
             }
 
