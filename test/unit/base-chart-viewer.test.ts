@@ -4,7 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BaseChartViewer } from '../../src/viewer/webview/components/baseChartViewer';
 
 const chart = vi.hoisted(() => ({ line: vi.fn(() => null) }));
-vi.mock('@ant-design/charts', () => ({ Line: chart.line, ChartEvent: {} }));
+vi.mock('@ant-design/charts', async () => {
+    const { forwardRef } = await import('react');
+    return {
+        Line: forwardRef<unknown, Record<string, unknown>>(function MockLine(props, _ref) {
+            return chart.line(props);
+        }),
+        ChartEvent: {},
+    };
+});
 
 describe('BaseChartViewer viewport bounds', () => {
     beforeEach(() => { chart.line.mockClear(); });
@@ -15,16 +23,16 @@ describe('BaseChartViewer viewport bounds', () => {
             xRange: [10, 20], color: ['red'],
         }));
         expect(chart.line).toHaveBeenCalledWith(expect.objectContaining({
-            scale: { x: { domain: [10, 20], nice: false }, color: { range: ['red'] } },
-        }), expect.anything());
+            scale: { x: { domain: [10, 20], nice: false, tickMethod: expect.any(Function) }, color: { range: ['red'] } },
+        }));
     });
 
     it('updates the plotted domain when the fitted or following viewport grows', () => {
         for (const xRange of [[0, 10], [0, 19], [9, 19]] as [number, number][]) {
             renderToString(createElement(BaseChartViewer, { data: [], xRange }));
             expect(chart.line).toHaveBeenLastCalledWith(expect.objectContaining({
-                scale: { x: { domain: xRange, nice: false } },
-            }), expect.anything());
+                scale: { x: { domain: xRange, nice: false, tickMethod: expect.any(Function) } },
+            }));
         }
     });
 });

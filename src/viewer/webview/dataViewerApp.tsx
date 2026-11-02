@@ -74,7 +74,7 @@ function DataViewerApp() {
     const [initial, setInitial] = useState(() => getInitialState<InitialState>({}));
     const [activeChannels, setActiveChannels] = useState(() => new Set(initial.channelNames));
     const [samples, setSamples] = useState<Sample[]>(() => initial.samples ?? []);
-    const [currentBlock, setCurrentBlock] = useState<number | null>(null);
+    const [currentBlock, setCurrentBlock] = useState<number | null>(() => initial.samples?.[0]?.index ?? null);
     const [resetKey, setResetKey] = useState(0);
     const channelNames = useMemo(() => initial.channelNames ?? [], [initial.channelNames]);
     const stats = initial.stats ?? ({} as SdsFileStats);
@@ -96,7 +96,7 @@ function DataViewerApp() {
         onSliderAfterChange,
     } = useViewportRange({ domainStart, domainEnd, resetKey });
 
-    const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
+    const [highlightedTime, setHighlightedTime] = useState<number | null>(() => initial.samples?.[0]?.timeSeconds ?? null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
     const [decimationPreset] = useState<DecimationPreset>(() => initial.decimationPreset ?? 'accuracy');
     const requestSeqRef = useRef(0);
@@ -171,8 +171,8 @@ function DataViewerApp() {
                     return !channelNames.includes(channel) || current.has(channel);
                 })));
                 if (!update.live) {
-                    setHighlightedTime(null);
-                    setCurrentBlock(null);
+                    setHighlightedTime(update.payload.samples?.[0]?.timeSeconds ?? null);
+                    setCurrentBlock(update.payload.samples?.[0]?.index ?? null);
                 }
                 return;
             }
