@@ -18,6 +18,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChartEvent, Line } from '@ant-design/charts';
 
+const ChartLine = React.memo(Line);
+const legend = { position: 'top' };
+const slider = { x: false, y: false };
+
 interface ChartCoordinateLike {
     x: number;
     y: number;
@@ -303,19 +307,24 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return null;
     }, [data, xField]);
 
-    const tooltipTitle = (value: ChartSample) => {
+    const userTooltipTitle = userTooltip?.title;
+    const tooltipTitle = useCallback((value: ChartSample) => {
         const blockIndex = typeof value?.index === 'number' ? value.index : null;
         const blockTitle = blockIndex !== null ? `Block: ${blockIndex + 1}` : 'Block';
 
-        if (userTooltip?.title && typeof userTooltip.title === 'function') {
-            const userTitle = userTooltip.title(value);
+        if (typeof userTooltipTitle === 'function') {
+            const userTitle = userTooltipTitle(value);
             if (typeof userTitle === 'string' && userTitle.length > 0) {
                 return `${blockTitle} | ${userTitle}`;
             }
         }
 
         return blockTitle;
-    };
+    }, [userTooltipTitle]);
+
+    const labelFormatter = useCallback((value: string) => {
+        return blockLabelForX(Number(value)) ?? value;
+    }, [blockLabelForX]);
 
     const tickPositions = useMemo(() => {
         const positions = new Set<number>();
@@ -344,6 +353,25 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         });
     }, [tickPositions]);
 
+    const scale = useMemo(() => ({
+        ...(color && color.length > 0 ? { color: { range: color } } : {}),
+        x: { tickMethod },
+    }), [color, tickMethod]);
+
+    const axis = useMemo(() => ({
+        ...(restAxis ?? {}),
+        x: {
+            ...(restAxis?.x ?? {}),
+            labelFormatter,
+        },
+    }), [restAxis, labelFormatter]);
+
+    const tooltip = useMemo(() => ({
+        showMarkers: true,
+        ...(userTooltip ?? {}),
+        title: tooltipTitle,
+    }), [userTooltip, tooltipTitle]);
+
     const config = {
         data,
         xField,
@@ -352,31 +380,16 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         // Ensure multi-series line colors follow the provided palette.
         colorField: seriesField,
         color,
-        scale: {
-            ...(color && color.length > 0 ? { color: { range: color } } : {}),
-            x: { tickMethod },
-        },
+        scale,
         ...otherRest,
-        axis: {
-            ...(restAxis ?? {}),
-            x: {
-                ...(restAxis?.x ?? {}),
-                labelFormatter: (value: string) => {
-                    return blockLabelForX(Number(value)) ?? value;
-                },
-            },
-        },
+        axis,
         animate: false,
-        legend: { position: 'top' },
-        tooltip: {
-            showMarkers: true,
-            ...(userTooltip ?? {}),
-            title: tooltipTitle,
-        },
-        slider: { x: false, y: false },
+        legend,
+        tooltip,
+        slider,
     };
 
-    const mergedOnReady = (plot: ChartPlotLike) => {
+    const mergedOnReady = useCallback((plot: ChartPlotLike) => {
         if (detachCanvasListenersRef.current) {
             detachCanvasListenersRef.current();
             detachCanvasListenersRef.current = null;
@@ -432,14 +445,14 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         if (typeof userOnReady === 'function') {
             userOnReady(plot);
         }
-    };
+    }, [resolvePlotRegion, setPlotRegionIfChanged, userOnReady, xField]);
 
     const cursorLeftPx = cursorLeftFromX(highlightedX);
 
     return (
         <div ref={containerRef} style={{ position: 'relative', height: '100%' }} onWheel={handleWheel}>
             <div id='chart' style={{ height: '100%' }}>
-                <Line {...config} onReady={mergedOnReady} ref={plotRef} />
+                <ChartLine {...config} onReady={mergedOnReady} ref={plotRef} />
             </div>
             {plotRegion && cursorLeftPx !== null && (
                 <div

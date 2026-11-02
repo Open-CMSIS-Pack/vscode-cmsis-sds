@@ -190,6 +190,54 @@ test.describe('Viewer Panel — Structure', () => {
 // ── Interactions ────────────────────────────────────────────
 
 test.describe('Viewer Panel — Interactions', () => {
+    test('preserves hidden signals when clicking and dragging the time cursor', async ({ page }) => {
+        await captureCanvasLabels(page);
+        await openViewer(page);
+
+        const canvas = page.locator('#chart canvas');
+        const signalPixelCount = () => canvas.evaluate(element => {
+            const surface = element as HTMLCanvasElement;
+            const context = surface.getContext('2d')!;
+            const cursor = document.querySelector<HTMLElement>('#chart + div')!;
+            const top = Math.ceil(parseFloat(cursor.style.top) * devicePixelRatio);
+            const height = Math.floor(parseFloat(cursor.style.height) * devicePixelRatio);
+            const pixels = context.getImageData(0, top, surface.width, height).data;
+            let count = 0;
+            for (let offset = 0; offset < pixels.length; offset += 4) {
+                if (pixels[offset] === 129 && pixels[offset + 1] === 199 && pixels[offset + 2] === 132) {
+                    count++;
+                }
+            }
+            return count;
+        });
+
+        await expect.poll(signalPixelCount).toBeGreaterThan(10);
+        const legendLabel = await canvas.evaluate(element => {
+            const labels = (window as unknown as {
+                chartLabels: WeakMap<HTMLCanvasElement, { text: string; x: number; y: number }[]>;
+            }).chartLabels.get(element as HTMLCanvasElement) ?? [];
+            return labels.find(label => label.text === 'y');
+        });
+        expect(legendLabel).toBeDefined();
+        await canvas.click({ position: { x: legendLabel!.x + 3, y: legendLabel!.y } });
+        await expect.poll(signalPixelCount).toBe(0);
+
+        const bounds = (await canvas.boundingBox())!;
+        const cursor = (await page.locator('#chart + div').boundingBox())!;
+        const plotY = cursor.y + cursor.height / 2;
+        await page.mouse.click(bounds.x + bounds.width / 2, plotY);
+        await expect(page.locator('.info-bar')).toContainText('2 of 3');
+        await expect.poll(signalPixelCount).toBe(0);
+
+        const ticks = await getXAxisTicks(page);
+        await page.mouse.move(bounds.x + bounds.width / 2, plotY);
+        await page.mouse.down();
+        await page.mouse.move(bounds.x + ticks[0].x + 1, plotY, { steps: 5 });
+        await page.mouse.up();
+        await expect(page.locator('.info-bar')).toContainText('1 of 3');
+        await expect.poll(signalPixelCount).toBe(0);
+    });
+
     test('initializes refreshed data at its first timestamp and clears empty data', async ({ page }) => {
         await openViewer(page);
         await page.evaluate(() => {
