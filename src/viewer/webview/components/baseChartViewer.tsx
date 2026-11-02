@@ -317,6 +317,33 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return blockTitle;
     };
 
+    const tickPositions = useMemo(() => {
+        const positions = new Set<number>();
+        for (const point of data) {
+            const position = point[xField];
+            if (typeof position === 'number' && Number.isFinite(position)) {
+                positions.add(position);
+            }
+        }
+        return [...positions].sort((left, right) => left - right);
+    }, [data, xField]);
+
+    const tickMethod = useCallback((min: number, max: number, requestedCount?: number) => {
+        const positions = tickPositions.filter(position => position >= min && position <= max);
+        const count = requestedCount !== undefined && Number.isFinite(requestedCount)
+            ? Math.max(0, Math.floor(requestedCount))
+            : positions.length;
+        if (positions.length <= count) {
+            return positions;
+        }
+        if (count <= 1) {
+            return positions.slice(0, count);
+        }
+        return Array.from({ length: count }, (_, index) => {
+            return positions[Math.round(index * (positions.length - 1) / (count - 1))];
+        });
+    }, [tickPositions]);
+
     const config = {
         data,
         xField,
@@ -325,13 +352,10 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         // Ensure multi-series line colors follow the provided palette.
         colorField: seriesField,
         color,
-        scale: color && color.length > 0
-            ? {
-                color: {
-                    range: color,
-                },
-            }
-            : undefined,
+        scale: {
+            ...(color && color.length > 0 ? { color: { range: color } } : {}),
+            x: { tickMethod },
+        },
         ...otherRest,
         axis: {
             ...(restAxis ?? {}),
