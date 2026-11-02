@@ -245,14 +245,19 @@
                     "group": "1_config1@0"
                 },
                 {
-                    "command": "arm-sds.sds.newConfig",
+                    "command": "arm-sds.sds.openConfig",
                     "when": "view == sdsExplorer",
                     "group": "1_config1@1"
                 },
                 {
-                    "command": "arm-sds.sds.closeConfig",
+                    "command": "arm-sds.sds.newConfig",
                     "when": "view == sdsExplorer",
                     "group": "1_config1@2"
+                },
+                {
+                    "command": "arm-sds.sds.closeConfig",
+                    "when": "view == sdsExplorer",
+                    "group": "1_config1@3"
                 },
                 {
                     "command": "arm-sds.refreshExplorer",
