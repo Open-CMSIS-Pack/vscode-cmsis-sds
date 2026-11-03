@@ -361,6 +361,11 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     }, [data, xField]);
 
     const tickPositions = useMemo(() => [...samplesByX.keys()].sort((left, right) => left - right), [samplesByX]);
+    const cursorSamplesRef = useRef({ samplesByX, tickPositions, xField });
+
+    useEffect(() => {
+        cursorSamplesRef.current = { samplesByX, tickPositions, xField };
+    }, [samplesByX, tickPositions, xField]);
 
     const tickMethod = useCallback((min: number, max: number, requestedCount?: number) => {
         const positions = tickPositions.filter(position => position >= min && position <= max);
@@ -459,6 +464,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                     return;
                 }
                 const clickedTime = xScale.invert((x - region.left) / (region.right - region.left));
+                const { samplesByX, tickPositions, xField } = cursorSamplesRef.current;
                 if (!Number.isFinite(clickedTime) || tickPositions.length === 0) {
                     return;
                 }
@@ -543,7 +549,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         if (typeof userOnReady === 'function') {
             userOnReady(plot);
         }
-    }, [resolvePlotRegion, samplesByX, setPlotRegionIfChanged, tickPositions, userOnReady, xField]);
+    }, [resolvePlotRegion, setPlotRegionIfChanged, userOnReady]);
 
     const cursorLeftPx = cursorLeftFromX(highlightedX);
 
