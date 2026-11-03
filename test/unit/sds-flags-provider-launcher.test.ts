@@ -25,6 +25,7 @@ const launcherState = {
 
 const launcherMock = {
     hasTerminal: vi.fn(() => launcherState.hasTerminal),
+    getRunningServerPort: vi.fn(async (_preferredPort: number): Promise<number | undefined> => undefined),
     stop: vi.fn(async () => undefined),
     start: vi.fn(async () => true),
     dispose: vi.fn(),
@@ -70,6 +71,7 @@ vi.mock('vscode', () => {
         },
         window: {
             showInputBox: vi.fn(),
+            showErrorMessage: vi.fn(),
             createOutputChannel: vi.fn(() => ({
                 show: vi.fn(),
                 hide: vi.fn(),
@@ -103,6 +105,7 @@ import * as vscode from 'vscode';
 class FakeMonitor extends EventEmitter {
     start = vi.fn(async () => {
         this.emit('connected');
+        this.emit('info', { sdsFlags: 0, sdsIdleRate: undefined });
     });
 
     stop = vi.fn();
@@ -167,12 +170,15 @@ describe('SdsIoControlService launcher delegation', () => {
         launcherState.hasTerminal = false;
         launcherMock.hasTerminal.mockReset();
         launcherMock.hasTerminal.mockImplementation(() => launcherState.hasTerminal);
+        launcherMock.getRunningServerPort.mockReset();
+        launcherMock.getRunningServerPort.mockResolvedValue(undefined);
         launcherMock.stop.mockReset();
         launcherMock.stop.mockResolvedValue(undefined);
         launcherMock.start.mockReset();
         launcherMock.start.mockResolvedValue(true);
         launcherMock.dispose.mockReset();
         vi.mocked(vscode.window.showInputBox).mockReset();
+        vi.mocked(vscode.window.showErrorMessage).mockReset();
         vi.mocked(vscode.workspace.getConfiguration).mockReset();
         vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({ get: vi.fn(() => 6060) } as never);
         vi.mocked(selectSdsioMonitorPort).mockReset();
@@ -202,6 +208,83 @@ describe('SdsIoControlService launcher delegation', () => {
             configFile: 'active.sdsio.yml',
             monitorPort: 6060,
         });
+    });
+
+    it('connects to a running server without stopping it or launching another', async () => {
+        launcherMock.getRunningServerPort.mockResolvedValue(7070);
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
+
+        await expect(service.connectServer()).resolves.toBe(true);
+
+        expect(launcherMock.getRunningServerPort).toHaveBeenCalledWith(6060);
+        expect(monitor.start).toHaveBeenCalledWith(7070);
+        expect(selectSdsioMonitorPort).not.toHaveBeenCalled();
+        expect(launcherMock.start).not.toHaveBeenCalled();
+        expect(launcherMock.stop).not.toHaveBeenCalled();
+    });
+
+    it('reports an unreachable running server without launching another', async () => {
+        launcherMock.getRunningServerPort.mockResolvedValue(6060);
+        const monitor = new FakeMonitor();
+        monitor.start.mockRejectedValueOnce(new Error('connection refused'));
+        const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
+
+        await expect(service.connectServer()).resolves.toBe(false);
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringMatching(/check and close the running SDSIO server process/i));
+        expect(launcherMock.start).not.toHaveBeenCalled();
+        expect(launcherMock.stop).not.toHaveBeenCalled();
+        expect(monitor.stop).toHaveBeenCalled();
+    });
+
+    it('times out an existing server that accepts TCP but sends no monitor info', async () => {
+        vi.useFakeTimers();
+        try {
+            launcherMock.getRunningServerPort.mockResolvedValue(6060);
+            const monitor = new FakeMonitor();
+            monitor.start.mockImplementationOnce(async () => { monitor.emit('connected'); });
+            const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
+
+            const connection = service.connectServer();
+            await vi.runAllTimersAsync();
+
+            await expect(connection).resolves.toBe(false);
+            expect(service.canConnect()).toBe(true);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringMatching(/check and close the running SDSIO server process/i));
+            expect(launcherMock.start).not.toHaveBeenCalled();
+            expect(monitor.stop).toHaveBeenCalledTimes(2);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not launch a server if process discovery fails', async () => {
+        launcherMock.getRunningServerPort.mockRejectedValue(new Error('process list unavailable'));
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
+
+        await expect(service.connectServer()).resolves.toBe(false);
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringMatching(/check and close any running SDSIO server process/i));
+        expect(launcherMock.start).not.toHaveBeenCalled();
+        expect(monitor.start).not.toHaveBeenCalled();
+    });
+
+    it('cancels connection during process discovery without launching or showing an error', async () => {
+        let resolvePort!: (port: number | undefined) => void;
+        launcherMock.getRunningServerPort.mockReturnValueOnce(new Promise((resolve) => { resolvePort = resolve; }));
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
+        const connection = service.connectServer();
+        const disconnect = service.disconnectServer();
+        resolvePort(6060);
+
+        await disconnect;
+        await expect(connection).resolves.toBe(false);
+        expect(launcherMock.start).not.toHaveBeenCalled();
+        expect(monitor.start).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
     });
 
     it.each([6060, 7070])('uses preferred port %i for both server and client', async (port) => {
@@ -257,6 +340,7 @@ describe('SdsIoControlService launcher delegation', () => {
         const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
         const first = service.connectServer();
         expect(service.connectServer()).toBe(first);
+        await Promise.resolve();
         const disconnect = service.disconnectServer();
         resolvePort(49152);
 
@@ -277,6 +361,7 @@ describe('SdsIoControlService launcher delegation', () => {
             const service = new SdsIoControlService(configManager as never, monitor as never, 'extension');
 
             const connection = service.connectServer();
+            await Promise.resolve();
             const reconnect = configManager.triggerConfigFileChange();
             const stopping = operation === 'disconnect' ? service.disconnectServer() : service.shutdown();
             resolvePort(49152);
@@ -942,8 +1027,9 @@ describe('SdsIoControlService launcher delegation', () => {
         }
     });
 
-    it('stops an existing terminal before connecting', async () => {
+    it('reuses its existing terminal when connecting', async () => {
         launcherState.hasTerminal = true;
+        launcherMock.getRunningServerPort.mockResolvedValue(6060);
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');
         const service = new SdsIoControlService(
@@ -954,12 +1040,9 @@ describe('SdsIoControlService launcher delegation', () => {
 
         await service.connectServer();
 
-        expect(launcherMock.stop).toHaveBeenCalledWith('Terminating existing SDSIO server terminal before connecting');
-        expect(launcherMock.start).toHaveBeenCalledWith({
-            basePath: 'c:/workspace/ext',
-            configFile: 'active.sdsio.yml',
-            monitorPort: 6060,
-        });
+        expect(launcherMock.stop).not.toHaveBeenCalled();
+        expect(launcherMock.start).not.toHaveBeenCalled();
+        expect(monitor.start).toHaveBeenCalledWith(6060);
     });
 
     it('reconnects from config changes by stopping a connected monitor first', async () => {

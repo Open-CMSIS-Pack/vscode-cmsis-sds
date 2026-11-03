@@ -22,6 +22,9 @@ import * as vscode from 'vscode';
 import { SdsioServerLauncher } from '../../src/controller/sdsioServerLauncher';
 import { SdsDiagnostics } from '../../src/diagnostics/sdsDiagnostics';
 
+const processList = vi.hoisted(() => ({ execute: vi.fn() }));
+vi.mock('child_process', () => ({ execFile: processList.execute }));
+
 type MockTerminal = {
     sendText: ReturnType<typeof vi.fn>;
     show: ReturnType<typeof vi.fn>;
@@ -62,6 +65,7 @@ describe('SdsioServerLauncher', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        processList.execute.mockReset();
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sdsio-launcher-'));
         mockTerminal = {
             sendText: vi.fn(),
@@ -127,6 +131,49 @@ describe('SdsioServerLauncher', () => {
         expect(started).toBe(false);
         expect(launcher.hasTerminal()).toBe(false);
         expect((diagnostics.error as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    });
+
+    it.each([
+        [[], undefined],
+        [[process.platform === 'win32' ? '"C:\\tools\\sdsio-server.exe" --mon-port 7070' : '/tools/sdsio-server --mon-port=7070'], 7070],
+        [['/tools/sdsio-server --mon-port 7070'], 7070],
+        [['/tools/sdsio-server "--mon-port" "7070"'], 7070],
+        [['/tools/sdsio-server'], 6060],
+        [['/tools/sdsio-server -m 7070', '/tools/sdsio-server -m 6060'], 6060],
+    ] as const)('discovers monitor ports from running server commands %j', async (commands, expectedPort) => {
+        processList.execute.mockImplementation((file, _args, _options, callback) => {
+            const stdout = file === 'powershell.exe'
+                ? JSON.stringify(commands.map((CommandLine) => ({ CommandLine })))
+                : commands.join('\n');
+            callback(null, { stdout });
+        });
+        const launcher = new SdsioServerLauncher(diagnostics);
+
+        await expect(launcher.getRunningServerPort(6060)).resolves.toBe(expectedPort);
+        expect(vscode.window.createTerminal).not.toHaveBeenCalled();
+    });
+
+    it('propagates process discovery errors instead of treating them as no running server', async () => {
+        processList.execute.mockImplementation((_file, _args, _options, callback) => {
+            callback(new Error('access denied'));
+        });
+        const launcher = new SdsioServerLauncher(diagnostics);
+
+        await expect(launcher.getRunningServerPort(6060)).rejects.toThrow('access denied');
+    });
+
+    it('retains its monitor port and refuses to create a second terminal', async () => {
+        const toolsDir = path.join(tmpDir, 'tools');
+        fs.mkdirSync(toolsDir, { recursive: true });
+        fs.writeFileSync(path.join(toolsDir, 'sdsio-server.exe'), '');
+        const launcher = new SdsioServerLauncher(diagnostics);
+        const options = { basePath: tmpDir, configFile: 'sample.sdsio.yml', monitorPort: 49152 };
+
+        await expect(launcher.start(options)).resolves.toBe(true);
+        await expect(launcher.getRunningServerPort(6060)).resolves.toBe(49152);
+        await expect(launcher.start(options)).resolves.toBe(false);
+        expect(vscode.window.createTerminal).toHaveBeenCalledTimes(1);
+        expect(processList.execute).not.toHaveBeenCalled();
     });
 
     it('stop sends shutdown command and disposes terminal', async () => {
