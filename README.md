@@ -22,7 +22,7 @@ an FVP simulation model. Arm SDS lets you review SDS data from both environments
 only to physical targets to record and play back data.
 
 <!--![Get started with Arm SDS](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/tree/main/docs/SDS-Intro.gif?raw=true)-->
-![Get started with Arm SDS](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/blob/feature/update-readme/docs/SDS-Intro.gif?raw=true)
+![Get started with Arm SDS](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/blob/feature/update-readme/docs/SDS-Intro-F10.gif?raw=true)
 
 ## What you can do
 
