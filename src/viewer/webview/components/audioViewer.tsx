@@ -375,6 +375,31 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         };
     }, []);
 
+    const tooltipFormatter = useCallback((datum: { y?: unknown }) => ({
+        name: 'audio',
+        value: typeof datum?.y === 'number' ? datum.y.toFixed(5) : String(datum?.y ?? ''),
+    }), []);
+
+    const tooltipTitle = useCallback((value: unknown) => {
+        const time = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
+        return Number.isFinite(time) ? `Time: ${time.toFixed(4)} s` : time;
+    }, []);
+
+    const tooltip = useMemo(() => ({
+        showMarkers: true,
+        shared: true,
+        crosshairs: {
+            line: {
+                style: {
+                    stroke: 'rgba(150,150,150,0.45)',
+                    lineWidth: 1,
+                },
+            },
+        },
+        formatter: tooltipFormatter,
+        title: tooltipTitle,
+    }), [tooltipFormatter, tooltipTitle]);
+
     return (
         <div className="media-page">
             <Row className="info-bar">
@@ -399,26 +424,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     onCursorChange={onCursorChange}
                     onZoomRangeChange={(range) => setVisibleRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
-                    tooltip={{
-                        showMarkers: true,
-                        shared: true,
-                        crosshairs: {
-                            line: {
-                                style: {
-                                    stroke: 'rgba(150,150,150,0.45)',
-                                    lineWidth: 1,
-                                },
-                            },
-                        },
-                        formatter: (datum: { y?: unknown }) => ({
-                            name: 'audio',
-                            value: typeof datum?.y === 'number' ? datum.y.toFixed(5) : String(datum?.y ?? ''),
-                        }),
-                        title: (value: unknown) => {
-                            const t = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
-                            return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
-                        },
-                    }}
+                    tooltip={tooltip}
                 />
             </div>
             <Row className="controls" gutter={12}>

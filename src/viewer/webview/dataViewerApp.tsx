@@ -267,7 +267,7 @@ function DataViewerApp() {
         });
     };
 
-    const colors = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'];
+    const colors = useMemo(() => ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'], []);
 
     const chartData = useMemo<ChartSample[]>(() => {
         const [start, end] = viewRange;
@@ -323,6 +323,31 @@ function DataViewerApp() {
 
     const windowLength = Math.max(0, viewRange[1] - viewRange[0]);
 
+    const tooltipFormatter = useCallback((datum: { channel?: unknown; y?: unknown }) => ({
+        name: datum?.channel ?? 'value',
+        value: typeof datum?.y === 'number' ? datum.y.toFixed(4) : String(datum?.y ?? ''),
+    }), []);
+
+    const tooltipTitle = useCallback((value: unknown) => {
+        const time = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
+        return Number.isFinite(time) ? `Time: ${time.toFixed(4)} s` : time;
+    }, []);
+
+    const tooltip = useMemo(() => ({
+        showMarkers: true,
+        shared: true,
+        crosshairs: {
+            line: {
+                style: {
+                    stroke: 'rgba(150,150,150,0.45)',
+                    lineWidth: 1,
+                },
+            },
+        },
+        formatter: tooltipFormatter,
+        title: tooltipTitle,
+    }), [tooltipFormatter, tooltipTitle]);
+
     if (initial.error) {
         return (
             <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
@@ -362,26 +387,7 @@ function DataViewerApp() {
                     onCursorChange={onCursorChange}
                     onZoomRangeChange={(range) => setViewRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
-                    tooltip={{
-                        showMarkers: true,
-                        shared: true,
-                        crosshairs: {
-                            line: {
-                                style: {
-                                    stroke: 'rgba(150,150,150,0.45)',
-                                    lineWidth: 1,
-                                },
-                            },
-                        },
-                        formatter: (datum: { channel?: unknown; y?: unknown }) => ({
-                            name: datum?.channel ?? 'value',
-                            value: typeof datum?.y === 'number' ? datum.y.toFixed(4) : String(datum?.y ?? ''),
-                        }),
-                        title: (value: unknown) => {
-                            const t = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
-                            return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
-                        },
-                    }}
+                    tooltip={tooltip}
                 />
             </div>
             <Row className='controls' gutter={12}>

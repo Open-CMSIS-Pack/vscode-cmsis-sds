@@ -18,6 +18,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChartEvent, Line } from '@ant-design/charts';
 
+const ChartLine = React.memo(Line);
+const slider = { x: false, y: false };
+
 interface ChartCoordinateLike {
     x: number;
     y: number;
@@ -38,16 +41,39 @@ interface ChartCoordinate {
 interface ChartPlotLike {
     chart?: {
         getCoordinate: () => ChartCoordinate | undefined;
-        getContext: () => { views: { layout: { width: number; height: number; marginLeft: number; marginRight: number; marginTop: number; marginBottom: number; paddingLeft: number; paddingRight: number; paddingTop: number; paddingBottom: number; innerWidth: number; innerHeight: number } }[] };
+        getContext: () => {
+            canvas?: {
+                addEventListener: (event: string, handler: (event: ChartPointerEvent) => void, capture: boolean) => void;
+                removeEventListener: (event: string, handler: (event: ChartPointerEvent) => void, capture: boolean) => void;
+            };
+            views: {
+                layout: { width: number; height: number; marginLeft: number; marginRight: number; marginTop: number; marginBottom: number; paddingLeft: number; paddingRight: number; paddingTop: number; paddingBottom: number; innerWidth: number; innerHeight: number };
+                scale?: {
+                    color?: { getOptions: () => { domain?: unknown[] } };
+                    x?: { invert: (value: number) => number };
+                };
+            }[];
+        };
         getDataByXY: (point: ChartCoordinateLike, options?: { shared: boolean }) => Record<string, ChartSample> | undefined;
+        emit?: (event: string, payload: { data: { channel: string; value: unknown } }) => void;
         on?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
         off?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
     };
 }
 
+interface ChartEventTarget {
+    attributes?: { class?: string };
+    className?: string;
+    parentNode?: ChartEventTarget | null;
+    __data__?: { index?: number };
+}
+
 interface ChartPointerEvent {
-    target?: { attributes?: { class?: string } };
+    target?: ChartEventTarget;
+    data?: { channel?: string; value?: unknown; values?: unknown[] };
     buttons?: number;
+    shiftKey?: boolean;
+    stopPropagation?: () => void;
     nativeEvent?: MouseEvent;
     type: (typeof ChartEvent)[keyof typeof ChartEvent];
     x: number;
@@ -94,6 +120,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const detachCanvasListenersRef = useRef<(() => void) | null>(null);
     const onCursorChangeRef = useRef<typeof onCursorChange>(onCursorChange);
+    const selectedValuesRef = useRef<unknown[] | undefined>(undefined);
     const [plotRegion, setPlotRegion] = useState<PlotRegion | null>(null);
 
     const resolveXRange = useMemo<[number, number] | null>(() => {
@@ -303,30 +330,37 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         return null;
     }, [data, xField]);
 
-    const tooltipTitle = (value: ChartSample) => {
+    const userTooltipTitle = userTooltip?.title;
+    const tooltipTitle = useCallback((value: ChartSample) => {
         const blockIndex = typeof value?.index === 'number' ? value.index : null;
         const blockTitle = blockIndex !== null ? `Block: ${blockIndex + 1}` : 'Block';
 
-        if (userTooltip?.title && typeof userTooltip.title === 'function') {
-            const userTitle = userTooltip.title(value);
+        if (typeof userTooltipTitle === 'function') {
+            const userTitle = userTooltipTitle(value);
             if (typeof userTitle === 'string' && userTitle.length > 0) {
                 return `${blockTitle} | ${userTitle}`;
             }
         }
 
         return blockTitle;
-    };
+    }, [userTooltipTitle]);
 
-    const tickPositions = useMemo(() => {
-        const positions = new Set<number>();
+    const labelFormatter = useCallback((value: string) => {
+        return blockLabelForX(Number(value)) ?? value;
+    }, [blockLabelForX]);
+
+    const samplesByX = useMemo(() => {
+        const samples = new Map<number, ChartSample>();
         for (const point of data) {
             const position = point[xField];
             if (typeof position === 'number' && Number.isFinite(position)) {
-                positions.add(position);
+                samples.set(position, point);
             }
         }
-        return [...positions].sort((left, right) => left - right);
+        return samples;
     }, [data, xField]);
+
+    const tickPositions = useMemo(() => [...samplesByX.keys()].sort((left, right) => left - right), [samplesByX]);
 
     const tickMethod = useCallback((min: number, max: number, requestedCount?: number) => {
         const positions = tickPositions.filter(position => position >= min && position <= max);
@@ -344,6 +378,31 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         });
     }, [tickPositions]);
 
+    const { scale, legend } = useMemo(() => ({
+        scale: {
+            ...(color && color.length > 0 ? { color: { range: color } } : {}),
+            x: { tickMethod },
+        },
+        legend: {
+            position: 'top',
+            color: { defaultSelect: selectedValuesRef.current },
+        },
+    }), [color, tickMethod]);
+
+    const axis = useMemo(() => ({
+        ...(restAxis ?? {}),
+        x: {
+            ...(restAxis?.x ?? {}),
+            labelFormatter,
+        },
+    }), [restAxis, labelFormatter]);
+
+    const tooltip = useMemo(() => ({
+        showMarkers: true,
+        ...(userTooltip ?? {}),
+        title: tooltipTitle,
+    }), [userTooltip, tooltipTitle]);
+
     const config = {
         data,
         xField,
@@ -352,31 +411,16 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         // Ensure multi-series line colors follow the provided palette.
         colorField: seriesField,
         color,
-        scale: {
-            ...(color && color.length > 0 ? { color: { range: color } } : {}),
-            x: { tickMethod },
-        },
+        scale,
         ...otherRest,
-        axis: {
-            ...(restAxis ?? {}),
-            x: {
-                ...(restAxis?.x ?? {}),
-                labelFormatter: (value: string) => {
-                    return blockLabelForX(Number(value)) ?? value;
-                },
-            },
-        },
+        axis,
         animate: false,
-        legend: { position: 'top' },
-        tooltip: {
-            showMarkers: true,
-            ...(userTooltip ?? {}),
-            title: tooltipTitle,
-        },
-        slider: { x: false, y: false },
+        legend,
+        tooltip,
+        slider,
     };
 
-    const mergedOnReady = (plot: ChartPlotLike) => {
+    const mergedOnReady = useCallback((plot: ChartPlotLike) => {
         if (detachCanvasListenersRef.current) {
             detachCanvasListenersRef.current();
             detachCanvasListenersRef.current = null;
@@ -393,8 +437,8 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 onCursorChangeRef.current?.(time, blockIndex);
             };
 
-            const pointerClickEvent = `plot:${ChartEvent.CLICK}`;
-            const pointerMoveEvent = `plot:${ChartEvent.POINTER_MOVE}`;
+            const pointerClickEvent = ChartEvent.CLICK;
+            const pointerMoveEvent = ChartEvent.POINTER_MOVE;
             const sizeChangeEvent = `${ChartEvent.AFTER_RENDER}`;
 
             const handlePointerEvent = (e: ChartPointerEvent) => {
@@ -406,7 +450,28 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                     return;
                 }
 
-                const sample = plot.chart?.getDataByXY({ x: x, y: y }, { shared: true })?.[0];
+                const region = resolvePlotRegion(plot, canvasEl);
+                const xScale = plot.chart?.getContext().views[0]?.scale?.x;
+                if (!region || !xScale || !Number.isFinite(y) || x < region.left || x > region.right || y < region.top || y > region.bottom || region.right <= region.left) {
+                    return;
+                }
+                const clickedTime = xScale.invert((x - region.left) / (region.right - region.left));
+                if (!Number.isFinite(clickedTime) || tickPositions.length === 0) {
+                    return;
+                }
+                let lower = 0;
+                let upper = tickPositions.length - 1;
+                while (lower < upper) {
+                    const middle = Math.floor((lower + upper) / 2);
+                    if (tickPositions[middle] < clickedTime) {
+                        lower = middle + 1;
+                    } else {
+                        upper = middle;
+                    }
+                }
+                const nearest = lower > 0 && clickedTime - tickPositions[lower - 1] <= tickPositions[lower] - clickedTime
+                    ? lower - 1 : lower;
+                const sample = samplesByX.get(tickPositions[nearest]);
                 const time = sample?.[xField];
                 const blockIndex = sample?.index;
                 if (typeof time === 'number' && typeof blockIndex === 'number') {
@@ -418,12 +483,55 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 setPlotRegionIfChanged(resolvePlotRegion(plot, canvasEl));
             };
 
-            plot.chart?.on?.(pointerClickEvent, handlePointerEvent);
-            plot.chart?.on?.(pointerMoveEvent, handlePointerEvent);
+            const handleLegendFilter = (event: ChartPointerEvent) => {
+                if (event.data?.channel === 'color') {
+                    selectedValuesRef.current = event.data.values ? [...event.data.values] : undefined;
+                }
+            };
+            const handleLegendFocus = (event: ChartPointerEvent) => {
+                if (event.data?.channel === 'color') {
+                    selectedValuesRef.current = [event.data.value];
+                }
+            };
+            const handleLegendReset = () => {
+                selectedValuesRef.current = undefined;
+            };
+
+            const handleLegendClick = (event: ChartPointerEvent) => {
+                if (!event.shiftKey && !event.nativeEvent?.shiftKey) {
+                    return;
+                }
+                let item = event.target;
+                while (item && !item.className?.split(/\s+/).includes('items-item')) {
+                    item = item.parentNode ?? undefined;
+                }
+                const index = item?.__data__?.index;
+                const domain = plot.chart?.getContext().views[0]?.scale?.color?.getOptions().domain;
+                if (index === undefined || !domain || index < 0 || index >= domain.length) {
+                    return;
+                }
+                event.stopPropagation?.();
+                const value = domain[index];
+                const selectedValues = selectedValuesRef.current;
+                const reset = selectedValues?.length === 1 && selectedValues[0] === value;
+                plot.chart?.emit?.(reset ? 'legend:reset' : 'legend:focus', { data: { channel: 'color', value } });
+            };
+
+            const chartCanvas = plot.chart?.getContext().canvas;
+            plot.chart?.on?.('legend:filter', handleLegendFilter);
+            plot.chart?.on?.('legend:focus', handleLegendFocus);
+            plot.chart?.on?.('legend:reset', handleLegendReset);
+            chartCanvas?.addEventListener('click', handleLegendClick, true);
+            chartCanvas?.addEventListener(pointerClickEvent, handlePointerEvent, true);
+            chartCanvas?.addEventListener(pointerMoveEvent, handlePointerEvent, true);
             plot.chart?.on?.(sizeChangeEvent, handleSizeChange);
             detachCanvasListenersRef.current = () => {
-                plot.chart?.off?.(pointerClickEvent, handlePointerEvent);
-                plot.chart?.off?.(pointerMoveEvent, handlePointerEvent);
+                plot.chart?.off?.('legend:filter', handleLegendFilter);
+                plot.chart?.off?.('legend:focus', handleLegendFocus);
+                plot.chart?.off?.('legend:reset', handleLegendReset);
+                chartCanvas?.removeEventListener('click', handleLegendClick, true);
+                chartCanvas?.removeEventListener(pointerClickEvent, handlePointerEvent, true);
+                chartCanvas?.removeEventListener(pointerMoveEvent, handlePointerEvent, true);
                 plot.chart?.off?.(sizeChangeEvent, handleSizeChange);
                 canvasRef.current = null;
             };
@@ -432,14 +540,14 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         if (typeof userOnReady === 'function') {
             userOnReady(plot);
         }
-    };
+    }, [resolvePlotRegion, samplesByX, setPlotRegionIfChanged, tickPositions, userOnReady, xField]);
 
     const cursorLeftPx = cursorLeftFromX(highlightedX);
 
     return (
         <div ref={containerRef} style={{ position: 'relative', height: '100%' }} onWheel={handleWheel}>
             <div id='chart' style={{ height: '100%' }}>
-                <Line {...config} onReady={mergedOnReady} ref={plotRef} />
+                <ChartLine {...config} onReady={mergedOnReady} ref={plotRef} />
             </div>
             {plotRegion && cursorLeftPx !== null && (
                 <div
