@@ -190,6 +190,47 @@ test.describe('Viewer Panel — Structure', () => {
 // ── Interactions ────────────────────────────────────────────
 
 test.describe('Viewer Panel — Interactions', () => {
+    test('shows an in-flight sample response when another live update arrives first', async ({ page }) => {
+        await captureCanvasLabels(page);
+        await openViewer(page);
+        await expect.poll(() => getXAxisLabels(page)).toEqual(['1', '2', '3']);
+        await page.evaluate(() => {
+            const initial = (window as unknown as { __INITIAL_STATE__: Record<string, unknown> }).__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', live: true, payload: { ...initial, domainEnd: 0.05 } },
+            }));
+        });
+        await page.waitForFunction(() => (window as unknown as {
+            __messages: { command: string; payload?: { rangeEnd: number } }[];
+        }).__messages.some(message => message.command === 'requestVisibleRangeData' && message.payload?.rangeEnd === 0.05));
+        await page.evaluate(() => {
+            const state = window as unknown as {
+                __INITIAL_STATE__: Record<string, unknown>;
+                __messages: { command: string; requestId: number; payload: Record<string, unknown> }[];
+            };
+            const request = state.__messages.filter(message => message.command === 'requestVisibleRangeData').at(-1)!;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', live: true, payload: { ...state.__INITIAL_STATE__, domainEnd: 0.08 } },
+            }));
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: {
+                    command: 'visibleRangeData', requestId: request.requestId,
+                    payload: {
+                        ...request.payload,
+                        samples: Array.from({ length: 6 }, (_, index) => ({
+                            index, timestamp: index * 10, timeSeconds: index / 100,
+                            values: { x: index, y: index + 1, z: index + 2 },
+                        })),
+                    },
+                },
+            }));
+        });
+        await expect.poll(async () => (await getXAxisLabels(page)).at(-1)).toBe('6');
+    });
+
     test('selects newly appended samples by clicking and dragging during live recording', async ({ page }) => {
         await captureCanvasLabels(page);
         await openViewer(page);

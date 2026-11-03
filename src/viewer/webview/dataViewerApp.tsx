@@ -163,7 +163,9 @@ function DataViewerApp() {
             if (msg.command === 'viewerStateChanged') {
                 const update = msg as ViewerStateChangedMessage<InitialState>;
                 if (!update.payload) { return; }
-                latestAppliedSeqRef.current = requestSeqRef.current + 1;
+                if (!update.live || update.reset) {
+                    latestAppliedSeqRef.current = requestSeqRef.current + 1;
+                }
                 setInitial(update.payload);
                 if (update.reset) { setResetKey(current => current + 1); }
                 if (!update.live) { setSamples(update.payload.samples ?? []); }
