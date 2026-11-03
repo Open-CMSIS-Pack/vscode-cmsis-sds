@@ -43,7 +43,7 @@ const sdsio: Downloadable = new Downloadable(
     async (target) => {
         const { os, arch } = {
             'win32-x64': { os: 'windows', arch: '' },
-            'win32-arm64': { os: 'windows', arch: '' },
+            'win32-arm64': { os: 'windows', arch: '-arm64' },
             'linux-x64': { os: 'linux', arch: '' },
             'linux-arm64': { os: 'linux', arch: '-arm64' },
             'darwin-x64': { os: 'macos', arch: '' },
@@ -72,7 +72,7 @@ const sdsioNightly: Downloadable = new Downloadable(
     async (target) => {
         const { os, arch } = {
             'win32-x64': { os: 'windows', arch: '' },
-            'win32-arm64': { os: 'windows', arch: '' },
+            'win32-arm64': { os: 'windows', arch: '-arm64' },
             'linux-x64': { os: 'linux', arch: '' },
             'linux-arm64': { os: 'linux', arch: '-arm64' },
             'darwin-x64': { os: 'macos', arch: '' },
