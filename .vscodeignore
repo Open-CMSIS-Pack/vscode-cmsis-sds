@@ -13,6 +13,7 @@ out/src/studio/**
 out/src/viewer/**
 out/src/webview/**
 e2e-report/**
+docs/SDS-Intro.gif
 esbuild.js
 .gitignore
 tsconfig.json
