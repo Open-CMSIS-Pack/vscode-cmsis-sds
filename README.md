@@ -21,10 +21,7 @@ optimize ML models, reproduce a problem, compare algorithm or model versions, an
 an FVP simulation model. Arm SDS lets you review SDS data from both environments; its built-in SDSIO-Server connects
 only to physical targets to record and play back data.
 
-> **Demo video coming soon:** Load an existing [`*.sdsio.yml` control file](https://arm-software.github.io/SDS-Framework/main/utilities.html#sdsio-control-file-sdsioyml), show recorded images, connect to a target, record images, and play the recorded images back to the target.
-
-<!-- Replace this placeholder with the final linked video thumbnail. -->
-<!-- [![Get started with Arm SDS](media/get-started-thumbnail.png)](VIDEO_URL) -->
+![Get started with Arm SDS](https://github.com/Open-CMSIS-Pack/vscode-cmsis-sds/tree/main/docs/SDS-Intro-F10.gif?raw=true)
 
 ## What you can do
 
