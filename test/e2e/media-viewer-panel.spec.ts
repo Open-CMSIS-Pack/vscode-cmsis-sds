@@ -644,7 +644,7 @@ test.describe('Media Viewer — Audio', () => {
 
     test('plays only samples in the visible range after zooming', async ({ page }) => {
         await page.addInitScript(() => {
-            const audioEvents = { bufferLengths: [] as number[], stopCount: 0 };
+            const audioEvents = { bufferLengths: [] as number[], startCount: 0, stopCount: 0 };
             Object.assign(window, { __audioEvents: audioEvents });
 
             class AudioContextMock {
@@ -663,7 +663,7 @@ test.describe('Media Viewer — Audio', () => {
                         connect: () => undefined,
                         disconnect: () => undefined,
                         onended: null,
-                        start: () => undefined,
+                        start: () => audioEvents.startCount++,
                         stop: () => audioEvents.stopCount++,
                     };
                 }
@@ -698,6 +698,10 @@ test.describe('Media Viewer — Audio', () => {
         await expect(page.locator('button[title="Play Visible Range"]')).toContainText('Play');
         await page.keyboard.press('Space');
         await expect(page.locator('button[title="Pause"]')).toBeVisible();
+        // Pause is shown while the audio window is still loading; wait until a source has started.
+        await expect.poll(() => page.evaluate(() => (
+            window as Window & { __audioEvents: { startCount: number } }
+        ).__audioEvents.startCount)).toBe(2);
         await page.evaluate(() => {
             const initial = (window as unknown as { __INITIAL_STATE__: { audio: Record<string, unknown> } }).__INITIAL_STATE__;
             window.dispatchEvent(new MessageEvent('message', {
