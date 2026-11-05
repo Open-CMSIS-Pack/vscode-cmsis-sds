@@ -228,9 +228,12 @@ jobs:
           path: .
 
       - name: Download tools
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOWNLOAD_SCRIPT: ${{ github.event_name == 'release' && 'download-tools' || 'download-tools:nightly' }}
         run: |
           npm ci
-          npm run download-tools -- --target ${{ matrix.target }} --no-cache
+          npm run "$DOWNLOAD_SCRIPT" -- --target ${{ matrix.target }} --no-cache
 
       - name: Package VSIX
         run: npm run package -- --target ${{ matrix.target }}

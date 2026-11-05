@@ -67,7 +67,9 @@ npm run download-tools -- --target win32-x64 --no-cache
 npm run download-tools:nightly -- --target win32-x64 --no-cache
 ```
 
-Nightly downloads require `GITHUB_TOKEN` with access to the upstream Actions artifacts.
+CI uses nightly downloads for pull requests, branch builds, and manual runs. Published release builds use the
+configured release download instead. Nightly downloads require `GITHUB_TOKEN` with access to the upstream Actions
+artifacts.
 Supported targets are `win32-x64`, `linux-x64`, `linux-arm64`, and `darwin-arm64`.
 Windows ARM64 and Intel macOS downloads are not available; no cross-architecture fallback is used.
 
