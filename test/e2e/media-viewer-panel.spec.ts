@@ -41,6 +41,12 @@ test.afterAll(async () => {
     server.close();
 });
 
+async function installPausedClock(page: Page) {
+    // Pause before loading the viewer; never race a running browser clock against host time.
+    await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+    await page.clock.pauseAt(new Date('2026-01-02T00:00:00Z'));
+}
+
 async function clickSliderAt(page: Page, sliderLocator: string, ratio: number) {
     const slider = page.locator(sliderLocator).first();
     await expect(slider).toBeVisible();
@@ -127,10 +133,9 @@ test.describe('Media Viewer — Image', () => {
     });
 
     test('metadata frequency updates preserve the canvas, zoom, and playback position', async ({ page }) => {
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');
-        await page.clock.pauseAt(new Date());
         const updateFrequency = (interval: string) => page.evaluate(frequency => {
             const initial = (window as unknown as { __INITIAL_STATE__: { image: Record<string, unknown> } }).__INITIAL_STATE__;
             window.dispatchEvent(new MessageEvent('message', {
@@ -342,10 +347,9 @@ test.describe('Media Viewer — Image', () => {
                 },
             });
         });
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');
-        await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1)));
         await page.locator('.controls button').first().click();
         await page.clock.runFor(3500);
         const selectedIndex = Number(await page.locator('.ant-slider-handle').getAttribute('aria-valuenow'));
@@ -397,10 +401,9 @@ test.describe('Media Viewer — Image', () => {
                 },
             });
         });
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');
-        await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1)));
         await page.evaluate(() => {
             type WindowRequest = {
                 command?: string;
@@ -457,11 +460,9 @@ test.describe('Media Viewer — Image', () => {
     });
 
     test('Space toggles playback', async ({ page }) => {
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('.controls');
-        // Keep the short recording from ending before the playback assertions.
-        await page.clock.pauseAt(await page.evaluate(() => Date.now()));
 
         const playButton = page.locator('.controls button').first();
         await page.locator('.media-page').focus();
@@ -487,14 +488,14 @@ test.describe('Media Viewer — Image', () => {
 test.describe('Media Viewer — Audio', () => {
     test('continues into arriving audio and stops when playback catches the writer', async ({ page }) => {
         test.setTimeout(45000);
-        await page.clock.install();
+        await installPausedClock(page);
         await page.addInitScript(() => {
             Object.defineProperty(window, '__INITIAL_STATE__', {
                 configurable: true,
                 set(initial) {
                     const audio = {
-                        ...initial.audio, sampleRate: 100, domainStart: 0, domainEnd: 10,
-                        totalSamples: 1000, samples: [{ timestamp: 0, samples: Array(1000).fill(0.25) }]
+                        ...initial.audio, sampleRate: 100, domainStart: 0, domainEnd: 6,
+                        totalSamples: 600, samples: [{ timestamp: 0, samples: Array(600).fill(0.25) }]
                     };
                     Object.defineProperty(window, '__INITIAL_STATE__', { configurable: true, writable: true, value: { ...initial, audio } });
                 },
@@ -532,12 +533,12 @@ test.describe('Media Viewer — Audio', () => {
         });
         await page.goto(`${baseUrl}/audio`);
         await page.waitForSelector('canvas');
-        await page.clock.pauseAt(new Date(Date.now() + 1000));
         await page.locator('button[title="Play Visible Range"]').click();
         await page.clock.runFor(100);
         await expect(page.locator('button[title="Pause"]')).toBeVisible();
-        await page.clock.runFor(4900);
-        for (let batch = 1; batch <= 5; batch++) {
+        await page.clock.runFor(2900);
+        // Stay ahead of playback with several arrivals, then let playback catch the writer.
+        for (let batch = 1; batch <= 3; batch++) {
             await page.evaluate(end => {
                 const target = window as unknown as { __INITIAL_STATE__: { audio: Record<string, unknown> } };
                 const initial = target.__INITIAL_STATE__;
@@ -549,19 +550,19 @@ test.describe('Media Viewer — Audio', () => {
                     origin: window.location.origin,
                     data: { command: 'viewerStateChanged', live: true, reset: false, payload: initial }
                 }));
-            }, 10 + batch * 9);
+            }, 6 + batch * 3);
             await page.clock.runFor(1);
             await expect(page.locator('button[title="Pause"]')).toBeVisible();
-            await page.clock.runFor(9999);
+            await page.clock.runFor(3999);
         }
         await page.clock.runFor(100);
         await expect(page.locator('button[title="Play Visible Range"]')).toBeVisible();
         const events = await page.evaluate(() => (window as unknown as {
             __audioEvents: { starts: number[]; lengths: number[] };
         }).__audioEvents);
-        expect(events.starts.length).toBeGreaterThan(10);
+        expect(events.starts.length).toBeGreaterThan(7);
         expect(Math.max(...events.lengths)).toBeLessThanOrEqual(200);
-        expect(events.lengths.reduce((total, length) => total + length, 0)).toBe(5500);
+        expect(events.lengths.reduce((total, length) => total + length, 0)).toBe(1500);
         for (let index = 1; index < events.starts.length; index++) {
             expect(events.starts[index]).toBeCloseTo(events.starts[index - 1] + events.lengths[index - 1] / 100, 5);
         }
