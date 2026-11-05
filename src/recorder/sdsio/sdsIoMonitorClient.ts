@@ -147,6 +147,41 @@ class MonitorFrameAccumulator {
     }
 }
 
+export function probeSdsioMonitor(port: number, timeoutMs = 500): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+            reject(new RangeError('SDSIO monitor port must be an integer between 1 and 65535.'));
+            return;
+        }
+        const socket = net.createConnection({ host: '127.0.0.1', port });
+        let greeting = Buffer.alloc(0);
+        let finished = false;
+        const finish = (isMonitor: boolean) => {
+            if (finished) { return; }
+            finished = true;
+            clearTimeout(timer);
+            socket.destroy();
+            resolve(isMonitor);
+        };
+        const timer = setTimeout(() => finish(false), timeoutMs);
+        socket.on('error', () => finish(false));
+        socket.on('close', () => finish(false));
+        socket.on('data', (data: Buffer) => {
+            if (finished) { return; }
+            const limit = HEADER_SIZE + 8 + MAX_MONITOR_FILENAME_BYTES;
+            greeting = Buffer.concat([greeting, data.subarray(0, limit - greeting.length)]);
+            if (greeting.length < HEADER_SIZE) { return; }
+            const payloadLength = greeting.readUInt32LE(12);
+            if (greeting.readUInt32LE(0) !== MON_INFO ||
+                (payloadLength !== 0 && (payloadLength < 8 || payloadLength > 8 + MAX_MONITOR_FILENAME_BYTES))) {
+                finish(false);
+            } else if (greeting.length >= HEADER_SIZE + payloadLength) {
+                finish(true);
+            }
+        });
+    });
+}
+
 // ── Monitor Client ─────────────────────────────────────────
 
 /**

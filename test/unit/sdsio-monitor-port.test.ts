@@ -26,7 +26,7 @@ afterEach(() => vi.restoreAllMocks());
 async function listen(server: net.Server, port = 0): Promise<number> {
     await new Promise<void>((resolve, reject) => {
         server.once('error', reject);
-        server.listen({ host: '0.0.0.0', port, exclusive: true }, resolve);
+        server.listen({ host: '127.0.0.1', port, exclusive: true }, resolve);
     });
     return (server.address() as net.AddressInfo).port;
 }
@@ -87,8 +87,8 @@ describe('SDSIO monitor port selection', () => {
         vi.spyOn(net, 'createServer').mockReturnValueOnce(preferred as never).mockReturnValueOnce(fallback as never);
 
         expect(await selectSdsioMonitorPort(6060)).toBe(49152);
-        expect(preferred.listen).toHaveBeenCalledWith({ host: '0.0.0.0', port: 6060, exclusive: true }, expect.any(Function));
-        expect(fallback.listen).toHaveBeenCalledWith({ host: '0.0.0.0', port: 0, exclusive: true }, expect.any(Function));
+        expect(preferred.listen).toHaveBeenCalledWith({ host: '127.0.0.1', port: 6060, exclusive: true }, expect.any(Function));
+        expect(fallback.listen).toHaveBeenCalledWith({ host: '127.0.0.1', port: 0, exclusive: true }, expect.any(Function));
         expect(fallback.close).toHaveBeenCalledTimes(1);
     });
 

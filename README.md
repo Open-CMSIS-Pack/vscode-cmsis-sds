@@ -224,9 +224,12 @@ default value. The SDSIO monitor-port setting is machine-scoped; when using a re
 
 ### The preferred monitor port is unavailable
 
-The local monitor uses TCP port `6060` by default. Before starting SDSIO, the extension checks the preferred port. If
-it is occupied or access is denied, the operating system selects an available port, which is passed to both server and
-client. The selected port appears in the **Arm SDS** output channel; the setting itself is not changed.
+The local monitor uses TCP port `6060` by default. Before starting SDSIO, the extension checks for a valid SDSIO
+`INFO` greeting on the preferred port and reuses an identified monitor. Otherwise it checks port availability on
+`127.0.0.1`, matching the server's listening address. If the port is occupied or access is denied, the operating system
+selects an available port, which is passed to both server and client. The selected port appears in the **Arm SDS**
+output channel; the setting itself is not changed. A TCP connection alone is not considered a successful monitor
+connection: the extension must receive SDSIO `INFO`, including after launching a new server.
 
 This check cannot detect firewall filtering, and another process could claim the port before server startup. If
 problems persist, allow the SDSIO-Server through the local firewall or choose another

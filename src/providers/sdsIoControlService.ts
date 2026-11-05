@@ -15,7 +15,7 @@
  */
 
 import * as vscode from 'vscode';
-import { SDSIO_ALL_PLAYBACK_TEST_CASE, SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
+import { probeSdsioMonitor, SDSIO_ALL_PLAYBACK_TEST_CASE, SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
 import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS, type SdsioPlaybackTestCase } from '../controller/sdsioConfigManager';
 import { DEFAULT_SDSIO_MONITOR_PORT, selectSdsioMonitorPort } from '../recorder/sdsio/sdsIoMonitorPort';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
@@ -286,7 +286,9 @@ export class SdsIoControlService {
         try {
             const preferredPort = vscode.workspace.getConfiguration('cmsis-sds.sdsio')
                 .get<number>('monitorPort', DEFAULT_SDSIO_MONITOR_PORT);
-            const runningPort = await this.serverLauncher.getRunningServerPort(preferredPort);
+            const runningPort = await probeSdsioMonitor(preferredPort)
+                ? preferredPort
+                : await this.serverLauncher.getRunningServerPort(preferredPort);
             if (generation !== this.connectionGeneration) {
                 return false;
             }
@@ -336,7 +338,7 @@ export class SdsIoControlService {
             if (generation !== this.connectionGeneration) {
                 return false;
             }
-            if (this.monitorConnected && (!existingServer || this.monitorInfoReceived)) {
+            if (this.monitorConnected && this.monitorInfoReceived) {
                 return true;
             }
             await new Promise((resolve) => setTimeout(resolve, 100));
@@ -344,9 +346,8 @@ export class SdsIoControlService {
 
         this.monitor.stop();
         this.setMonitorConnected(false);
-        if (existingServer) {
-            void vscode.window.showErrorMessage(existingServerError);
-        }
+        void vscode.window.showErrorMessage(existingServer ? existingServerError
+            : 'No valid SDSIO monitor INFO received. Check the SDSIO server terminal and Arm SDS output for startup errors or a monitor port conflict.');
         return false;
     }
 
@@ -489,12 +490,13 @@ export class SdsIoControlService {
     }
 
     private onMonitorConnected(): void {
-        if (this.setMonitorConnected(true)) {
-            this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
-        }
+        this.monitorInfoReceived = false;
+        this.setMonitorConnected(false);
+        this.diagnostics.info(DiagnosticSource.Server, 'Monitor TCP connection established; waiting for SDSIO INFO.');
     }
 
     private onMonitorDisconnected(): void {
+        this.monitorInfoReceived = false;
         if (this.setMonitorConnected(false)) {
             this.diagnostics.info(DiagnosticSource.Server, 'Disconnected from SDSIO monitor');
         }
@@ -502,6 +504,9 @@ export class SdsIoControlService {
 
     private onMonitorInfo(info: SdsioMonitorInfo): void {
         this.monitorInfoReceived = true;
+        if (this.setMonitorConnected(true)) {
+            this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
+        }
         for (let i = 0; i < this.flags.length && i < 8; i++) {
             const bit = (info.sdsFlags >> i) & 1;
             this.flags[i].enabled = bit !== 0;
