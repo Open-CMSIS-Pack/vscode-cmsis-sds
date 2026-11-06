@@ -213,30 +213,23 @@ export function registerSdsFileCommands(args: RegisterSdsFileCommandsArgs): void
                 void vscode.window.showErrorMessage(`Selected SDS file does not exist: ${filePath}`);
                 return;
             }
-            const cmsisPackRoot = getCmsisPackRoot(process.env);
-            if (!cmsisPackRoot || !fs.existsSync(cmsisPackRoot)) {
-                void vscode.window.showErrorMessage('Default pack root doesn\'t exist or CMSIS_PACK_ROOT environment variable is not set. Please set it to the CMSIS Pack root directory.');
-                return;
-            }
-
-            const sdsPackRoot = path.join(cmsisPackRoot, 'ARM', 'SDS');
-            if (!fs.existsSync(sdsPackRoot)) {
-                void vscode.window.showErrorMessage(`SDS Pack root directory does not exist: ${sdsPackRoot}`);
-                return;
-            }
-            const recentVersionFolder = fs.readdirSync(sdsPackRoot).sort().pop();
-            if (!recentVersionFolder) {
-                void vscode.window.showErrorMessage(`No version folders found in SDS Pack root: ${sdsPackRoot}`);
-                return;
-            }
-            const sdsCheck = path.join(sdsPackRoot, recentVersionFolder, 'utilities', 'sds-check.py');
+            const sdsCheck = path.join(context.extensionUri.fsPath, 'tools', os.platform() === 'win32' ? 'sds-check.exe' : 'sds-check');
             if (!fs.existsSync(sdsCheck)) {
-                void vscode.window.showErrorMessage(`sds-check.py not found in SDS Pack: ${sdsCheck}`);
+                void vscode.window.showErrorMessage(`Bundled SDS Check executable not found: ${sdsCheck}. Reinstall the CMSIS SDS extension.`);
                 return;
             }
-            const terminal = vscode.window.createTerminal('SDS Check');
-            terminal.show();
-            terminal.sendText(`python "${sdsCheck}" -i "${filePath}"`);
+            const task = new vscode.Task(
+                { type: 'sds-check' },
+                vscode.TaskScope.Global,
+                'SDS Check',
+                'SDS',
+                new vscode.ProcessExecution(sdsCheck, ['-i', filePath]),
+                []
+            );
+            task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.New };
+            void vscode.tasks.executeTask(task).then(undefined, (err: unknown) => {
+                void vscode.window.showErrorMessage(`Failed to run SDS Check: ${err instanceof Error ? err.message : String(err)}`);
+            });
         })
     );
 }
@@ -304,15 +297,3 @@ async function doExportCsv(sdsPath: string): Promise<void> {
         vscode.window.showErrorMessage(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
-
-export function getCmsisPackRoot(environment = process.env): string {
-    const environmentValue = environment['CMSIS_PACK_ROOT'];
-    if (environmentValue) {
-        return environmentValue;
-    }
-
-    // Default to standard cache location
-    return os.platform() === 'win32'
-        ? path.join(environment['LOCALAPPDATA'] ?? os.homedir(), 'arm', 'packs')
-        : path.join(os.homedir(), '.cache', 'arm', 'packs');
-};

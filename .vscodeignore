@@ -13,7 +13,6 @@ out/src/studio/**
 out/src/viewer/**
 out/src/webview/**
 e2e-report/**
-docs/SDS-Intro.gif
 docs/SDS-Intro-F10.gif
 esbuild.js
 .gitignore
@@ -29,6 +28,7 @@ node_modules/**
 .vscode-test/**
 .vscodeignore
 test-results/**
+test/unit/fixtures/sds-toolbox/**
 coverage/**
 *.log
 *.tmp

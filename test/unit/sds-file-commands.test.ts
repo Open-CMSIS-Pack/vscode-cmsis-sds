@@ -44,6 +44,11 @@ const commandMockState = vi.hoisted(() => {
     };
 });
 
+vi.mock('os', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('os')>();
+    return { ...actual, platform: vi.fn(actual.platform) };
+});
+
 vi.mock('vscode', () => {
     class Uri {
         constructor(public fsPath: string) { }
@@ -57,6 +62,23 @@ vi.mock('vscode', () => {
         commands: {
             registerCommand: commandMockState.registerCommandMock,
         },
+        Task: class {
+            constructor(
+                public definition: unknown,
+                public scope: unknown,
+                public name: string,
+                public source: string,
+                public execution: unknown,
+                public problemMatchers: string[],
+            ) { }
+        },
+        ProcessExecution: class {
+            constructor(public process: string, public args: string[]) { }
+        },
+        TaskScope: { Global: 1 },
+        TaskRevealKind: { Always: 1 },
+        TaskPanelKind: { New: 3 },
+        tasks: { executeTask: vi.fn(async () => ({})) },
         Uri,
         TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
         window: {
@@ -122,7 +144,7 @@ import {
     parseMetadataFile,
     parseSdsFile,
 } from '../../src/sds';
-import { getCmsisPackRoot, registerSdsFileCommands } from '../../src/commands/sdsFileCommands';
+import { registerSdsFileCommands } from '../../src/commands/sdsFileCommands';
 
 function createContext() {
     return {
@@ -180,6 +202,7 @@ describe('registerSdsFileCommands', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(os.platform).mockReset();
         vi.mocked(SdsViewerPanel.createOrShow).mockReset();
         vi.mocked(SdsMediaViewerPanel.createOrShow).mockReset();
         resetVscodeMockDefaults();
@@ -199,6 +222,7 @@ describe('registerSdsFileCommands', () => {
     });
 
     afterEach(() => {
+        vi.restoreAllMocks();
         fs.rmSync(tmpDir, { recursive: true, force: true });
         if (originalCmsisPackRoot === undefined) {
             delete process.env.CMSIS_PACK_ROOT;
@@ -520,52 +544,65 @@ describe('registerSdsFileCommands', () => {
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('Quick open failed: find failed');
     });
 
-    it('validates sds-check prerequisites and runs the latest bundled checker', () => {
-        registerCommands();
+    it('validates the selected SDS file and reports a missing bundled checker', () => {
+        const { context } = registerCommands();
+        context.extensionUri = vscode.Uri.file(tmpDir);
         const command = getCommand('arm-sds.sdsCheck');
         const sdsPath = path.join(tmpDir, 'checked.0.sds');
+        const missingPath = path.join(tmpDir, 'missing.0.sds');
+        const checkerPath = path.join(tmpDir, 'tools', os.platform() === 'win32' ? 'sds-check.exe' : 'sds-check');
         fs.writeFileSync(sdsPath, '', 'utf-8');
 
         command();
-        command(path.join(tmpDir, 'missing.0.sds'));
-
-        process.env.CMSIS_PACK_ROOT = path.join(tmpDir, 'does-not-exist');
+        command(missingPath);
         command(sdsPath);
-
-        process.env.CMSIS_PACK_ROOT = tmpDir;
-        command(sdsPath);
-
-        const packRoot = path.join(tmpDir, 'ARM', 'SDS');
-        fs.mkdirSync(packRoot, { recursive: true });
-        command(sdsPath);
-
-        fs.mkdirSync(path.join(packRoot, '1.0.0', 'utilities'), { recursive: true });
-        const missingCheckerPath = path.join(packRoot, '1.0.0', 'utilities', 'sds-check.py');
-        command(sdsPath);
-
-        fs.mkdirSync(path.join(packRoot, '2.0.0', 'utilities'), { recursive: true });
-        const checkerPath = path.join(packRoot, '2.0.0', 'utilities', 'sds-check.py');
-        fs.writeFileSync(checkerPath, '', 'utf-8');
-        const terminal = { sendText: vi.fn(), show: vi.fn() };
-        vi.mocked(vscode.window.createTerminal).mockReturnValueOnce(terminal as never);
-
-        command(vscode.Uri.file(sdsPath));
 
         expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('No SDS file selected for sds-check.');
-        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(`Selected SDS file does not exist: ${path.join(tmpDir, 'missing.0.sds')}`);
-        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('Default pack root doesn\'t exist or CMSIS_PACK_ROOT environment variable is not set. Please set it to the CMSIS Pack root directory.');
-        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(`SDS Pack root directory does not exist: ${packRoot}`);
-        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(`No version folders found in SDS Pack root: ${packRoot}`);
-        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(`sds-check.py not found in SDS Pack: ${missingCheckerPath}`);
-        expect(vscode.window.createTerminal).toHaveBeenCalledWith('SDS Check');
-        expect(terminal.show).toHaveBeenCalled();
-        expect(terminal.sendText).toHaveBeenCalledWith(`python "${checkerPath}" -i "${sdsPath}"`);
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(`Selected SDS file does not exist: ${missingPath}`);
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(`Bundled SDS Check executable not found: ${checkerPath}. Reinstall the CMSIS SDS extension.`);
+        expect(vscode.tasks.executeTask).not.toHaveBeenCalled();
     });
 
-    it('resolves CMSIS pack roots from the environment or platform default', () => {
-        const defaultSuffix = os.platform() === 'win32' ? path.join('arm', 'packs') : path.join('.cache', 'arm', 'packs');
+    it.each(['win32', 'linux', 'darwin'] as const)('runs the bundled checker on %s without an SDS pack', (platform) => {
+        vi.mocked(os.platform).mockReturnValue(platform);
+        const { context } = registerCommands();
+        context.extensionUri = vscode.Uri.file(path.join(tmpDir, 'extension with spaces'));
+        const checkerPath = path.join(context.extensionUri.fsPath, 'tools', platform === 'win32' ? 'sds-check.exe' : 'sds-check');
+        fs.mkdirSync(path.dirname(checkerPath), { recursive: true });
+        fs.writeFileSync(checkerPath, '', 'utf-8');
+        const sdsPath = path.join(tmpDir, 'checked file.0.sds');
+        fs.writeFileSync(sdsPath, '', 'utf-8');
+        const command = getCommand('arm-sds.sdsCheck');
 
-        expect(getCmsisPackRoot({ CMSIS_PACK_ROOT: '/custom/packs' })).toBe('/custom/packs');
-        expect(getCmsisPackRoot({})).toContain(defaultSuffix);
+        delete process.env.CMSIS_PACK_ROOT;
+        command(sdsPath);
+        process.env.CMSIS_PACK_ROOT = path.join(tmpDir, 'nonexistent pack root');
+        command(vscode.Uri.file(sdsPath));
+        command(new SdsTreeItem('checked file', 'file', sdsPath));
+
+        expect(vscode.tasks.executeTask).toHaveBeenCalledTimes(3);
+        expect(vscode.tasks.executeTask).toHaveBeenCalledWith(expect.objectContaining({
+            name: 'SDS Check',
+            scope: vscode.TaskScope.Global,
+            execution: expect.objectContaining({ process: checkerPath, args: ['-i', sdsPath] }),
+            presentationOptions: { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.New },
+        }));
+        expect(vscode.window.createTerminal).not.toHaveBeenCalled();
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    });
+
+    it('reports failures to start the SDS Check task', async () => {
+        const { context } = registerCommands();
+        context.extensionUri = vscode.Uri.file(tmpDir);
+        const checkerPath = path.join(tmpDir, 'tools', os.platform() === 'win32' ? 'sds-check.exe' : 'sds-check');
+        fs.mkdirSync(path.dirname(checkerPath), { recursive: true });
+        fs.writeFileSync(checkerPath, '', 'utf-8');
+        const sdsPath = path.join(tmpDir, 'checked.0.sds');
+        fs.writeFileSync(sdsPath, '', 'utf-8');
+        vi.mocked(vscode.tasks.executeTask).mockRejectedValueOnce(new Error('launch failed'));
+
+        await getCommand('arm-sds.sdsCheck')(sdsPath);
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('Failed to run SDS Check: launch failed');
     });
 });
