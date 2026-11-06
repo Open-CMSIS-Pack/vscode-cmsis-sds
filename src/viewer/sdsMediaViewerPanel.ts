@@ -45,6 +45,8 @@ import {
     buildViewerWebviewHtml,
     registerViewerWebview,
     registerMetadataRefresh,
+    registerSdsRefresh,
+    readSdsAppend,
     resolveMetadataPathForSdsFile,
 } from './viewerPanelUtils';
 import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
@@ -68,6 +70,7 @@ type MediaAudioWindowRequest = {
         rangeEnd: number;
         plotWidth: number;
         quality: 'low' | 'high';
+        purpose?: 'waveform' | 'playback';
     };
 };
 
@@ -92,6 +95,7 @@ export class SdsMediaViewerPanel {
     private audioSampleRate = 0;
     private audioBitDepth = 0;
     private audioChannels = 0;
+    private audioDecodedRecords = 0;
 
     public static createOrShow(
         extensionUri: vscode.Uri,
@@ -167,6 +171,7 @@ export class SdsMediaViewerPanel {
         this.webview = this.panel.webview;
         this.disposables.push(registerViewerWebview(this.webview));
         this.disposables.push(registerMetadataRefresh(this.panel, this.metadataPath, () => this.update(true)));
+        this.disposables.push(registerSdsRefresh(this.sdsFilePath, reset => this.update(true, reset)));
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
         this.panel.webview.onDidReceiveMessage(
@@ -219,7 +224,7 @@ export class SdsMediaViewerPanel {
                     const plotWidth = typeof req.payload?.plotWidth === 'number' ? req.payload.plotWidth : 800;
                     const quality = req.payload?.quality === 'low' ? 'low' : 'high';
 
-                    const audioWindow = this.getAudioWindow(rangeStart, rangeEnd, plotWidth, quality);
+                    const audioWindow = this.getAudioWindow(rangeStart, rangeEnd, plotWidth, quality, req.payload?.purpose === 'playback');
                     if (!audioWindow) {
                         break;
                     }
@@ -242,7 +247,7 @@ export class SdsMediaViewerPanel {
         }
     }
 
-    private update(inPlace = false): void {
+    private update(inPlace = false, fileReset?: boolean): void {
         try {
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
@@ -253,7 +258,8 @@ export class SdsMediaViewerPanel {
             }
 
             const previousMetadata = this.metadata;
-            if (inPlace && this.hasViewerState && JSON.stringify(previousMetadata) === JSON.stringify(metadata)) {
+            const sameMetadata = JSON.stringify(previousMetadata) === JSON.stringify(metadata);
+            if (inPlace && this.hasViewerState && sameMetadata && fileReset === undefined) {
                 return;
             }
             const frequencyOnly = Boolean(previousMetadata && JSON.stringify({
@@ -261,23 +267,35 @@ export class SdsMediaViewerPanel {
                 sds: { ...previousMetadata.sds, 'sample-frequency': metadata.sds['sample-frequency'] },
             }) === JSON.stringify(metadata));
             this.metadata = metadata;
-            if (inPlace && this.hasViewerState && frequencyOnly && (this.mediaType === 'image' || this.mediaType === 'video')) {
+            if (fileReset === undefined && inPlace && this.hasViewerState && frequencyOnly && (this.mediaType === 'image' || this.mediaType === 'video')) {
                 void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: this.buildInitialState(), reset: false });
                 return;
             }
 
             this.mediaType = detectMediaType(metadata);
-            this.recordIndex = [];
-            this.parsedFile = undefined;
-
-            if (this.mediaType === 'image' || this.mediaType === 'video') {
-                this.recordIndex = indexSdsRecords(this.sdsFilePath, { strict: false });
+            const previous = this.parsedFile;
+            const append = fileReset === false && sameMetadata && previous !== undefined;
+            this.parsedFile = append ? readSdsAppend(this.sdsFilePath, previous) : parseSdsFile(this.sdsFilePath, { strict: false });
+            if (append && this.parsedFile === previous) { return; }
+            if (!append) {
+                this.recordIndex = [];
+                if (this.mediaType === 'image' || this.mediaType === 'video') {
+                    this.recordIndex = indexSdsRecords(this.sdsFilePath, { strict: false });
+                }
+            } else if (this.mediaType === 'image' || this.mediaType === 'video') {
+                let offset = previous.totalDataSize + previous.records.length * 8;
+                for (const record of this.parsedFile.records.slice(previous.records.length)) {
+                    this.recordIndex.push({ timestamp: record.timestamp, dataSize: record.dataSize, dataOffset: offset + 8 });
+                    offset += 8 + record.dataSize;
+                }
             }
-            this.parsedFile = parseSdsFile(this.sdsFilePath, { strict: false });
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             this.sdsFileStats = getSdsFileStats(this.parsedFile, tickFreq);
 
-            this.audioFrames = [];
+            if (!append) {
+                this.audioFrames = [];
+                this.audioDecodedRecords = 0;
+            }
             this.audioSampleRate = 0;
             this.audioBitDepth = 0;
             this.audioChannels = 0;
@@ -285,7 +303,7 @@ export class SdsMediaViewerPanel {
 
             const initialState = this.buildInitialState();
             if (inPlace && this.hasViewerState) {
-                void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: initialState, reset: !frequencyOnly });
+                void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: initialState, live: append, reset: !append && (fileReset === true || !frequencyOnly) });
             } else {
                 this.panel.webview.html = this.getHtml(initialState);
                 this.hasViewerState = true;
@@ -339,9 +357,9 @@ export class SdsMediaViewerPanel {
                 const audioMeta = content.find(c => c.audio)?.audio;
                 if (!audioMeta) { return { ...base, error: 'No audio metadata found in content.' }; }
                 const sampleRate = metadata.sds['sample-frequency'];
-                const frames: SampleFrame[] = [];
+                const frames = this.audioFrames;
                 const tickFreq = metadata.sds['tick-frequency'] ?? 1000;
-                for (const record of parsed.records) {
+                for (const record of parsed.records.slice(this.audioDecodedRecords)) {
                     try {
                         const block = decodeAudioBlock(record.data, sampleRate, audioMeta['bit-depth'], audioMeta['channels']);
                         frames.push({ timestamp: record.timestamp / tickFreq, samples: Array.from(block[0]) });
@@ -349,6 +367,7 @@ export class SdsMediaViewerPanel {
                 }
 
                 this.audioFrames = frames;
+                this.audioDecodedRecords = parsed.records.length;
                 this.audioSampleRate = sampleRate;
                 this.audioBitDepth = audioMeta['bit-depth'];
                 this.audioChannels = audioMeta['channels'];
@@ -358,14 +377,13 @@ export class SdsMediaViewerPanel {
                 const domainEnd = frames.length > 0
                     ? frames[frames.length - 1].timestamp + (frames[frames.length - 1].samples.length / sampleRate)
                     : 1;
-                const audioWindow = this.getAudioWindow(domainStart, domainEnd, 1200, 'high');
                 return {
                     ...base,
                     mediaType: 'audio',
                     audio: {
-                        samples: audioWindow?.samples ?? [],
-                        rangeStart: audioWindow?.rangeStart ?? domainStart,
-                        rangeEnd: audioWindow?.rangeEnd ?? domainEnd,
+                        samples: [],
+                        rangeStart: domainStart,
+                        rangeEnd: domainEnd,
                         domainStart,
                         domainEnd,
                         decimationPreset,
@@ -405,7 +423,7 @@ export class SdsMediaViewerPanel {
         }
     }
 
-    private getAudioWindow(rangeStart: number, rangeEnd: number, plotWidth: number, quality: 'low' | 'high'): { rangeStart: number; rangeEnd: number; samples: SampleFrame[] } | undefined {
+    private getAudioWindow(rangeStart: number, rangeEnd: number, plotWidth: number, quality: 'low' | 'high', playback = false): { rangeStart: number; rangeEnd: number; samples: SampleFrame[] } | undefined {
         if (this.audioFrames.length === 0 || this.audioSampleRate <= 0) {
             return undefined;
         }
@@ -415,7 +433,7 @@ export class SdsMediaViewerPanel {
         const domainEnd = lastFrame.timestamp + (lastFrame.samples.length / this.audioSampleRate);
 
         const start = Math.max(domainStart, Math.min(rangeStart, rangeEnd));
-        const end = Math.min(domainEnd, Math.max(rangeStart, rangeEnd));
+        const end = Math.min(domainEnd, Math.max(rangeStart, rangeEnd), playback ? start + 2 : Infinity);
         if (end <= start) {
             return { rangeStart: start, rangeEnd: end, samples: [] };
         }
@@ -429,29 +447,46 @@ export class SdsMediaViewerPanel {
             if (frame.timestamp > end) {
                 break;
             }
-            selected.push(frame);
+            const first = Math.max(0, Math.ceil((start - frame.timestamp) * this.audioSampleRate - 1e-7));
+            const last = Math.min(frame.samples.length, Math.ceil((end - frame.timestamp) * this.audioSampleRate - 1e-7));
+            if (last > first) {
+                selected.push({
+                    timestamp: frame.timestamp + first / this.audioSampleRate,
+                    samples: first === 0 && last === frame.samples.length ? frame.samples : frame.samples.slice(first, last)
+                });
+            }
         }
 
-        if (quality === 'high' || selected.length === 0) {
+        const pointCount = selected.reduce((sum, frame) => sum + frame.samples.length, 0);
+        const budget = Math.max(80, Math.min(quality === 'low' ? 1200 : 4800, Math.floor(plotWidth * (quality === 'low' ? 0.8 : 2))));
+        if (playback || pointCount <= budget) {
             return { rangeStart: start, rangeEnd: end, samples: selected };
         }
 
-        const targetFrames = Math.max(80, Math.min(1500, Math.floor(plotWidth * 0.8)));
-        if (selected.length <= targetFrames) {
-            return { rangeStart: start, rangeEnd: end, samples: selected };
-        }
-
-        const step = selected.length / targetFrames;
         const reduced: SampleFrame[] = [];
-        for (let i = 0; i < targetFrames; i++) {
-            const idx = Math.min(selected.length - 1, Math.floor(i * step));
-            reduced.push(selected[idx]);
+        const bucketSize = Math.max(1, Math.ceil(pointCount / Math.floor(budget / 2)));
+        let count = 0;
+        let minimum: SampleFrame | undefined;
+        let maximum: SampleFrame | undefined;
+        const flush = () => {
+            if (minimum && maximum) {
+                reduced.push(...(minimum.timestamp <= maximum.timestamp ? [minimum, maximum] : [maximum, minimum]));
+            }
+            minimum = maximum = undefined;
+        };
+        for (const frame of selected) {
+            for (let index = 0; index < frame.samples.length; index++) {
+                const value = frame.samples[index];
+                if (!minimum || value < minimum.samples[0]) {
+                    minimum = { timestamp: frame.timestamp + index / this.audioSampleRate, samples: [value] };
+                }
+                if (!maximum || value > maximum.samples[0]) {
+                    maximum = { timestamp: frame.timestamp + index / this.audioSampleRate, samples: [value] };
+                }
+                if (++count % bucketSize === 0) { flush(); }
+            }
         }
-
-        const last = selected[selected.length - 1];
-        if (reduced[reduced.length - 1] !== last) {
-            reduced.push(last);
-        }
+        flush();
 
         return { rangeStart: start, rangeEnd: end, samples: reduced };
     }

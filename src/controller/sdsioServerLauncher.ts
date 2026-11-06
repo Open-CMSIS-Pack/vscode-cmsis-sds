@@ -15,7 +15,9 @@
  */
 
 import * as fs from 'fs';
+import { execFile } from 'child_process';
 import path from 'path';
+import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 
@@ -27,6 +29,7 @@ export type SdsioServerLaunchOptions = {
 
 export class SdsioServerLauncher {
     private terminal?: vscode.Terminal | undefined;
+    private monitorPort?: number;
     private stoppingPromise?: Promise<void> | undefined;
     private readonly closeListener: vscode.Disposable;
 
@@ -40,6 +43,40 @@ export class SdsioServerLauncher {
 
     hasTerminal(): boolean {
         return this.terminal !== undefined;
+    }
+
+    async getRunningServerPort(preferredPort: number): Promise<number | undefined> {
+        if (this.terminal) {
+            return this.monitorPort ?? preferredPort;
+        }
+
+        const execute = promisify(execFile);
+        let commands: string[];
+        if (process.platform === 'win32') {
+            const { stdout } = await execute('powershell.exe', [
+                '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
+                '$ErrorActionPreference = \'Stop\'; $servers = @(Get-CimInstance Win32_Process -Filter "Name = \'sdsio-server.exe\'" | Select-Object CommandLine); ConvertTo-Json -InputObject $servers -Compress',
+            ], { timeout: 5000, windowsHide: true });
+            const servers = JSON.parse(stdout) as Array<{ CommandLine: string | null }>;
+            commands = servers.map((server) => server.CommandLine ?? 'sdsio-server');
+        } else {
+            const { stdout } = await execute('ps', ['-ax', '-o', 'args='], { timeout: 5000 });
+            commands = stdout.split('\n').filter((command) => /(?:^|[/\s])sdsio-server(?:\s|$)/.test(command));
+        }
+
+        if (commands.length === 0) {
+            return undefined;
+        }
+
+        const ports = commands.map((command) => {
+            const match = command.match(/(?:--mon-port|-m)["']?(?:=|\s+)["']?(\d+)/);
+            const port = match ? Number(match[1]) : preferredPort;
+            if (!Number.isInteger(port) || port < 1 || port > 65535) {
+                throw new Error('Running SDSIO server has an invalid monitor port.');
+            }
+            return port;
+        });
+        return ports.includes(preferredPort) ? preferredPort : ports[0];
     }
 
     async stop(reason: string): Promise<void> {
@@ -71,12 +108,16 @@ export class SdsioServerLauncher {
     }
 
     async start(options: SdsioServerLaunchOptions): Promise<boolean> {
+        if (this.terminal) {
+            return false;
+        }
         const serverBinary = this.resolveServerBinary(options.basePath);
         if (!serverBinary) {
             return false;
         }
 
         const configDir = path.dirname(options.configFile);
+        this.monitorPort = options.monitorPort;
 
         this.terminal = vscode.window.createTerminal({
             name: `SDSIO Server ${new Date().toLocaleTimeString()}`,

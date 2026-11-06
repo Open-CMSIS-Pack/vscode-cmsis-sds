@@ -190,6 +190,159 @@ test.describe('Viewer Panel — Structure', () => {
 // ── Interactions ────────────────────────────────────────────
 
 test.describe('Viewer Panel — Interactions', () => {
+    test('shows an in-flight sample response when another live update arrives first', async ({ page }) => {
+        await captureCanvasLabels(page);
+        await openViewer(page);
+        await expect.poll(() => getXAxisLabels(page)).toEqual(['1', '2', '3']);
+        await page.evaluate(() => {
+            const initial = (window as unknown as { __INITIAL_STATE__: Record<string, unknown> }).__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', live: true, payload: { ...initial, domainEnd: 0.05 } },
+            }));
+        });
+        await page.waitForFunction(() => (window as unknown as {
+            __messages: { command: string; payload?: { rangeEnd: number } }[];
+        }).__messages.some(message => message.command === 'requestVisibleRangeData' && message.payload?.rangeEnd === 0.05));
+        await page.evaluate(() => {
+            const state = window as unknown as {
+                __INITIAL_STATE__: Record<string, unknown>;
+                __messages: { command: string; requestId: number; payload: Record<string, unknown> }[];
+            };
+            const request = state.__messages.filter(message => message.command === 'requestVisibleRangeData').at(-1)!;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: { command: 'viewerStateChanged', live: true, payload: { ...state.__INITIAL_STATE__, domainEnd: 0.08 } },
+            }));
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: {
+                    command: 'visibleRangeData', requestId: request.requestId,
+                    payload: {
+                        ...request.payload,
+                        samples: Array.from({ length: 6 }, (_, index) => ({
+                            index, timestamp: index * 10, timeSeconds: index / 100,
+                            values: { x: index, y: index + 1, z: index + 2 },
+                        })),
+                    },
+                },
+            }));
+        });
+        await expect.poll(async () => (await getXAxisLabels(page)).at(-1)).toBe('6');
+    });
+
+    test('selects newly appended samples by clicking and dragging during live recording', async ({ page }) => {
+        await captureCanvasLabels(page);
+        await openViewer(page);
+        await expect.poll(() => getXAxisLabels(page)).toEqual(['1', '2', '3']);
+
+        for (const count of [6, 9]) {
+            await page.evaluate(sampleCount => {
+                const initial = (window as unknown as { __INITIAL_STATE__: Record<string, unknown> }).__INITIAL_STATE__;
+                window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        command: 'viewerStateChanged', live: true,
+                        payload: {
+                            ...initial,
+                            stats: { totalRecords: sampleCount },
+                            domainEnd: (sampleCount - 1) / 100,
+                        },
+                    },
+                }));
+            }, count);
+
+            await page.waitForFunction(end => (window as unknown as {
+                __messages: { command: string; payload?: { rangeEnd: number } }[];
+            }).__messages.some(message => message.command === 'requestVisibleRangeData' && message.payload?.rangeEnd === end), (count - 1) / 100);
+            await page.evaluate(sampleCount => {
+                const request = (window as unknown as {
+                    __messages: { command: string; requestId: number; payload: Record<string, unknown> }[];
+                }).__messages.filter(message => message.command === 'requestVisibleRangeData').at(-1)!;
+                window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        command: 'visibleRangeData', requestId: request.requestId,
+                        payload: {
+                            ...request.payload,
+                            samples: Array.from({ length: sampleCount }, (_, index) => ({
+                                index, timestamp: index * 10, timeSeconds: index / 100,
+                                values: { x: index, y: index + 1, z: index + 2 },
+                            })),
+                        },
+                    },
+                }));
+            }, count);
+
+            await expect.poll(async () => (await getXAxisLabels(page)).at(-1)).toBe(String(count));
+            const ticks = await getXAxisTicks(page);
+            const canvas = (await page.locator('#chart canvas').boundingBox())!;
+            const cursor = (await page.locator('#chart + div').boundingBox())!;
+            const plotY = cursor.y + cursor.height / 2;
+            const tailX = canvas.x + ticks[ticks.length - 1].x - 1;
+            await page.mouse.click(tailX, plotY);
+            await expect(page.locator('.info-bar')).toContainText(`${count} of ${count}`);
+            await expect(page.locator('.info-bar')).toContainText(`${((count - 1) / 100).toFixed(4)} s`);
+            await page.mouse.click(canvas.x + ticks[0].x + 1, plotY);
+            await expect(page.locator('.info-bar')).toContainText(`1 of ${count}`);
+            await page.mouse.down();
+            await page.mouse.move(tailX, plotY, { steps: 5 });
+            await page.mouse.up();
+            await expect(page.locator('.info-bar')).toContainText(`${count} of ${count}`);
+        }
+    });
+
+    for (const viewer of ['viewer', 'audio']) {
+        test(`${viewer} live growth preserves fit, history, and a following tail`, async ({ page }) => {
+            await page.goto(`${baseUrl}/${viewer}`);
+            await page.waitForSelector('#chart');
+            const updateDomain = (end: number, reset = false) => page.evaluate(({ endTime, isReset, kind }) => {
+                const initial = (window as unknown as { __INITIAL_STATE__: Record<string, unknown> }).__INITIAL_STATE__;
+                const content = { ...((kind === 'audio' ? initial.audio : initial) as Record<string, unknown>), domainStart: 0, domainEnd: endTime };
+                window.dispatchEvent(new MessageEvent('message', {
+                    origin: window.location.origin,
+                    data: {
+                        command: 'viewerStateChanged', live: !isReset, reset: isReset,
+                        payload: kind === 'audio' ? { ...initial, audio: content } : content
+                    }
+                }));
+            }, { endTime: end, isReset: reset, kind: viewer });
+            const handles = page.locator('.controls .ant-slider-handle');
+            const range = () => page.evaluate(kind => {
+                const command = kind === 'audio' ? 'requestMediaAudioWindow' : 'requestVisibleRangeData';
+                const request = (window as unknown as {
+                    __messages: { command?: string; payload?: { rangeStart: number; rangeEnd: number } }[];
+                }).__messages.filter(message => message.command === command).at(-1);
+                return request?.payload ? [request.payload.rangeStart, request.payload.rangeEnd] : [];
+            }, viewer);
+            await updateDomain(10, true);
+            await expect.poll(range).toEqual([0, 10]);
+            await updateDomain(19);
+            await expect.poll(range).toEqual([0, 19]);
+            await page.locator('button[title="Zoom In"]').first().click();
+            await expect.poll(async () => (await range())[1]).toBeLessThan(19);
+            const historicalRange = await range();
+            expect(historicalRange[0]).toBeGreaterThan(0);
+            expect(historicalRange[1]).toBeLessThan(19);
+            const count = await page.evaluate(() => (window as unknown as { __messages: unknown[] }).__messages.length);
+            await updateDomain(28);
+            await expect.poll(() => page.evaluate(() => (window as unknown as { __messages: unknown[] }).__messages.length)).toBeGreaterThan(count);
+            await expect.poll(range).toEqual(historicalRange);
+            await handles.nth(1).focus();
+            await page.keyboard.press('End');
+            await expect.poll(async () => (await range())[1]).toBe(28);
+            const tailRange = await range();
+            await updateDomain(37);
+            await expect.poll(async () => (await range())[1]).toBe(37);
+            expect((await range())[0]).toBeCloseTo(tailRange[0] + 9, 9);
+            await updateDomain(46);
+            await expect.poll(async () => (await range())[1]).toBe(46);
+            expect((await range())[0]).toBeCloseTo(tailRange[0] + 18, 9);
+            await updateDomain(55, true);
+            await expect.poll(range).toEqual([0, 55]);
+        });
+    }
+
     test('shift-click isolates a signal and selection survives cursor changes and zoom', async ({ page }) => {
         await captureCanvasLabels(page);
         await openViewer(page);

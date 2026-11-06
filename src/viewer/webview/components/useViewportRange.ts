@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { clampViewRange, fitRange, ViewRange, zoomInRange, zoomOutRange } from './viewportMath';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { clampViewRange, fitRange, growViewRange, ViewRange, zoomInRange, zoomOutRange } from './viewportMath';
 
 export type UseViewportRangeOptions = {
     domainStart: number;
     domainEnd: number;
     minSpanDivisor?: number;
+    resetKey?: number;
 };
 
-export function useViewportRange({ domainStart, domainEnd, minSpanDivisor = 1000 }: UseViewportRangeOptions) {
+export function useViewportRange({ domainStart, domainEnd, minSpanDivisor = 1000, resetKey = 0 }: UseViewportRangeOptions) {
     const domainSpan = Math.max(domainEnd - domainStart, 0.001);
     const minViewSpan = Math.max(domainSpan / minSpanDivisor, 0.001);
     const sliderStep = Math.max(domainSpan / minSpanDivisor, 0.0001);
@@ -35,10 +36,17 @@ export function useViewportRange({ domainStart, domainEnd, minSpanDivisor = 1000
 
     const [viewRange, setViewRange] = useState<ViewRange>(() => [domainStart, domainEnd]);
     const [isDragging, setIsDragging] = useState(false);
+    const previousDomain = useRef<ViewRange>([domainStart, domainEnd]);
+    const previousReset = useRef(resetKey);
 
     useEffect(() => {
-        setViewRange([domainStart, domainEnd]);
-    }, [domainEnd, domainStart]);
+        const previous = previousDomain.current;
+        const next: ViewRange = [domainStart, domainEnd];
+        previousDomain.current = next;
+        const reset = previousReset.current !== resetKey;
+        previousReset.current = resetKey;
+        setViewRange(view => reset ? fitRange(domainStart, domainEnd) : growViewRange(view, previous, next));
+    }, [domainEnd, domainStart, resetKey]);
 
     const clampRange = useCallback(
         (start: number, end: number): ViewRange => clampViewRange(start, end, clampOptions),

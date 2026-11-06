@@ -75,6 +75,8 @@ const viewerUtilsMockState = vi.hoisted(() => ({
     })),
     registerViewerWebview: vi.fn(() => ({ dispose: vi.fn() })),
     registerMetadataRefresh: vi.fn((_panel: unknown, _metadataPath: string | undefined, _onChange: () => void) => ({ dispose: vi.fn() })),
+    registerSdsRefresh: vi.fn((_filePath: string, _onChange: (reset: boolean) => void) => ({ dispose: vi.fn() })),
+    readSdsAppend: vi.fn(),
     resolveMetadataPathForSdsFile: vi.fn(),
 }));
 
@@ -174,6 +176,8 @@ vi.mock('../../src/viewer/viewerPanelUtils', () => ({
     buildViewerWebviewHtml: viewerUtilsMockState.buildViewerWebviewHtml,
     registerViewerWebview: viewerUtilsMockState.registerViewerWebview,
     registerMetadataRefresh: viewerUtilsMockState.registerMetadataRefresh,
+    registerSdsRefresh: viewerUtilsMockState.registerSdsRefresh,
+    readSdsAppend: viewerUtilsMockState.readSdsAppend,
     resolveMetadataPathForSdsFile: viewerUtilsMockState.resolveMetadataPathForSdsFile,
 }));
 
@@ -360,6 +364,42 @@ describe('SdsViewerPanel', () => {
             fileName: 'stream.0.sds',
             decimationPreset: 'accuracy',
         });
+    });
+
+    it('publishes complete appended data without redecoding history and resets on replacement', () => {
+        const sdsPath = path.join(tmpDir, 'stream.0.sds');
+        const metaPath = metadataFile(tmpDir);
+        const metadata = { sds: { name: 'stream', 'sample-frequency': 1, content: [{ value: 'x', type: 'float' }] } };
+        const first = { timestamp: 0, dataSize: 4, data: Buffer.alloc(4) };
+        const second = { timestamp: 1000, dataSize: 4, data: Buffer.alloc(4, 1) };
+        const original = createParsedFile([first]);
+        const appended = createParsedFile([first, second]);
+        sdsMockState.parseMetadataFile.mockReturnValue(metadata);
+        sdsMockState.parseSdsFile.mockReturnValue(original);
+        sdsMockState.decodeAllRecords.mockImplementation(parsed => parsed.records.map((record: SdsRecordLike, index: number) => ({
+            timestamp: record.timestamp, timeSeconds: record.timestamp / 1000, values: { x: record.timestamp }, index,
+        })));
+        SdsViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
+        const panel = latestPanel();
+        const html = panel.webview.html;
+        const refresh = viewerUtilsMockState.registerSdsRefresh.mock.calls.at(-1)![1];
+        sdsMockState.decodeAllRecords.mockClear();
+        viewerUtilsMockState.readSdsAppend.mockReturnValue(appended);
+        refresh(false);
+        expect(viewerUtilsMockState.readSdsAppend).toHaveBeenLastCalledWith(sdsPath, original);
+        expect(sdsMockState.decodeAllRecords).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ records: [second] }), metadata);
+        expect(panel.webview.html).toBe(html);
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            command: 'viewerStateChanged', live: true, reset: false,
+            payload: expect.objectContaining({ domainEnd: 1, samples: [expect.objectContaining({ index: 0 }), expect.objectContaining({ index: 1 })] }),
+        }));
+        panel.webview.postMessage.mockClear();
+        viewerUtilsMockState.readSdsAppend.mockReturnValue(appended);
+        refresh(false);
+        expect(panel.webview.postMessage).not.toHaveBeenCalled();
+        sdsMockState.parseSdsFile.mockReturnValue(appended);
+        refresh(true);
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ live: false, reset: true }));
     });
 
     it('publishes changed data metadata in place and preserves the viewer on invalid updates', () => {
@@ -732,6 +772,128 @@ describe('SdsMediaViewerPanel', () => {
                 mediaType: 'video',
                 frames: [{ timestamp: 1, rgbaBase64: 'BQYHCA==' }],
             }),
+        }));
+    });
+
+    it('decodes only appended audio records and leaves PCM out of state updates', async () => {
+        const sdsPath = path.join(tmpDir, 'audio.0.sds');
+        const metaPath = metadataFile(tmpDir, 'audio.sds.yml');
+        sdsMockState.parseMetadataFile.mockReturnValue({
+            sds: {
+                name: 'audio', 'sample-frequency': 4,
+                content: [{ audio: { 'bit-depth': 16, channels: 1 } }]
+            }
+        });
+        sdsMockState.detectMediaType.mockReturnValue('audio');
+        const first = { timestamp: 0, dataSize: 1, data: Buffer.from([1]) };
+        const second = { timestamp: 1000, dataSize: 1, data: Buffer.from([2]) };
+        sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([first]));
+        sdsMockState.decodeAudioBlock.mockReturnValue([Float32Array.from([0.1, 0.2, 0.3, 0.4])]);
+        SdsMediaViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
+        const panel = latestPanel();
+        const html = panel.webview.html;
+        expect(initialState(panel)).toMatchObject({ audio: { samples: [], totalSamples: 4 } });
+        sdsMockState.decodeAudioBlock.mockClear();
+        viewerUtilsMockState.readSdsAppend.mockReturnValue(createParsedFile([first, second]));
+        viewerUtilsMockState.registerSdsRefresh.mock.calls.at(-1)![1](false);
+        expect(sdsMockState.decodeAudioBlock).toHaveBeenCalledTimes(1);
+        expect(sdsMockState.decodeAudioBlock.mock.calls[0][0]).toBe(second.data);
+        expect(panel.webview.html).toBe(html);
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            live: true, reset: false, payload: expect.objectContaining({
+                audio: expect.objectContaining({
+                    samples: [], totalSamples: 8, totalRecords: 2, domainEnd: 2,
+                })
+            }),
+        }));
+        await dispatchMessage(panel, {
+            command: 'requestMediaAudioWindow', requestId: 10,
+            payload: { rangeStart: 1, rangeEnd: 2, purpose: 'playback' }
+        });
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            requestId: 10,
+            payload: expect.objectContaining({ samples: [expect.objectContaining({ timestamp: 1, samples: expect.any(Array) })] })
+        }));
+    });
+
+    it('bounds waveform points while preserving extrema and returns exact bounded playback PCM', async () => {
+        const sdsPath = path.join(tmpDir, 'audio.0.sds');
+        const metaPath = metadataFile(tmpDir, 'audio.sds.yml');
+        sdsMockState.parseMetadataFile.mockReturnValue({
+            sds: {
+                name: 'audio', 'sample-frequency': 1000,
+                content: [{ audio: { 'bit-depth': 16, channels: 1 } }]
+            }
+        });
+        sdsMockState.detectMediaType.mockReturnValue('audio');
+        sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([{ timestamp: 0, dataSize: 1, data: Buffer.from([1]) }]));
+        const pcm = new Float32Array(4000);
+        pcm[100] = 1;
+        pcm[120] = -1;
+        sdsMockState.decodeAudioBlock.mockReturnValue([pcm]);
+        SdsMediaViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
+        const panel = latestPanel();
+        await dispatchMessage(panel, {
+            command: 'requestMediaAudioWindow', requestId: 20,
+            payload: { rangeStart: 0, rangeEnd: 4, plotWidth: 20, quality: 'high', purpose: 'waveform' }
+        });
+        const waveform = panel.webview.postMessage.mock.calls.at(-1)![0].payload.samples as { timestamp: number; samples: number[] }[];
+        expect(waveform.flatMap(frame => frame.samples).length).toBeLessThanOrEqual(80);
+        expect(waveform).toContainEqual({ timestamp: 0.1, samples: [1] });
+        expect(waveform).toContainEqual({ timestamp: 0.12, samples: [-1] });
+        await dispatchMessage(panel, {
+            command: 'requestMediaAudioWindow', requestId: 21,
+            payload: { rangeStart: 0, rangeEnd: 4, purpose: 'playback' }
+        });
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            payload: expect.objectContaining({
+                rangeStart: 0, rangeEnd: 2, samples: [{ timestamp: 0, samples: Array.from(pcm.subarray(0, 2000)) }],
+            })
+        }));
+        await dispatchMessage(panel, {
+            command: 'requestMediaAudioWindow', requestId: 22,
+            payload: { rangeStart: 2, rangeEnd: 4, purpose: 'playback' }
+        });
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            payload: expect.objectContaining({
+                rangeStart: 2, rangeEnd: 4, samples: [{ timestamp: 2, samples: Array.from(pcm.subarray(2000)) }],
+            })
+        }));
+    });
+
+    it('indexes appended image records at their on-disk offsets without reloading the panel', async () => {
+        const sdsPath = path.join(tmpDir, 'camera.0.sds');
+        const metaPath = metadataFile(tmpDir, 'camera.sds.yml');
+        const first = { timestamp: 0, dataSize: 4, data: Buffer.alloc(4, 1) };
+        const second = { timestamp: 1000, dataSize: 4, data: Buffer.alloc(4, 2) };
+        fs.writeFileSync(sdsPath, Buffer.concat([Buffer.alloc(8), first.data, Buffer.alloc(8), second.data]));
+        sdsMockState.parseMetadataFile.mockReturnValue({
+            sds: {
+                name: 'camera', 'sample-frequency': 1,
+                content: [{ image: { pixel_format: 'RAW8', width: 1, height: 1 } }]
+            }
+        });
+        sdsMockState.detectMediaType.mockReturnValue('image');
+        sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([first]));
+        sdsMockState.indexSdsRecords.mockReturnValue([{ timestamp: 0, dataSize: 4, dataOffset: 8 }]);
+        sdsMockState.decodeImageFrameToRGBA.mockImplementation(data => new Uint8Array([data[0], 0, 0, 255]));
+        SdsMediaViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
+        const panel = latestPanel();
+        const html = panel.webview.html;
+        viewerUtilsMockState.readSdsAppend.mockReturnValue(createParsedFile([first, second]));
+        viewerUtilsMockState.registerSdsRefresh.mock.calls.at(-1)![1](false);
+        expect(panel.webview.html).toBe(html);
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            live: true, reset: false, payload: expect.objectContaining({ image: expect.objectContaining({ totalFrames: 2 }) }),
+        }));
+        await dispatchMessage(panel, {
+            command: 'requestMediaFrameWindow', requestId: 30,
+            payload: { mediaType: 'image', centerIndex: 1, windowSize: 1 }
+        });
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            payload: expect.objectContaining({
+                rangeStart: 1, frames: [{ timestamp: 1, rgbaBase64: Buffer.from([2, 0, 0, 255]).toString('base64') }],
+            })
         }));
     });
 

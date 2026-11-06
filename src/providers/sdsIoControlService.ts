@@ -15,7 +15,7 @@
  */
 
 import * as vscode from 'vscode';
-import { SDSIO_ALL_PLAYBACK_TEST_CASE, SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
+import { probeSdsioMonitor, SDSIO_ALL_PLAYBACK_TEST_CASE, SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
 import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS, type SdsioPlaybackTestCase } from '../controller/sdsioConfigManager';
 import { DEFAULT_SDSIO_MONITOR_PORT, selectSdsioMonitorPort } from '../recorder/sdsio/sdsIoMonitorPort';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
@@ -61,6 +61,7 @@ export class SdsIoControlService {
     private readonly monitor?: SdsioMonitorClient | undefined;
     private readonly extensionInstallPath?: string | undefined;
     private monitorConnected = false;
+    private monitorInfoReceived = false;
     private readonly serverLauncher: SdsioServerLauncher;
     private shutdownPromise?: Promise<void> | undefined;
     private shutdownRequested = false;
@@ -279,47 +280,57 @@ export class SdsIoControlService {
         }
 
         this.monitor.stop();
+        this.monitorInfoReceived = false;
+        let existingServer = false;
+        const existingServerError = 'Unable to connect to the running SDSIO server. Please check and close the running SDSIO server process, then try connecting again.';
         try {
-            if (this.serverLauncher.hasTerminal()) {
-                await this.serverLauncher.stop('Terminating existing SDSIO server terminal before connecting');
-            }
-
-            const basePath = this.extensionInstallPath;
-            if (!basePath) {
-                this.diagnostics.error(DiagnosticSource.Server, 'No workspace folder or extension install path available to locate server binary.');
-                return false;
-            }
-
-            const sdsIoFile = this.configManager.getConfigFile();
-            if (!sdsIoFile) {
-                this.diagnostics.error(DiagnosticSource.Server, 'No SDSIO config file selected. Please select or create a .sdsio.yml file.');
-                return false;
-            }
-
             const preferredPort = vscode.workspace.getConfiguration('cmsis-sds.sdsio')
                 .get<number>('monitorPort', DEFAULT_SDSIO_MONITOR_PORT);
-            const monitorPort = await selectSdsioMonitorPort(preferredPort);
+            const runningPort = await probeSdsioMonitor(preferredPort)
+                ? preferredPort
+                : await this.serverLauncher.getRunningServerPort(preferredPort);
             if (generation !== this.connectionGeneration) {
                 return false;
             }
-            if (monitorPort !== preferredPort) {
-                this.diagnostics.warn(DiagnosticSource.Server, `SDSIO monitor port ${preferredPort} is unavailable; using port ${monitorPort}.`);
-            }
-            this.diagnostics.info(DiagnosticSource.Server, `Using SDSIO monitor port ${monitorPort}.`);
-            const started = await this.serverLauncher.start({
-                basePath,
-                configFile: sdsIoFile,
-                monitorPort,
-            });
-            if (!started || generation !== this.connectionGeneration) {
-                return false;
+            existingServer = runningPort !== undefined;
+            let monitorPort = runningPort;
+            if (monitorPort === undefined) {
+                const basePath = this.extensionInstallPath;
+                if (!basePath) {
+                    this.diagnostics.error(DiagnosticSource.Server, 'No workspace folder or extension install path available to locate server binary.');
+                    return false;
+                }
+
+                const sdsIoFile = this.configManager.getConfigFile();
+                if (!sdsIoFile) {
+                    this.diagnostics.error(DiagnosticSource.Server, 'No SDSIO config file selected. Please select or create a .sdsio.yml file.');
+                    return false;
+                }
+
+                monitorPort = await selectSdsioMonitorPort(preferredPort);
+                if (generation !== this.connectionGeneration) {
+                    return false;
+                }
+                if (monitorPort !== preferredPort) {
+                    this.diagnostics.warn(DiagnosticSource.Server, `SDSIO monitor port ${preferredPort} is unavailable; using port ${monitorPort}.`);
+                }
+                const started = await this.serverLauncher.start({ basePath, configFile: sdsIoFile, monitorPort });
+                if (!started || generation !== this.connectionGeneration) {
+                    return false;
+                }
             }
 
+            this.diagnostics.info(DiagnosticSource.Server, `${existingServer ? 'Reusing running SDSIO server' : 'Using SDSIO monitor'} on port ${monitorPort}.`);
             this.diagnostics.info(DiagnosticSource.Server, 'Attempting to connect monitor client to server...');
             await this.monitor.start(monitorPort);
         } catch (error) {
             this.monitor.stop();
+            this.setMonitorConnected(false);
             this.diagnostics.error(DiagnosticSource.Server, `Failed to connect SDSIO monitor: ${error instanceof Error ? error.message : String(error)}`);
+            if (generation === this.connectionGeneration) {
+                void vscode.window.showErrorMessage(existingServer ? existingServerError
+                    : 'Unable to check or connect to the SDSIO server. Please check and close any running SDSIO server process, then try connecting again.');
+            }
             return false;
         }
 
@@ -327,13 +338,17 @@ export class SdsIoControlService {
             if (generation !== this.connectionGeneration) {
                 return false;
             }
-            if (this.monitorConnected) {
+            if (this.monitorConnected && this.monitorInfoReceived) {
                 return true;
             }
             await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
-        return this.monitorConnected;
+        this.monitor.stop();
+        this.setMonitorConnected(false);
+        void vscode.window.showErrorMessage(existingServer ? existingServerError
+            : 'No valid SDSIO monitor INFO received. Check the SDSIO server terminal and Arm SDS output for startup errors or a monitor port conflict.');
+        return false;
     }
 
     async shutdown(reason = 'Shutting down SDSIO server'): Promise<void> {
@@ -475,18 +490,23 @@ export class SdsIoControlService {
     }
 
     private onMonitorConnected(): void {
-        if (this.setMonitorConnected(true)) {
-            this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
-        }
+        this.monitorInfoReceived = false;
+        this.setMonitorConnected(false);
+        this.diagnostics.info(DiagnosticSource.Server, 'Monitor TCP connection established; waiting for SDSIO INFO.');
     }
 
     private onMonitorDisconnected(): void {
+        this.monitorInfoReceived = false;
         if (this.setMonitorConnected(false)) {
             this.diagnostics.info(DiagnosticSource.Server, 'Disconnected from SDSIO monitor');
         }
     }
 
     private onMonitorInfo(info: SdsioMonitorInfo): void {
+        this.monitorInfoReceived = true;
+        if (this.setMonitorConnected(true)) {
+            this.diagnostics.info(DiagnosticSource.Server, 'Connected to SDSIO monitor');
+        }
         for (let i = 0; i < this.flags.length && i < 8; i++) {
             const bit = (info.sdsFlags >> i) & 1;
             this.flags[i].enabled = bit !== 0;
