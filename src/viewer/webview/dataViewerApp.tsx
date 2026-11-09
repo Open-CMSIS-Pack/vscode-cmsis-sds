@@ -21,8 +21,8 @@ import { WebviewMessenger, getInitialState } from '../../webview/bridge';
 import { SdsFileStats, SdsMetadata } from '../../sds';
 import { Button, Col, ConfigProvider, Row, Slider, theme } from 'antd';
 import { ExpandOutlined, ExportOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
-import { BroadcastMessage, getIndexedSdsSuffix, Message, WebviewMessage } from '../../webview/protocol';
-import { broadcastMessage } from '../../webview/vscode-api';
+import { BroadcastMessage, getIndexedSdsSuffix, Message, ViewerStateChangedMessage, WebviewMessage } from '../../webview/protocol';
+import { broadcastMessage, setState } from '../../webview/vscode-api';
 import { decimateExtremaSeries, DecimationPreset } from './components/decimation';
 import { getIsDarkTheme, sliderStyle, statsTitleStyle, statsValueStyle } from '../../webview/utilities';
 import { BaseChartViewer, ChartSample } from './components/baseChartViewer';
@@ -39,6 +39,8 @@ type InitialState = {
     domainEnd?: number;
     decimationPreset?: DecimationPreset;
     fileName?: string;
+    sdsFilePath?: string;
+    metadataPath?: string;
     error?: string;
 };
 
@@ -69,10 +71,10 @@ type OutboundMessage = ({ command: 'exportCsv' } & WebviewMessage) | VisibleRang
 const messenger = new WebviewMessenger<WebviewMessage, OutboundMessage>();
 
 function DataViewerApp() {
-    const initial = getInitialState<InitialState>({});
+    const [initial, setInitial] = useState(() => getInitialState<InitialState>({}));
     const [activeChannels, setActiveChannels] = useState(() => new Set(initial.channelNames));
     const [samples, setSamples] = useState<Sample[]>(() => initial.samples ?? []);
-    const [currentBlock, setCurrentBlock] = useState<number | null>(null);
+    const [currentBlock, setCurrentBlock] = useState<number | null>(() => initial.samples?.[0]?.index ?? null);
     const channelNames = useMemo(() => initial.channelNames ?? [], [initial.channelNames]);
     const stats = initial.stats ?? ({} as SdsFileStats);
     const metadata = initial.metadata ?? null;
@@ -93,7 +95,7 @@ function DataViewerApp() {
         onSliderAfterChange,
     } = useViewportRange({ domainStart, domainEnd });
 
-    const [highlightedTime, setHighlightedTime] = useState<number | null>(null);
+    const [highlightedTime, setHighlightedTime] = useState<number | null>(() => initial.samples?.[0]?.timeSeconds ?? null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
     const [decimationPreset] = useState<DecimationPreset>(() => initial.decimationPreset ?? 'accuracy');
     const requestSeqRef = useRef(0);
@@ -157,6 +159,20 @@ function DataViewerApp() {
 
             const msg = event.data as Message;
 
+            if (msg.command === 'viewerStateChanged') {
+                const update = msg as ViewerStateChangedMessage<InitialState>;
+                if (!update.payload) { return; }
+                latestAppliedSeqRef.current = requestSeqRef.current + 1;
+                setInitial(update.payload);
+                setSamples(update.payload.samples ?? []);
+                setActiveChannels(current => new Set((update.payload.channelNames ?? []).filter(channel => {
+                    return !channelNames.includes(channel) || current.has(channel);
+                })));
+                setHighlightedTime(update.payload.samples?.[0]?.timeSeconds ?? null);
+                setCurrentBlock(update.payload.samples?.[0]?.index ?? null);
+                return;
+            }
+
             if (msg.type === 'broadcast') {
                 const payload = msg as BroadcastMessage;
                 if (getIndexedSdsSuffix(filename) !== getIndexedSdsSuffix(payload.fileName)) {
@@ -193,7 +209,7 @@ function DataViewerApp() {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [blockIndexFromTime, filename]);
+    }, [blockIndexFromTime, channelNames, filename]);
 
     useEffect(() => {
         if (initial.error) {
@@ -209,7 +225,7 @@ function DataViewerApp() {
         return () => {
             window.clearTimeout(handle);
         };
-    }, [initial.error, isDragging, requestVisibleRangeData, viewRange]);
+    }, [initial, isDragging, requestVisibleRangeData, viewRange]);
 
     useEffect(() => {
         if (initial.error) {
@@ -251,7 +267,7 @@ function DataViewerApp() {
         });
     };
 
-    const colors = ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'];
+    const colors = useMemo(() => ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'], []);
 
     const chartData = useMemo<ChartSample[]>(() => {
         const [start, end] = viewRange;
@@ -307,6 +323,31 @@ function DataViewerApp() {
 
     const windowLength = Math.max(0, viewRange[1] - viewRange[0]);
 
+    const tooltipFormatter = useCallback((datum: { channel?: unknown; y?: unknown }) => ({
+        name: datum?.channel ?? 'value',
+        value: typeof datum?.y === 'number' ? datum.y.toFixed(4) : String(datum?.y ?? ''),
+    }), []);
+
+    const tooltipTitle = useCallback((value: unknown) => {
+        const time = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
+        return Number.isFinite(time) ? `Time: ${time.toFixed(4)} s` : time;
+    }, []);
+
+    const tooltip = useMemo(() => ({
+        showMarkers: true,
+        shared: true,
+        crosshairs: {
+            line: {
+                style: {
+                    stroke: 'rgba(150,150,150,0.45)',
+                    lineWidth: 1,
+                },
+            },
+        },
+        formatter: tooltipFormatter,
+        title: tooltipTitle,
+    }), [tooltipFormatter, tooltipTitle]);
+
     if (initial.error) {
         return (
             <div style={{ background: 'var(--vscode-editor-background)', color: 'var(--vscode-editor-foreground)', fontFamily: 'var(--vscode-font-family)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
@@ -346,26 +387,7 @@ function DataViewerApp() {
                     onCursorChange={onCursorChange}
                     onZoomRangeChange={(range) => setViewRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
-                    tooltip={{
-                        showMarkers: true,
-                        shared: true,
-                        crosshairs: {
-                            line: {
-                                style: {
-                                    stroke: 'rgba(150,150,150,0.45)',
-                                    lineWidth: 1,
-                                },
-                            },
-                        },
-                        formatter: (datum: { channel?: unknown; y?: unknown }) => ({
-                            name: datum?.channel ?? 'value',
-                            value: typeof datum?.y === 'number' ? datum.y.toFixed(4) : String(datum?.y ?? ''),
-                        }),
-                        title: (value: unknown) => {
-                            const t = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
-                            return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
-                        },
-                    }}
+                    tooltip={tooltip}
                 />
             </div>
             <Row className='controls' gutter={12}>
@@ -413,6 +435,9 @@ function ThemedViewerApp() {
         </ConfigProvider>
     );
 }
+
+const { sdsFilePath, metadataPath } = getInitialState<InitialState>({});
+setState({ sdsFilePath, metadataPath });
 
 const container = document.getElementById('root');
 if (container) {

@@ -18,6 +18,7 @@ import * as vscode from 'vscode';
 
 import { SdsIoControlService, SdsIoNotifyEvent } from '../providers/sdsIoControlService';
 import { SdsExplorerProvider, SdsTreeItem } from '../providers/sdsExplorerProvider';
+import { SDSIO_ALL_PLAYBACK_TEST_CASE } from '../recorder/sdsio/sdsIoMonitorClient';
 
 export interface RegisterSdsioInterfaceCommandsArgs {
     context: vscode.ExtensionContext;
@@ -79,12 +80,32 @@ export function registerSdsioInterfaceCommands(args: RegisterSdsioInterfaceComma
 
     context.subscriptions.push(
         vscode.commands.registerCommand('arm-sds.sdsinterface.play', async () => {
+            const testCases = sdsIoControlService.getPlaybackTestCases();
+            let selectedTestCase = SDSIO_ALL_PLAYBACK_TEST_CASE;
+            let selectedTestCaseName: string | undefined;
+            if (testCases.length > 0) {
+                const selection = await vscode.window.showQuickPick(
+                    [
+                        { label: 'All', description: 'All test cases', testCase: SDSIO_ALL_PLAYBACK_TEST_CASE },
+                        ...testCases.map(({ testCase, name }) => ({ label: name, description: `Test case ${testCase}`, testCase })),
+                    ],
+                    { placeHolder: 'Select a playback test case' }
+                );
+                if (!selection) {
+                    return;
+                }
+                selectedTestCase = selection.testCase;
+                selectedTestCaseName = selection.testCase === SDSIO_ALL_PLAYBACK_TEST_CASE ? undefined : selection.label;
+            }
+
             const connected = await sdsIoControlService.connectServer();
             if (!connected) {
                 void vscode.window.showWarningMessage('Unable to connect to SDSIO monitor server.');
                 return;
             }
-            sdsIoControlService.play();
+            if (!sdsIoControlService.play(selectedTestCase, selectedTestCaseName)) {
+                void vscode.window.showWarningMessage('The selected playback test case is no longer available. Please select it again.');
+            }
         })
     );
 

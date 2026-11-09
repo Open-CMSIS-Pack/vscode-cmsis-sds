@@ -79,6 +79,42 @@ export function resolveMetadataPathForSdsFile(
     return undefined;
 }
 
+export function registerMetadataRefresh(
+    panel: vscode.WebviewPanel,
+    metadataPath: string | undefined,
+    onChange: () => void
+): vscode.Disposable {
+    const readContents = () => {
+        if (!metadataPath || !fs.existsSync(metadataPath)) {
+            return undefined;
+        }
+        return fs.readFileSync(metadataPath, 'utf-8');
+    };
+    let previousContents = readContents();
+    const recheck = () => {
+        const contents = readContents();
+        if (contents === previousContents) {
+            return;
+        }
+        onChange();
+        previousContents = contents;
+    };
+    const saveSubscription = vscode.workspace.onDidSaveTextDocument(document => {
+        if (metadataPath && document.uri.scheme === 'file' && path.relative(metadataPath, document.uri.fsPath) === '') {
+            recheck();
+        }
+    });
+    const visibilitySubscription = panel.onDidChangeViewState(event => {
+        if (event.webviewPanel.visible) {
+            recheck();
+        }
+    });
+    return new vscode.Disposable(() => {
+        saveSubscription.dispose();
+        visibilitySubscription.dispose();
+    });
+}
+
 export function generateNonce(length = 16): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';

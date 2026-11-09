@@ -1,5 +1,12 @@
 version: 2
 
+registries:
+  npm-github:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    scope: "@open-cmsis-pack"
+    token: ${{secrets.GH_PACKAGES_TOKEN}}
+
 updates:
   # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
@@ -18,6 +25,8 @@ updates:
   # Maintain dependencies for the JavaScript package
   - package-ecosystem: "npm"
     directory: "/"
+    registries:
+      - npm-github
     schedule:
       interval: "monthly"
       time: "02:00"
@@ -49,3 +58,7 @@ updates:
       - dependency-name: "nock"
         update-types:
         - version-update:semver-major
+    groups:
+      typescript-eslint:
+        patterns:
+          - "@typescript-eslint/*"

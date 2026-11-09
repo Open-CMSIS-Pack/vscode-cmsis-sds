@@ -19,7 +19,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+const monitorStartMock = vi.fn(async () => undefined);
 const createTreeViewMock = vi.fn();
+const registerWebviewPanelSerializerMock = vi.fn(() => ({ dispose: vi.fn() }));
 const executeCommandMock = vi.fn(async () => undefined);
 const registerCommandMock = vi.fn((_id: string, callback: (...args: unknown[]) => unknown) => callback);
 const onDidChangeConfigurationMock = vi.fn(() => ({ dispose: vi.fn() }));
@@ -70,6 +72,7 @@ vi.mock('vscode', () => {
     return {
         window: {
             createTreeView: createTreeViewMock,
+            registerWebviewPanelSerializer: registerWebviewPanelSerializerMock,
             showErrorMessage: vi.fn(),
             showWarningMessage: vi.fn(),
             showInformationMessage: vi.fn(),
@@ -124,7 +127,7 @@ vi.mock('../../src/diagnostics/sdsDiagnostics', () => {
 
 vi.mock('../../src/recorder/sdsio/sdsIoMonitorClient', () => {
     class SdsioMonitorClient {
-        start = vi.fn(async () => undefined);
+        start = monitorStartMock;
         stop = vi.fn();
     }
 
@@ -187,11 +190,11 @@ vi.mock('../../src/providers/sdsExplorerProvider', () => {
 });
 
 vi.mock('../../src/viewer/sdsViewerPanel', () => ({
-    SdsViewerPanel: { createOrShow: vi.fn() },
+    SdsViewerPanel: { viewType: 'arm-sds.viewer', createOrShow: vi.fn(), revive: vi.fn() },
 }));
 
 vi.mock('../../src/viewer/sdsMediaViewerPanel', () => ({
-    SdsMediaViewerPanel: { createOrShow: vi.fn() },
+    SdsMediaViewerPanel: { viewType: 'arm-sds.mediaViewer', createOrShow: vi.fn(), revive: vi.fn() },
 }));
 
 vi.mock('../../src/sds', () => ({
@@ -223,6 +226,7 @@ describe('activate integration wiring', () => {
             showCollapseAll: true,
         }));
         expect(createTreeViewMock).not.toHaveBeenCalledWith('sdsIOInterface', expect.anything());
+        expect(monitorStartMock).not.toHaveBeenCalled();
 
         expect(checkboxHandler).toBeTypeOf('function');
         checkboxHandler?.({
@@ -235,6 +239,33 @@ describe('activate integration wiring', () => {
         expect(sdsIoServiceMethods.setEnabledByTreeItems).toHaveBeenCalledWith([
             [{ itemType: 'sdsFlag', filePath: 'flag-0' }, 1],
         ]);
+    });
+
+    it.each(['arm-sds.viewer', 'arm-sds.mediaViewer'])('registers a serializer that restores saved %s tabs', async viewType => {
+        const extension = await import('../../src/extension');
+        const { SdsMediaViewerPanel } = await import('../../src/viewer/sdsMediaViewerPanel');
+        const { SdsViewerPanel } = await import('../../src/viewer/sdsViewerPanel');
+        const context = {
+            subscriptions: [] as unknown[],
+            extensionPath: 'c:/workspace/ext',
+            extensionUri: { fsPath: 'c:/workspace/ext' },
+        };
+        extension.activate(context as never);
+
+        expect(registerWebviewPanelSerializerMock).toHaveBeenCalledWith(viewType, {
+            deserializeWebviewPanel: expect.any(Function),
+        });
+        const calls = registerWebviewPanelSerializerMock.mock.calls as unknown as Array<[string, {
+            deserializeWebviewPanel: (panel: unknown, state: unknown) => Promise<void>;
+        }]>;
+        const index = calls.findIndex(([type]) => type === viewType);
+        expect(context.subscriptions).toContain(registerWebviewPanelSerializerMock.mock.results[index].value);
+        const serializer = calls[index][1];
+        const panel = {};
+        const state = { sdsFilePath: path.join(os.tmpdir(), 'camera.0.sds') };
+        await serializer.deserializeWebviewPanel(panel, state);
+        const viewer = viewType === 'arm-sds.viewer' ? SdsViewerPanel : SdsMediaViewerPanel;
+        expect(viewer.revive).toHaveBeenCalledWith(panel, context.extensionUri, state, expect.anything());
     });
 
     it('registers the explorer provider for disposal on deactivation', async () => {

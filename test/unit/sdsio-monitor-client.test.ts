@@ -43,7 +43,11 @@ vi.mock('net', async () => {
         });
 
         removeAllListeners = vi.fn((eventName?: string) => {
-            EventEmitter.prototype.removeAllListeners.call(this, eventName);
+            if (eventName === undefined) {
+                EventEmitter.prototype.removeAllListeners.call(this);
+            } else {
+                EventEmitter.prototype.removeAllListeners.call(this, eventName);
+            }
             return this;
         });
     }
@@ -176,7 +180,7 @@ describe('SdsioMonitorClient flag send API', () => {
         });
 
         expect(client.startRecording()).toBe(true);
-        expect(client.startPlayback()).toBe(true);
+        expect(client.startPlayback(3)).toBe(true);
         expect(client.stopRecordingOrPlayback()).toBe(true);
         expect(client.sendUserFlagBits([true, false, 1, 0, true, false, 0, 1])).toBe(true);
 
@@ -184,12 +188,47 @@ describe('SdsioMonitorClient flag send API', () => {
         expect(writes[0].readUInt32LE(8)).toBe(0x20000000);
         expect(writes[1].readUInt32LE(4)).toBe(0xa0000000);
         expect(writes[1].readUInt32LE(8)).toBe(0);
+        expect(writes[1].readUInt32LE(12)).toBe(3);
         expect(writes[2].readUInt32LE(4)).toBe(0);
         expect(writes[2].readUInt32LE(8)).toBe(0xa0000000);
         expect(writes[3].readUInt32LE(4)).toBe(0x95);
         expect(writes[3].readUInt32LE(8)).toBe(0x6a);
         expect(() => client.sendUserFlagBits([true])).toThrow('Expected exactly 8 bits, got 1');
     });
+
+    it('starts playback for all configured test cases when no selection is provided', () => {
+        let written: Buffer | undefined;
+        const client = connectedClientWithWrite((data) => {
+            written = data;
+        });
+
+        expect(client.startPlayback()).toBe(true);
+        expect(written?.readUInt32LE(4)).toBe(0xa0000000);
+        expect(written?.readUInt32LE(8)).toBe(0);
+        expect(written?.readUInt32LE(12)).toBe(0xffffffff);
+    });
+
+    it('encodes zero for the selected first playback step', () => {
+        let written: Buffer | undefined;
+        const client = connectedClientWithWrite((data) => {
+            written = data;
+        });
+
+        expect(client.startPlayback(0)).toBe(true);
+        expect(written?.readUInt32LE(0)).toBe(MON_FLAGS);
+        expect(written?.readUInt32LE(4)).toBe(0xa0000000);
+        expect(written?.readUInt32LE(8)).toBe(0);
+        expect(written?.readUInt32LE(12)).toBe(0);
+    });
+
+    it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 0x1_0000_0000])(
+        'rejects invalid playback test case %s',
+        (testCase) => {
+            const client = connectedClientWithWrite();
+
+            expect(() => client.startPlayback(testCase)).toThrow(RangeError);
+        },
+    );
 
     it('emits an error and returns false when socket write throws', () => {
         const client = connectedClientWithWrite(() => {
@@ -226,6 +265,39 @@ describe('SdsioMonitorClient socket lifecycle', () => {
         expect(netMockState.createConnection).toHaveBeenCalledWith({ host: 'localhost', port: 9000 });
         expect(client.isConnected).toBe(true);
         expect(events).toEqual(['Monitor connected to localhost:9000', 'connected']);
+    });
+
+    it('defaults to port 6060', async () => {
+        const client = new SdsioMonitorClient();
+        await client.start();
+        expect(netMockState.createConnection).toHaveBeenCalledWith({ host: '127.0.0.1', port: 6060 });
+        client.stop();
+    });
+
+    it.each([false, true])('changes ports without retaining old sockets or retries (destroyed: %s)', async (destroyed) => {
+        vi.useFakeTimers();
+        const client = new SdsioMonitorClient({ reconnectDelayMs: 25 });
+        try {
+            await client.start();
+            const oldSocket = netMockState.sockets[0];
+            oldSocket.emit('close');
+            oldSocket.destroyed = destroyed;
+            await client.start(49152);
+            oldSocket.emit('close');
+            await vi.advanceTimersByTimeAsync(25);
+
+            expect(oldSocket.removeAllListeners).toHaveBeenCalled();
+            expect(netMockState.createConnection).toHaveBeenCalledTimes(2);
+            expect(netMockState.createConnection).toHaveBeenLastCalledWith({ host: '127.0.0.1', port: 49152 });
+
+            netMockState.sockets[1].emit('close');
+            await vi.advanceTimersByTimeAsync(25);
+            expect(netMockState.createConnection).toHaveBeenCalledTimes(3);
+            expect(netMockState.createConnection).toHaveBeenLastCalledWith({ host: '127.0.0.1', port: 49152 });
+        } finally {
+            client.stop();
+            vi.useRealTimers();
+        }
     });
 
     it('schedules a reconnect after socket errors and close events while running', async () => {
@@ -339,6 +411,15 @@ describe('SdsioMonitorClient protocol parsing', () => {
             writeHeader(MON_INFO, 0x5, 42, 3),
             Buffer.from('err'),
         ]);
+        const errorPayload = Buffer.alloc(8);
+        errorPayload.writeInt32LE(-2, 0);
+        errorPayload.writeUInt32LE(73, 4);
+        const errorFileName = Buffer.from('source.c', 'utf-8');
+        const infoFrameWithError = Buffer.concat([
+            writeHeader(MON_INFO, 0x6, 17, errorPayload.length + errorFileName.length),
+            errorPayload,
+            errorFileName,
+        ]);
         const flagsFrame = writeHeader(MON_FLAGS, 1, 2, 3);
         const unknownFrame = writeHeader(99);
         const firstChunk = openFrame.subarray(0, HEADER_SIZE + 2);
@@ -348,6 +429,7 @@ describe('SdsioMonitorClient protocol parsing', () => {
             closeFrame,
             infoFrame,
             infoFrameWithPayload,
+            infoFrameWithError,
             flagsFrame,
             unknownFrame,
         ]);
@@ -365,6 +447,11 @@ describe('SdsioMonitorClient protocol parsing', () => {
         expect(infos).toEqual([
             { sdsFlags: 0x1234, sdsIdleRate: undefined },
             { sdsFlags: 0x5, sdsIdleRate: 42 },
+            {
+                sdsFlags: 0x6,
+                sdsIdleRate: 17,
+                error: { status: -2, line: 73, fileName: 'source.c' },
+            },
         ]);
         expect(flags).toEqual([{ setMask: 1, clearMask: 2, arg3: 3 }]);
         expect(logs).toEqual(['Unknown monitor message: 99']);

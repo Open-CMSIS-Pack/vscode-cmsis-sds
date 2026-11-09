@@ -1,10 +1,10 @@
 [
     {
-        "name": "sdsio",
-        "version": "3.0.0",
+        "name": "SDS-Toolbox",
+        "version": "3.1.0",
         "spdx": "Apache-2.0",
         "url": "https://github.com/ARM-software/SDS-Framework",
-        "license": "https://github.com/ARM-software/SDS-Framework/blob/v3.0.0/LICENSE"
+        "license": "https://github.com/ARM-software/SDS-Framework/blob/v3.1.0/LICENSE"
     },
     {
         "name": "xml2js",
@@ -15,7 +15,7 @@
     },
     {
         "name": "yaml",
-        "version": "2.4.2",
+        "version": "2.9.1",
         "spdx": "ISC",
         "url": "https://github.com/eemeli/yaml",
         "license": "https://github.com/eemeli/yaml/blob/main/LICENSE"
@@ -120,7 +120,7 @@
     },
     {
         "name": "antd",
-        "version": "6.3.7",
+        "version": "6.6.8",
         "spdx": "MIT",
         "url": "https://github.com/ant-design/ant-design",
         "license": "https://github.com/ant-design/ant-design/blob/master/LICENSE"
@@ -176,7 +176,7 @@
     },
     {
         "name": "yargs",
-        "version": "18.0.0",
+        "version": "18.2.0",
         "spdx": "MIT",
         "url": "https://github.com/yargs/yargs",
         "license": "https://github.com/yargs/yargs/blob/main/LICENSE"
@@ -190,7 +190,7 @@
     },
     {
         "name": "@ant-design/icons",
-        "version": "6.2.5",
+        "version": "6.3.4",
         "spdx": "MIT",
         "url": "https://github.com/ant-design/ant-design-icons",
         "license": "https://github.com/ant-design/ant-design-icons/blob/master/LICENSE"

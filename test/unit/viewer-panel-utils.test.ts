@@ -23,6 +23,7 @@ import * as path from 'path';
 
 const vscodeMockState = vi.hoisted(() => ({
     decimationPreset: 'accuracy',
+    onDidSaveTextDocument: vi.fn(),
 }));
 
 const webviewBusMockState = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ vi.mock('vscode', () => {
         Disposable,
         Uri,
         workspace: {
+            onDidSaveTextDocument: vscodeMockState.onDidSaveTextDocument,
             getConfiguration: vi.fn(() => ({
                 get: vi.fn((_section: string, fallback: string) => vscodeMockState.decimationPreset || fallback),
             })),
@@ -79,6 +81,7 @@ import {
     buildViewerWebviewHtml,
     generateNonce,
     registerViewerWebview,
+    registerMetadataRefresh,
     resolveMetadataPathForSdsFile,
 } from '../../src/viewer/viewerPanelUtils';
 
@@ -128,6 +131,46 @@ describe('viewerPanelUtils', () => {
 
         expect(resolveMetadataPathForSdsFile(path.join(tmpDir, 'not-sds.txt'), '.sds.yml')).toBeUndefined();
         expect(resolveMetadataPathForSdsFile(nestedSds, '.sds.yml', { getConfig: () => ({}) } as never)).toBe(sameDirMetadata);
+    });
+
+    it('rechecks saved metadata and visible panels without refreshing unchanged contents', () => {
+        const metadataPath = path.join(tmpDir, 'camera.sds.yml');
+        fs.writeFileSync(metadataPath, 'sds:\n  sample-frequency: 25\n');
+        let onSave: (document: { uri: { scheme: string; fsPath: string } }) => void;
+        let onViewState: (event: { webviewPanel: { visible: boolean } }) => void;
+        const saveDisposable = { dispose: vi.fn() };
+        const visibilityDisposable = { dispose: vi.fn() };
+        vscodeMockState.onDidSaveTextDocument.mockImplementation(handler => {
+            onSave = handler;
+            return saveDisposable;
+        });
+        const panel = {
+            onDidChangeViewState: vi.fn(handler => {
+                onViewState = handler;
+                return visibilityDisposable;
+            }),
+        };
+        const refresh = vi.fn();
+        const subscription = registerMetadataRefresh(panel as never, metadataPath, refresh);
+        onViewState!({ webviewPanel: { visible: true } });
+        expect(refresh).not.toHaveBeenCalled();
+        fs.writeFileSync(metadataPath, 'sds:\n  sample-frequency: 50\n');
+        onSave!({ uri: { scheme: 'file', fsPath: path.join(tmpDir, 'other.sds.yml') } });
+        onViewState!({ webviewPanel: { visible: false } });
+        expect(refresh).not.toHaveBeenCalled();
+        onSave!({ uri: { scheme: 'file', fsPath: metadataPath } });
+        expect(refresh).toHaveBeenCalledTimes(1);
+        onViewState!({ webviewPanel: { visible: true } });
+        expect(refresh).toHaveBeenCalledTimes(1);
+        fs.writeFileSync(metadataPath, 'sds:\n  sample-frequency: 75\n');
+        onViewState!({ webviewPanel: { visible: true } });
+        expect(refresh).toHaveBeenCalledTimes(2);
+        fs.rmSync(metadataPath);
+        onViewState!({ webviewPanel: { visible: true } });
+        expect(refresh).toHaveBeenCalledTimes(3);
+        subscription.dispose();
+        expect(saveDisposable.dispose).toHaveBeenCalledOnce();
+        expect(visibilityDisposable.dispose).toHaveBeenCalledOnce();
     });
 
     it('generates nonce values with the requested length and allowed characters', () => {

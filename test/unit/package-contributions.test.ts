@@ -37,8 +37,10 @@ describe('package.json contributions for merged explorer/flags UI', () => {
     const packageJsonPath = path.join(process.cwd(), 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as {
         extensionDependencies: string[];
+        activationEvents: string[];
         contributes: {
             commands: CommandContribution[];
+            configuration: { properties: Record<string, unknown> };
             views: Record<string, Array<{ id: string }>>;
             yamlValidation: SchemaContribution[];
             'json.schemas'?: SchemaContribution[];
@@ -47,6 +49,20 @@ describe('package.json contributions for merged explorer/flags UI', () => {
             };
         };
     };
+
+    it.each(['arm-sds.viewer', 'arm-sds.mediaViewer'])('activates when VS Code restores %s', viewType => {
+        expect(packageJson.activationEvents).toContain(`onWebviewPanel:${viewType}`);
+    });
+
+    it('contributes a user-only monitor port with valid TCP port bounds', () => {
+        expect(packageJson.contributes.configuration.properties['cmsis-sds.sdsio.monitorPort']).toEqual(expect.objectContaining({
+            type: 'integer',
+            default: 6060,
+            minimum: 1,
+            maximum: 65535,
+            scope: 'machine',
+        }));
+    });
 
     it('contributes only the sdsExplorer view in the Arm SDS container', () => {
         const views = packageJson.contributes.views['arm-sds-explorer'];

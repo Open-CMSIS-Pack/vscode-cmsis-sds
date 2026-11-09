@@ -16,7 +16,8 @@
  * limitations under the License.
  */
 
-import { ArchiveFileAsset, Downloadable, Downloader, GitHubReleaseAsset, GitHubWorkflowAsset } from '@open-cmsis-pack/vsce-helper';
+import { Downloadable, Downloader } from '@open-cmsis-pack/vsce-helper';
+import { toolboxReleaseAsset, toolboxWorkflowAsset } from './sds-toolbox.js';
 import { PackageJson } from 'type-fest';
 import process from 'node:process';
 
@@ -39,16 +40,8 @@ function splitGitReference(reference: string, owner: string, repo: string) {
 }
 
 const sdsio: Downloadable = new Downloadable(
-    'SDSIO', '',
+    'SDS-Toolbox', '',
     async (target) => {
-        const { os, arch } = {
-            'win32-x64': { os: 'windows', arch: '' },
-            'win32-arm64': { os: 'windows', arch: '-arm64' },
-            'linux-x64': { os: 'linux', arch: '' },
-            'linux-arm64': { os: 'linux', arch: '-arm64' },
-            'darwin-x64': { os: 'macos', arch: '' },
-            'darwin-arm64': { os: 'macos', arch: '' },
-        }[target];
         const json = await downloader.getPackageJson<CmsisPackageJson>();
         const reqVersion = json?.cmsis?.sdsio;
         if (reqVersion === undefined) {
@@ -57,27 +50,14 @@ const sdsio: Downloadable = new Downloadable(
         }
         // Here, reference is expected to be a release asset version
         const { repo, owner, reference } = splitGitReference(reqVersion, 'ARM-software', 'SDS-Framework');
-        const releaseAsset = new GitHubReleaseAsset(
-            owner, repo, reference,
-            `sdsio-server-${os}${arch}-${reference}.zip`,
-            { token: process.env.GITHUB_TOKEN });
-        const asset = new ArchiveFileAsset(releaseAsset);
-        return asset;
+        return toolboxReleaseAsset(target, owner, repo, reference, process.env.GITHUB_TOKEN);
     },
 );
 
 
 const sdsioNightly: Downloadable = new Downloadable(
-    'SDSIO', '',
+    'SDS-Toolbox', '',
     async (target) => {
-        const { os, arch } = {
-            'win32-x64': { os: 'windows', arch: '' },
-            'win32-arm64': { os: 'windows', arch: '-arm64' },
-            'linux-x64': { os: 'linux', arch: '' },
-            'linux-arm64': { os: 'linux', arch: '-arm64' },
-            'darwin-x64': { os: 'macos', arch: '' },
-            'darwin-arm64': { os: 'macos', arch: '' },
-        }[target];
         const json = await downloader.getPackageJson<CmsisPackageJson>();
         const workflow = json?.cmsis?.sdsioNightly;
         if (workflow === undefined) {
@@ -85,13 +65,8 @@ const sdsioNightly: Downloadable = new Downloadable(
             return undefined;
         }
         // Here, reference is expected to be the name of the workflow yml file without file ending
-        const { repo, owner, reference } = splitGitReference(workflow, 'sdsio', 'SDSIO');
-        const assetPattern = (`sdsio-server-${os}${arch}-\\d+\\.\\d+\\.\\d+.*`);
-        const asset = new GitHubWorkflowAsset(
-            owner, repo, `${reference}.yml`,
-            assetPattern,
-            { token: process.env.GITHUB_TOKEN });
-        return asset;
+        const { repo, owner, reference } = splitGitReference(workflow, 'ARM-software', 'SDS-Framework');
+        return toolboxWorkflowAsset(target, owner, repo, reference, process.env.GITHUB_TOKEN);
     },
 );
 

@@ -17,7 +17,7 @@
 import { ExpandOutlined, PauseCircleOutlined, PlayCircleOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import { Button, Col, Row, Slider } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BroadcastMessage, getIndexedSdsSuffix, Message, SampleFrame } from '../../../webview/protocol';
+import { BroadcastMessage, getIndexedSdsSuffix, isSameSdsFile, Message, SampleFrame } from '../../../webview/protocol';
 import { broadcastMessage } from '../../../webview/vscode-api';
 import { BaseChartViewer, ChartSample } from './baseChartViewer';
 import { decimateExtremaSeries, DecimationPreset } from './decimation';
@@ -147,7 +147,10 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     }, [decimationPreset, isDragging, resolvedDomainStart, sampleRate, samples, viewRange, viewWidth]);
 
     const blockIndexFromTime = useCallback((time: number) => {
-        if (!Number.isFinite(time) || sampleRate <= 0 || totalSamples <= 0 || time < resolvedDomainStart || time > resolvedDomainEnd) {
+        if (!Number.isFinite(time) || sampleRate <= 0 || totalSamples <= 0) {
+            return null;
+        }
+        if (time < resolvedDomainStart || time > resolvedDomainEnd) {
             return null;
         }
 
@@ -298,24 +301,27 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
         };
     }, [isPlaying, playLoadedSamples, stopPlayback]);
 
-    useEffect(() => () => {
-        const source = sourceRef.current;
-        if (source) {
-            try {
-                source.stop();
-            } catch {
-                // Source can already be stopped.
+    useEffect(() => {
+        setIsPlaying(false);
+        return () => {
+            const source = sourceRef.current;
+            if (source) {
+                try {
+                    source.stop();
+                } catch {
+                    // Source can already be stopped.
+                }
+                source.disconnect();
+                sourceRef.current = null;
             }
-            source.disconnect();
-            sourceRef.current = null;
-        }
 
-        const audioCtx = audioCtxRef.current;
-        if (audioCtx) {
-            void audioCtx.close();
-            audioCtxRef.current = null;
-        }
-    }, []);
+            const audioCtx = audioCtxRef.current;
+            if (audioCtx) {
+                void audioCtx.close();
+                audioCtxRef.current = null;
+            }
+        };
+    }, [sampleRate, state.bitDepth, state.channels]);
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
@@ -342,9 +348,9 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                 return;
             }
 
-            if (payload.playbackState === 'stopped') {
+            if (payload.playbackState === 'stopped' && isSameSdsFile(filename, payload.fileName)) {
                 stopPlayback(false);
-            } else if (payload.playbackState === 'playing') {
+            } else if (payload.playbackState === 'playing' && isSameSdsFile(filename, payload.fileName)) {
                 void playLoadedSamples(false);
             }
 
@@ -368,6 +374,31 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
             window.removeEventListener('resize', onResize);
         };
     }, []);
+
+    const tooltipFormatter = useCallback((datum: { y?: unknown }) => ({
+        name: 'audio',
+        value: typeof datum?.y === 'number' ? datum.y.toFixed(5) : String(datum?.y ?? ''),
+    }), []);
+
+    const tooltipTitle = useCallback((value: unknown) => {
+        const time = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
+        return Number.isFinite(time) ? `Time: ${time.toFixed(4)} s` : time;
+    }, []);
+
+    const tooltip = useMemo(() => ({
+        showMarkers: true,
+        shared: true,
+        crosshairs: {
+            line: {
+                style: {
+                    stroke: 'rgba(150,150,150,0.45)',
+                    lineWidth: 1,
+                },
+            },
+        },
+        formatter: tooltipFormatter,
+        title: tooltipTitle,
+    }), [tooltipFormatter, tooltipTitle]);
 
     return (
         <div className="media-page">
@@ -393,26 +424,7 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
                     onCursorChange={onCursorChange}
                     onZoomRangeChange={(range) => setVisibleRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
-                    tooltip={{
-                        showMarkers: true,
-                        shared: true,
-                        crosshairs: {
-                            line: {
-                                style: {
-                                    stroke: 'rgba(150,150,150,0.45)',
-                                    lineWidth: 1,
-                                },
-                            },
-                        },
-                        formatter: (datum: { y?: unknown }) => ({
-                            name: 'audio',
-                            value: typeof datum?.y === 'number' ? datum.y.toFixed(5) : String(datum?.y ?? ''),
-                        }),
-                        title: (value: unknown) => {
-                            const t = typeof value === 'number' ? value : Number((value as { x?: unknown }).x);
-                            return Number.isFinite(t) ? `Time: ${t.toFixed(4)} s` : t;
-                        },
-                    }}
+                    tooltip={tooltip}
                 />
             </div>
             <Row className="controls" gutter={12}>

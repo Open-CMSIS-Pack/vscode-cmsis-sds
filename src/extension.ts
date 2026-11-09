@@ -36,8 +36,9 @@ import { registerSdsioConfigCommands } from './commands/sdsioConfigCommands';
 import { registerSdsioInterfaceCommands } from './commands/sdsioInterfaceCommands';
 import { registerSdsFileCommands } from './commands/sdsFileCommands';
 import { registerWorkspaceCommands } from './commands/workspaceCommands';
+import { SdsMediaViewerPanel } from './viewer/sdsMediaViewerPanel';
+import { SdsViewerPanel } from './viewer/sdsViewerPanel';
 
-export const SDSIO_SERVER_MONITOR_PORT = 6060;
 const SDSIO_CONFIG_EXTENSION = '.sdsio.yml';
 const SDSIO_TEMPLATE = [
     'sdsio:',
@@ -69,20 +70,23 @@ export function activate(context: vscode.ExtensionContext) {
     configureTerminalPath(context, diagnostics);
 
     // ── SDSIO Monitor Client ────────────────────────────────────
-    const monitor = new SdsioMonitorClient({ port: SDSIO_SERVER_MONITOR_PORT });
+    const monitor = new SdsioMonitorClient();
     context.subscriptions.push({
         dispose: () => {
             monitor.stop();
         },
     });
-    // Start monitor in background
-    monitor.start().catch((err) => {
-        diagnostics.error(DiagnosticSource.Extension, `Failed to start monitor: ${err instanceof Error ? err.message : String(err)}`);
-    });
 
     // ── Config Manager ──────────────────────────────────────────
     const configManager = new SdsioConfigManager();
     context.subscriptions.push({ dispose: () => configManager.dispose() });
+    for (const viewer of [SdsViewerPanel, SdsMediaViewerPanel]) {
+        context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(viewer.viewType, {
+            async deserializeWebviewPanel(panel, state: unknown) {
+                viewer.revive(panel, context.extensionUri, state, configManager);
+            },
+        }));
+    }
 
     // ── Tree Views ──────────────────────────────────────────────
     const sdsIoControlService = new SdsIoControlService(configManager, monitor, context.extensionPath);

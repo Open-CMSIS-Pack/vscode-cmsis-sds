@@ -51,6 +51,11 @@ export type WebviewMessage = {
 };
 
 export type MediaFrame = { timestamp: number; };
+export type ViewerStateChangedMessage<T> = WebviewMessage & {
+    command: 'viewerStateChanged';
+    payload: T;
+    reset?: boolean;
+};
 export type ImageFrame = MediaFrame & { rgbaBase64: string };
 export type SampleFrame = MediaFrame & { samples: number[] };
 
@@ -58,8 +63,14 @@ export function getIndexedSdsSuffix(value: unknown) {
     if (typeof value !== 'string') {
         return null;
     }
-
     return value.match(SDS_FILE_MATCHER)?.[2].toLowerCase() ?? null;
+}
+
+export function isSameSdsFile(left: unknown, right: unknown) {
+    if (typeof left !== 'string' || typeof right !== 'string') {
+        return false;
+    }
+    return left.toLowerCase() === right.toLowerCase();
 }
 
 export function isTimestampInFrameRange(timeStamp: number | undefined, frames: MediaFrame[]) {

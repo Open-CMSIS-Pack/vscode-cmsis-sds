@@ -27,6 +27,7 @@
 
 import { EventEmitter } from 'events';
 import * as net from 'net';
+import { DEFAULT_SDSIO_MONITOR_PORT } from './sdsIoMonitorPort';
 
 // ── Protocol constants ──────────────────────────────────────
 export const MON_OPEN = 1;
@@ -34,6 +35,8 @@ export const MON_CLOSE = 2;
 export const MON_FLAGS = 6;
 export const MON_INFO = 7;
 export const HEADER_SIZE = 16;
+/** MON_FLAGS TestCase value that selects every configured playback step. */
+export const SDSIO_ALL_PLAYBACK_TEST_CASE = 0xffffffff;
 
 // sdsFlags control bits from SDS-Framework issue #209
 const SDS_FLAG_IO_ACTIVE = 0x80000000; // bit 31
@@ -161,7 +164,7 @@ class MonitorFrameAccumulator {
  */
 export class SdsioMonitorClient extends EventEmitter {
     private readonly host: string;
-    private readonly port: number;
+    private port: number;
     private readonly reconnectDelayMs: number;
     private socket: net.Socket | undefined;
     private readonly accumulator = new MonitorFrameAccumulator();
@@ -171,7 +174,7 @@ export class SdsioMonitorClient extends EventEmitter {
     constructor(opts?: { host?: string; port?: number; reconnectDelayMs?: number }) {
         super();
         this.host = opts?.host ?? '127.0.0.1';
-        this.port = opts?.port ?? 8181;
+        this.port = opts?.port ?? DEFAULT_SDSIO_MONITOR_PORT;
         this.reconnectDelayMs = opts?.reconnectDelayMs ?? 2000;
     }
 
@@ -179,7 +182,11 @@ export class SdsioMonitorClient extends EventEmitter {
         return !!this.socket && !this.socket.destroyed;
     }
 
-    async start(): Promise<void> {
+    async start(port = this.port): Promise<void> {
+        if (port !== this.port) {
+            this.stop();
+            this.port = port;
+        }
         if (this.running) {
             return;
         }
@@ -196,21 +203,26 @@ export class SdsioMonitorClient extends EventEmitter {
      * Send FLAGS command to update sdsFlags on the server.
      * Returns true if sent successfully, false if not connected.
      */
-    sendFlags(setMask: number, clearMask: number): boolean {
+    sendFlags(setMask: number, clearMask: number, testCase = 0): boolean {
         if (!this.isConnected) {
             return false;
         }
 
         const set = setMask >>> 0;
         const clear = clearMask >>> 0;
+        if (!Number.isSafeInteger(testCase) || testCase < 0 || testCase > 0xffffffff) {
+            throw new RangeError(`Invalid playback test case: ${testCase}`);
+        }
+        const selectedTestCase = testCase;
 
         const header = Buffer.alloc(HEADER_SIZE);
         header.writeUInt32LE(MON_FLAGS, 0);
         header.writeUInt32LE(set, 4);
         header.writeUInt32LE(clear, 8);
-        header.writeUInt32LE(0, 12);
+        header.writeUInt32LE(selectedTestCase, 12);
 
         try {
+            // MON_FLAGS has no server response, so selection rejection cannot currently be reported to the caller.
             this.socket!.write(header);
             return true;
         } catch (err) {
@@ -226,11 +238,9 @@ export class SdsioMonitorClient extends EventEmitter {
         return this.sendFlags(SDS_FLAG_IO_ACTIVE, SDS_FLAG_PLAYBACK);
     }
 
-    /**
-     * Start playback mode: set bit31=1 and bit29=1, clear no bits.
-     */
-    startPlayback(): boolean {
-        return this.sendFlags((SDS_FLAG_IO_ACTIVE | SDS_FLAG_PLAYBACK) >>> 0, 0);
+    /** Start playback mode for a zero-based test case, or all configured steps by default. */
+    startPlayback(testCase = SDSIO_ALL_PLAYBACK_TEST_CASE): boolean {
+        return this.sendFlags((SDS_FLAG_IO_ACTIVE | SDS_FLAG_PLAYBACK) >>> 0, 0, testCase);
     }
 
     /**
@@ -311,7 +321,7 @@ export class SdsioMonitorClient extends EventEmitter {
                     this._handleFlags(header);
                     break;
                 case MON_INFO:
-                    this._handleInfo(header);
+                    this._handleInfo(header, payload);
                     break;
                 default:
                     this._safeEmit('log', `Unknown monitor message: ${header.cmd}`);
@@ -348,18 +358,22 @@ export class SdsioMonitorClient extends EventEmitter {
         this._safeEmit('close', fileName);
     }
 
-    private _handleInfo(header: SdsioMonitorHeader): void {
+    private _handleInfo(header: SdsioMonitorHeader, payload: Buffer): void {
         const sdsFlags = header.setMask;
         const sdsIdleRate = header.clearMask;
-        //const errorLen = header.arg3;
 
         const info: SdsioMonitorInfo = {
             sdsFlags,
             sdsIdleRate: sdsIdleRate === 0xffffffff ? undefined : sdsIdleRate,
         };
 
-        // TODO: Parse error data if present
-        // For now, just emit the basic info
+        if (payload.length >= 8) {
+            info.error = {
+                status: payload.readInt32LE(0),
+                line: payload.readUInt32LE(4),
+                fileName: payload.subarray(8).toString('utf-8'),
+            };
+        }
 
         this._safeEmit('info', info);
     }
@@ -392,10 +406,12 @@ export class SdsioMonitorClient extends EventEmitter {
             this.reconnectTimer = undefined;
         }
 
-        if (this.socket && !this.socket.destroyed) {
+        if (this.socket) {
             try {
-                this.socket.destroy();
                 this.socket.removeAllListeners();
+                if (!this.socket.destroyed) {
+                    this.socket.destroy();
+                }
             } catch { /* ignore */ }
         }
 

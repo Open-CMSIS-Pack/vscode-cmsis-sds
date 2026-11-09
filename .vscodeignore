@@ -13,6 +13,7 @@ out/src/studio/**
 out/src/viewer/**
 out/src/webview/**
 e2e-report/**
+docs/SDS-Intro-F10.gif
 esbuild.js
 .gitignore
 tsconfig.json
@@ -22,10 +23,12 @@ package-lock.json
 **/*.d.ts
 *.vsix
 .github/**
+.qlty/out/**
 node_modules/**
 .vscode-test/**
 .vscodeignore
 test-results/**
+test/unit/fixtures/sds-toolbox/**
 coverage/**
 *.log
 *.tmp

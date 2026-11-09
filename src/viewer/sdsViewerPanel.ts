@@ -39,6 +39,7 @@ import { WebviewMessage } from '../webview/protocol';
 import {
     buildViewerWebviewHtml,
     registerViewerWebview,
+    registerMetadataRefresh,
     resolveMetadataPathForSdsFile,
 } from './viewerPanelUtils';
 import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
@@ -69,6 +70,7 @@ export class SdsViewerPanel {
     private channelNames: string[] = [];
     private stats: ReturnType<typeof getSdsFileStats> | undefined;
     private metadata: SdsMetadata | undefined;
+    private hasViewerState = false;
 
     public static createOrShow(
         extensionUri: vscode.Uri,
@@ -103,6 +105,25 @@ export class SdsViewerPanel {
         return viewer;
     }
 
+    public static revive(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        state: unknown,
+        configManager?: SdsioConfigManager
+    ): void {
+        if (!state || typeof state !== 'object' || !('sdsFilePath' in state)
+            || typeof state.sdsFilePath !== 'string' || !state.sdsFilePath) {
+            panel.dispose();
+            return;
+        }
+
+        const metadataPath = 'metadataPath' in state && typeof state.metadataPath === 'string'
+            ? state.metadataPath
+            : undefined;
+        const viewer = new SdsViewerPanel(panel, extensionUri, state.sdsFilePath, configManager, metadataPath);
+        SdsViewerPanel.panels.set(state.sdsFilePath, viewer);
+    }
+
     private constructor(
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
@@ -115,10 +136,15 @@ export class SdsViewerPanel {
         this.sdsFilePath = sdsFilePath;
         this.metadataPath = metadataPath || resolveMetadataPathForSdsFile(sdsFilePath, SDS_METADATA_EXTENSION, configManager);
         this.webview = panel.webview;
+        this.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [extensionUri],
+        };
         this.disposables.push(registerViewerWebview(this.webview));
 
         this.panel.iconPath = new vscode.ThemeIcon('graph-line');
         this.update();
+        this.disposables.push(registerMetadataRefresh(this.panel, this.metadataPath, () => this.update(true)));
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
@@ -165,14 +191,16 @@ export class SdsViewerPanel {
         }
     }
 
-    private update(): void {
+    private update(inPlace = false): void {
         try {
-            const parsed = parseSdsFile(this.sdsFilePath, { strict: false });
-
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
                 metadata = parseMetadataFile(this.metadataPath, { sdsFilePath: this.sdsFilePath, inferMissingSampleFrequency: true });
             }
+            if (inPlace && this.hasViewerState && JSON.stringify(this.metadata) === JSON.stringify(metadata)) {
+                return;
+            }
+            const parsed = parseSdsFile(this.sdsFilePath, { strict: false });
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             this.stats = getSdsFileStats(parsed, tickFreq);
 
@@ -200,7 +228,7 @@ export class SdsViewerPanel {
             const domainEnd = this.decodedSamples.length > 0 ? this.decodedSamples[this.decodedSamples.length - 1].timeSeconds : 1;
             const initialSamples = this.getVisibleRangeSamples(domainStart, domainEnd, 1200, 'high');
 
-            this.panel.webview.html = this.getHtml({
+            const initialState = {
                 samples: initialSamples,
                 channelNames: this.channelNames,
                 stats: this.stats,
@@ -209,9 +237,21 @@ export class SdsViewerPanel {
                 domainEnd,
                 fileName: path.basename(this.sdsFilePath),
                 decimationPreset: ViewerSettings.getDecimationPreset(),
-            });
+            };
+            if (inPlace && this.hasViewerState) {
+                void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: initialState });
+            } else {
+                this.panel.webview.html = this.getHtml(initialState);
+                this.hasViewerState = true;
+            }
         } catch (err) {
-            this.panel.webview.html = this.getErrorHtml(err instanceof Error ? err.message : String(err));
+            const message = err instanceof Error ? err.message : String(err);
+            if (inPlace && this.hasViewerState) {
+                void vscode.window.showErrorMessage(`Viewer metadata update failed: ${message}`);
+            } else {
+                this.panel.webview.html = this.getErrorHtml(message);
+                this.hasViewerState = false;
+            }
         }
     }
 
@@ -351,7 +391,11 @@ export class SdsViewerPanel {
             styleFile: 'dataViewerWebview.css',
             scriptFile: 'dataViewerWebview.js',
             title: 'SDS Viewer',
-            initialState,
+            initialState: {
+                ...initialState,
+                sdsFilePath: this.sdsFilePath,
+                metadataPath: this.metadataPath,
+            },
         });
     }
 

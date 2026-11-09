@@ -70,7 +70,17 @@ export function registerSdsioConfigCommands(args: RegisterSdsioConfigCommandsArg
                 return;
             }
 
-            const targetPath = path.join(workspaceFolder.uri.fsPath, `${baseName.trim()}${configExtension}`);
+            const folders = await vscode.window.showOpenDialog({
+                title: 'Select Folder',
+                openLabel: 'Select Folder',
+                defaultUri: workspaceFolder.uri,
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+            });
+            const selectedFolder = folders?.[0] ?? workspaceFolder.uri;
+
+            const targetPath = path.join(selectedFolder.fsPath, `${baseName.trim()}${configExtension}`);
             try {
                 fs.writeFileSync(targetPath, configTemplate, { encoding: 'utf-8', flag: 'wx' });
             } catch (err) {
@@ -126,7 +136,7 @@ export function registerSdsioConfigCommands(args: RegisterSdsioConfigCommandsArg
         vscode.commands.registerCommand('arm-sds.sds.selectConfig', async () => {
             const configFiles = await vscode.workspace.findFiles('**/*.sdsio.yml', '**/node_modules/**');
             if (configFiles.length === 0) {
-                void vscode.window.showInformationMessage('No .sdsio.yml files found in the current workspace.');
+                void vscode.window.showErrorMessage('No SDS Configuration (*.sdsio.yml file) in Workspace found');
                 return;
             }
 

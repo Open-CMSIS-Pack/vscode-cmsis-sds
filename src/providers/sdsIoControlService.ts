@@ -15,9 +15,9 @@
  */
 
 import * as vscode from 'vscode';
-import { SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
-import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS } from '../controller/sdsioConfigManager';
-import { SDSIO_SERVER_MONITOR_PORT } from '../extension';
+import { SDSIO_ALL_PLAYBACK_TEST_CASE, SdsioMonitorClient, SdsioMonitorInfo, SdsioMonitorOpenMessage } from '../recorder/sdsio/sdsIoMonitorClient';
+import { SdsioConfigManager, MAX_FLAG_INFO_FLAGS, type SdsioPlaybackTestCase } from '../controller/sdsioConfigManager';
+import { DEFAULT_SDSIO_MONITOR_PORT, selectSdsioMonitorPort } from '../recorder/sdsio/sdsIoMonitorPort';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 import { SdsioServerLauncher } from '../controller/sdsioServerLauncher';
 import { SdsTreeItem } from './sdsExplorerProvider';
@@ -63,6 +63,10 @@ export class SdsIoControlService {
     private monitorConnected = false;
     private readonly serverLauncher: SdsioServerLauncher;
     private shutdownPromise?: Promise<void> | undefined;
+    private shutdownRequested = false;
+    private disconnectPromise?: Promise<void> | undefined;
+    private connectionPromise?: Promise<boolean> | undefined;
+    private connectionGeneration = 0;
 
     constructor(private readonly configManager: SdsioConfigManager, monitor?: SdsioMonitorClient, extensionInstallPath?: string) {
         this.monitor = monitor;
@@ -77,6 +81,7 @@ export class SdsIoControlService {
             monitor.on('flags', (setMask: number, unsetMask: number) => this.onMonitorFlags(setMask, unsetMask));
         }
 
+        // Reloading the configured server preserves current lifecycle behavior; stopping and reconnecting first is another option.
         configManager.onDidChangeConfigFile(async () => await this.reConnectServer());
         configManager.onDidChangeConfig(() => this.syncFlagNamesFromManager());
         this.syncFlagNamesFromManager();
@@ -175,8 +180,21 @@ export class SdsIoControlService {
         this.notifyFlagsChanged();
     }
 
-    play(): void {
-        this.transitionMode('play', 'Play', () => this.monitor?.startPlayback() === true);
+    getPlaybackTestCases(): readonly SdsioPlaybackTestCase[] {
+        return this.configManager.getConfig().playbackTestCases;
+    }
+
+    play(testCase = SDSIO_ALL_PLAYBACK_TEST_CASE, expectedName?: string): boolean {
+        if (testCase !== SDSIO_ALL_PLAYBACK_TEST_CASE) {
+            const currentTestCase = this.getPlaybackTestCases().find((item) => item.testCase === testCase);
+            if (!Number.isSafeInteger(testCase) || testCase < 0 || !currentTestCase
+                || (expectedName !== undefined && currentTestCase.name !== expectedName)) {
+                this.diagnostics.warn(DiagnosticSource.Server, 'Selected playback test case is no longer present in the SDSIO configuration.');
+                return false;
+            }
+        }
+
+        return this.transitionMode('play', 'Play', () => this.monitor?.startPlayback(testCase) === true);
     }
 
     record(): void {
@@ -200,7 +218,7 @@ export class SdsIoControlService {
     }
 
     canConnect(): boolean {
-        return !this.monitorConnected;
+        return !this.monitorConnected && !this.shutdownRequested && !this.disconnectPromise;
     }
 
     canDisconnect(): boolean {
@@ -208,17 +226,47 @@ export class SdsIoControlService {
     }
 
     async disconnectServer(): Promise<void> {
-        this.stop();
-        await this.serverLauncher.stop('Disconnecting SDSIO server terminal on user request');
-
-        if (this.monitorConnected && this.monitor) {
-            this.monitor.stop();
+        if (this.disconnectPromise) {
+            await this.disconnectPromise;
+            return;
         }
 
+        this.disconnectPromise = (async () => {
+            this.stop();
+            this.cancelConnection();
+            if (this.connectionPromise) {
+                await this.connectionPromise;
+            }
+            await this.serverLauncher.stop('Disconnecting SDSIO server terminal on user request');
+        })();
+
+        try {
+            await this.disconnectPromise;
+        } finally {
+            this.disconnectPromise = undefined;
+        }
+    }
+
+    connectServer(): Promise<boolean> {
+        if (this.shutdownRequested || this.disconnectPromise) {
+            return Promise.resolve(false);
+        }
+        if (this.connectionPromise) {
+            return this.connectionPromise;
+        }
+        this.connectionPromise = this.connectMonitor(this.connectionGeneration).finally(() => {
+            this.connectionPromise = undefined;
+        });
+        return this.connectionPromise;
+    }
+
+    private cancelConnection(): void {
+        this.connectionGeneration++;
+        this.monitor?.stop();
         this.setMonitorConnected(false);
     }
 
-    async connectServer(): Promise<boolean> {
+    private async connectMonitor(generation: number): Promise<boolean> {
         this.diagnostics.info(DiagnosticSource.Server, 'Attempting to connect to SDSIO monitor...');
         if (!this.monitor) {
             this.diagnostics.error(DiagnosticSource.Server, 'No monitor client available to connect to.');
@@ -230,6 +278,7 @@ export class SdsIoControlService {
             return true;
         }
 
+        this.monitor.stop();
         try {
             if (this.serverLauncher.hasTerminal()) {
                 await this.serverLauncher.stop('Terminating existing SDSIO server terminal before connecting');
@@ -247,23 +296,37 @@ export class SdsIoControlService {
                 return false;
             }
 
-            await this.serverLauncher.start({
+            const preferredPort = vscode.workspace.getConfiguration('cmsis-sds.sdsio')
+                .get<number>('monitorPort', DEFAULT_SDSIO_MONITOR_PORT);
+            const monitorPort = await selectSdsioMonitorPort(preferredPort);
+            if (generation !== this.connectionGeneration) {
+                return false;
+            }
+            if (monitorPort !== preferredPort) {
+                this.diagnostics.warn(DiagnosticSource.Server, `SDSIO monitor port ${preferredPort} is unavailable; using port ${monitorPort}.`);
+            }
+            this.diagnostics.info(DiagnosticSource.Server, `Using SDSIO monitor port ${monitorPort}.`);
+            const started = await this.serverLauncher.start({
                 basePath,
                 configFile: sdsIoFile,
-                monitorPort: SDSIO_SERVER_MONITOR_PORT,
+                monitorPort,
             });
-        } catch {
-            // Ignore spawn failures and still try monitor reconnect below.
-        }
+            if (!started || generation !== this.connectionGeneration) {
+                return false;
+            }
 
-        try {
             this.diagnostics.info(DiagnosticSource.Server, 'Attempting to connect monitor client to server...');
-            await this.monitor.start();
-        } catch {
+            await this.monitor.start(monitorPort);
+        } catch (error) {
+            this.monitor.stop();
+            this.diagnostics.error(DiagnosticSource.Server, `Failed to connect SDSIO monitor: ${error instanceof Error ? error.message : String(error)}`);
             return false;
         }
 
         for (let i = 0; i < 20; i++) {
+            if (generation !== this.connectionGeneration) {
+                return false;
+            }
             if (this.monitorConnected) {
                 return true;
             }
@@ -279,15 +342,18 @@ export class SdsIoControlService {
             return;
         }
 
+        if (this.shutdownRequested) {
+            return;
+        }
+        this.shutdownRequested = true;
+
         this.shutdownPromise = (async () => {
             this.stop();
-            await this.serverLauncher.stop(reason);
-
-            if (this.monitorConnected && this.monitor) {
-                this.monitor.stop();
-                this.setMonitorConnected(false);
+            this.cancelConnection();
+            if (this.connectionPromise) {
+                await this.connectionPromise;
             }
-
+            await this.serverLauncher.stop(reason);
             this.serverLauncher.dispose();
         })();
 
@@ -310,14 +376,22 @@ export class SdsIoControlService {
     }
 
     private async reConnectServer(): Promise<void> {
-        if (this.serverLauncher.hasTerminal()) {
-            await this.serverLauncher.stop('Terminating existing SDSIO server terminal due to config file change');
-
-            if (this.monitorConnected && this.monitor) {
-                this.monitor.stop();
-                this.setMonitorConnected(false);
+        if (this.shutdownRequested || this.disconnectPromise) {
+            return;
+        }
+        if (this.serverLauncher.hasTerminal() || this.connectionPromise) {
+            this.cancelConnection();
+            const generation = this.connectionGeneration;
+            if (this.connectionPromise) {
+                await this.connectionPromise;
             }
-
+            if (generation !== this.connectionGeneration) {
+                return;
+            }
+            await this.serverLauncher.stop('Terminating existing SDSIO server terminal due to config file change');
+            if (generation !== this.connectionGeneration) {
+                return;
+            }
             await this.connectServer();
         }
     }
@@ -331,19 +405,20 @@ export class SdsIoControlService {
         this.monitor.sendFlags(setMask, unsetMask);
     }
 
-    private transitionMode(nextMode: SdsIoMode, operationName: string, sendToMonitor: () => boolean): void {
+    private transitionMode(nextMode: SdsIoMode, operationName: string, sendToMonitor: () => boolean): boolean {
         if (this.mode === nextMode) {
-            return;
+            return false;
         }
 
         const accepted = this.monitorConnected ? sendToMonitor() : true;
         if (!accepted) {
             this.diagnostics.warn(DiagnosticSource.Server, `${operationName} rejected by monitor`);
-            return;
+            return false;
         }
 
         this.setMode(nextMode);
         this.diagnostics.info(DiagnosticSource.Server, `${operationName} invoked. Control flags ${this.monitorConnected ? 'sent' : 'not sent'};`);
+        return true;
     }
 
     private findFlag(id: string): SdsFlag | undefined {

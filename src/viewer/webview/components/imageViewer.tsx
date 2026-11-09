@@ -46,14 +46,18 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const [playing, setPlaying] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const playbackTimestampRef = useRef(frames[0]?.timestamp ?? 0);
-    const getImageWindowSize = useCallback((quality: 'low' | 'high') => quality === 'low' ? 32 : 160, []);
-    const getImageNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(8, Math.floor(loadedFrameCount * 0.2)), []);
-    const setPlaybackState = useCallback((nextPlaying: boolean, broadcast = true) => {
+    const getImageWindowSize = useCallback((quality: 'low' | 'high') => {
+        const frameBytes = Math.max(1, width * height * 4);
+        const budgetFrames = Math.max(2, Math.floor(8 * 1024 * 1024 / frameBytes));
+        return Math.min(quality === 'low' ? 32 : 160, budgetFrames);
+    }, [height, width]);
+    const getImageNearEdgeMargin = useCallback((loadedFrameCount: number) => Math.max(1, Math.floor(loadedFrameCount * 0.2)), []);
+    const setPlaybackState = useCallback((nextPlaying: boolean, broadcast = true, timeStamp = playbackTimestampRef.current) => {
         setPlaying(nextPlaying);
         if (broadcast) {
             broadcastMessage({
                 type: 'broadcast',
-                timeStamp: playbackTimestampRef.current,
+                timeStamp,
                 fileName: filename,
                 playbackState: nextPlaying ? 'playing' : 'stopped',
             });
@@ -63,7 +67,6 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
     const {
         index,
         windowFrames,
-        windowStart,
         setIsDragMode,
         getLoadedFrame,
         changeIndex,
@@ -91,10 +94,14 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         if (!playing || !Number.isFinite(framesPerSecond) || framesPerSecond <= 0) { return; }
         timerRef.current = setInterval(() => {
             if (index >= totalFrames - 1) {
-                setPlaybackState(false);
+                const firstFrameTimestamp = getLoadedFrame(0)?.timestamp ?? frames[0]?.timestamp ?? 0;
+                playbackTimestampRef.current = firstFrameTimestamp;
+                changeIndex(0, { manual: false, broadcast: false });
+                setPlaybackState(false, true, firstFrameTimestamp);
                 return;
             }
             const nextIndex = index + 1;
+            if (!getLoadedFrame(nextIndex)) { return; }
             changeIndex(nextIndex, { manual: false });
         }, 1000 / framesPerSecond);
 
@@ -104,14 +111,14 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
                 timerRef.current = null;
             }
         };
-    }, [changeIndex, index, playing, setPlaybackState, state.interval, totalFrames]);
+    }, [changeIndex, frames, getLoadedFrame, index, playing, setPlaybackState, state.interval, totalFrames]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas || windowFrames.length === 0) { return; }
         const ctx = canvas.getContext('2d');
         if (!ctx) { return; }
-        const frame = getLoadedFrame(index) ?? windowFrames[Math.max(0, Math.min(windowFrames.length - 1, index - windowStart))];
+        const frame = getLoadedFrame(index);
         if (!frame) { return; }
         const img = decodeFrame(frame, width, height);
         canvas.width = width;
@@ -119,7 +126,7 @@ export function ImageViewer({ state, filename }: ImageViewerProps) {
         canvas.style.width = `${width * zoom}px`;
         canvas.style.height = `${height * zoom}px`;
         ctx.putImageData(img, 0, 0);
-    }, [getLoadedFrame, height, index, width, zoom, windowFrames, windowStart]);
+    }, [getLoadedFrame, height, index, width, zoom, windowFrames]);
 
     const togglePlay = useCallback(() => setPlaybackState(!playing), [playing, setPlaybackState]);
 
