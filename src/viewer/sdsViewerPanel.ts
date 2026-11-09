@@ -242,7 +242,8 @@ export class SdsViewerPanel {
 
             const domainStart = this.decodedSamples.length > 0 ? this.decodedSamples[0].timeSeconds : 0;
             const domainEnd = this.decodedSamples.length > 0 ? this.decodedSamples[this.decodedSamples.length - 1].timeSeconds : 1;
-            const initialSamples = this.getVisibleRangeSamples(domainStart, domainEnd, 1200, 'high');
+            const initialSamples = append && inPlace && this.hasViewerState
+                ? [] : this.getVisibleRangeSamples(domainStart, domainEnd, 1200, 'high');
 
             const initialState = {
                 samples: initialSamples,

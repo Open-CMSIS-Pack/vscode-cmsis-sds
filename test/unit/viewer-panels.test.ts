@@ -391,7 +391,7 @@ describe('SdsViewerPanel', () => {
         expect(panel.webview.html).toBe(html);
         expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
             command: 'viewerStateChanged', live: true, reset: false,
-            payload: expect.objectContaining({ domainEnd: 1, samples: [expect.objectContaining({ index: 0 }), expect.objectContaining({ index: 1 })] }),
+            payload: expect.objectContaining({ domainEnd: 1, samples: [] }),
         }));
         panel.webview.postMessage.mockClear();
         viewerUtilsMockState.readSdsAppend.mockReturnValue(appended);
@@ -399,7 +399,10 @@ describe('SdsViewerPanel', () => {
         expect(panel.webview.postMessage).not.toHaveBeenCalled();
         sdsMockState.parseSdsFile.mockReturnValue(appended);
         refresh(true);
-        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({ live: false, reset: true }));
+        expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+            live: false, reset: true,
+            payload: expect.objectContaining({ samples: [expect.objectContaining({ index: 0 }), expect.objectContaining({ index: 1 })] }),
+        }));
     });
 
     it('publishes changed data metadata in place and preserves the viewer on invalid updates', () => {
