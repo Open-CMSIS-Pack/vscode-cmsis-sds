@@ -27,7 +27,7 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
     const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
     const sessionRef = useRef<{
         startTime: number; nextTime: number; scheduledUntil: number; limit: number; follow: boolean;
-        pending: number | null; broadcast: boolean;
+        pending: number | null; broadcast: boolean; started: boolean;
     } | null>(null);
     const domainEndRef = useRef(domainEnd);
     domainEndRef.current = domainEnd;
@@ -74,7 +74,7 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
         const session = {
             startTime: range[0], nextTime: range[0], scheduledUntil: context.currentTime, limit: range[1],
             follow: Math.abs(range[1] - domainEndRef.current) <= 1 / sampleRate,
-            pending: null as number | null, broadcast,
+            pending: null as number | null, broadcast, started: false,
         };
         sessionRef.current = session;
         setIsPlaying(true);
@@ -102,6 +102,11 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
             for (const frame of frames) {
                 for (let index = 0; index < frame.samples.length; index++) {
                     const time = frame.timestamp + index / sampleRate;
+                    if (!session.started && !pcm.length) {
+                        if (time < session.startTime - 1e-7 / sampleRate) { continue; }
+                        if (time >= session.startTime + (1 + 1e-7) / sampleRate) { break; }
+                        nextTime = time;
+                    }
                     if (time < nextTime - 0.5 / sampleRate) { continue; }
                     if (time > nextTime + 0.5 / sampleRate) { break; }
                     pcm.push(frame.samples[index]);
@@ -116,6 +121,9 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
                 stopPlayback();
                 return;
             }
+            const firstSampleTime = nextTime - pcm.length / sampleRate;
+            if (!session.started) { session.startTime = firstSampleTime; }
+            session.started = true;
             const buffer = context.createBuffer(1, pcm.length, sampleRate);
             buffer.copyToChannel(Float32Array.from(pcm), 0);
             const source = context.createBufferSource();
@@ -134,7 +142,7 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
             source.start(startAt);
             if (session.broadcast) {
                 session.broadcast = false;
-                broadcastMessage({ type: 'broadcast', timeStamp: frames[0].timestamp, fileName: filename, playbackState: 'playing' });
+                broadcastMessage({ type: 'broadcast', timeStamp: firstSampleTime, fileName: filename, playbackState: 'playing' });
             }
             pump();
         };

@@ -668,6 +668,42 @@ test.describe('Media Viewer — Audio', () => {
         expect(errors).toEqual([]);
     });
 
+    test('starts playback at the first sample after a fractional range boundary', async ({ page }) => {
+        await page.addInitScript(() => {
+            Object.defineProperty(window, '__INITIAL_STATE__', {
+                configurable: true,
+                set(initial) {
+                    const audio = {
+                        ...initial.audio, sampleRate: 100, domainStart: 0.001, domainEnd: 1,
+                        totalSamples: 100, samples: [{ timestamp: 0, samples: Array(100).fill(0.25) }]
+                    };
+                    Object.defineProperty(window, '__INITIAL_STATE__', { configurable: true, writable: true, value: { ...initial, audio } });
+                },
+            });
+            const lengths: number[] = [];
+            Object.assign(window, { __audioLengths: lengths, AudioContext: class {
+                state = 'running';
+                destination = {};
+                currentTime = 0;
+                createBuffer(_channels: number, length: number) {
+                    lengths.push(length);
+                    return { copyToChannel: () => undefined };
+                }
+                createBufferSource() {
+                    return { connect() {}, disconnect() {}, start() {}, stop() {} };
+                }
+                close() { return Promise.resolve(); }
+            } });
+        });
+        await page.goto(`${baseUrl}/audio`);
+        await page.locator('button[title="Play Visible Range"]').click();
+        await expect.poll(() => page.evaluate(() => (window as unknown as { __audioLengths: number[] }).__audioLengths)).toEqual([99]);
+        const started = await page.evaluate(() => (window as unknown as {
+            __messages: { playbackState?: string; timeStamp?: number }[];
+        }).__messages.find(message => message.playbackState === 'playing'));
+        expect(started?.timeStamp).toBeCloseTo(0.01, 8);
+    });
+
     test('plays only samples in the visible range after zooming', async ({ page }) => {
         await page.addInitScript(() => {
             const audioEvents = { bufferLengths: [] as number[], startCount: 0, stopCount: 0 };
