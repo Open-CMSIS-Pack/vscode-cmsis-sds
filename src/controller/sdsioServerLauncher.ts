@@ -70,7 +70,7 @@ export class SdsioServerLauncher {
 
         const ports = commands.map((command) => {
             const match = command.match(/(?:--mon-port|-m)["']?(?:=|\s+)["']?(\d+)/);
-            const port = match ? Number(match[1]) : preferredPort;
+            const port = match ? Number(match[1]) : 6060;
             if (!Number.isInteger(port) || port < 1 || port > 65535) {
                 throw new Error('Running SDSIO server has an invalid monitor port.');
             }

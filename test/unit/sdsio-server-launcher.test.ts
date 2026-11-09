@@ -153,6 +153,18 @@ describe('SdsioServerLauncher', () => {
         expect(vscode.window.createTerminal).not.toHaveBeenCalled();
     });
 
+    it('uses the server default for commands without an override despite a different preferred port', async () => {
+        processList.execute.mockImplementation((file, _args, _options, callback) => {
+            const stdout = file === 'powershell.exe'
+                ? JSON.stringify([{ CommandLine: 'sdsio-server.exe' }])
+                : '/tools/sdsio-server';
+            callback(null, { stdout });
+        });
+        const launcher = new SdsioServerLauncher(diagnostics);
+
+        await expect(launcher.getRunningServerPort(7070)).resolves.toBe(6060);
+    });
+
     it('propagates process discovery errors instead of treating them as no running server', async () => {
         processList.execute.mockImplementation((_file, _args, _options, callback) => {
             callback(new Error('access denied'));
