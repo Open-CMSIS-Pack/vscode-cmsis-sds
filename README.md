@@ -156,7 +156,7 @@ Close Configuration | Close the active [`*.sdsio.yml` control file](https://arm-
 Refresh | Refresh the SDS View.
 Open SDS Viewer | Open an SDS file in the interactive data viewer; prompt for a file when none is selected.
 Open Media Viewer | Open image, audio, or video content from an SDS file in the media viewer.
-Check Data File | Run SDS Check from the installed SDS pack on the selected SDS file.
+Check Data File | Run the extension's bundled SDS Check on the selected SDS file. Results appear in a task terminal.
 Export SDS to CSV | Decode the selected SDS file using its metadata and save the data as CSV.
 Create / Edit Metadata (YAML) | Create a metadata template when needed and open the stream's metadata file in the editor.
 Open Metadata Information | Open the existing metadata file associated with an SDS stream group.
@@ -249,9 +249,10 @@ problems persist, allow the SDSIO-Server through the local firewall or choose an
 
 ### Check Data File cannot find SDS Check
 
-SDS Check is provided by the SDS software pack. Install the
-[Arm SDS pack](https://www.keil.arm.com/packs/sds-arm/overview/) and make sure its pack root is available through the
-standard location or the `CMSIS_PACK_ROOT` environment variable. Restart VS Code after changing the environment.
+SDS Check is bundled in the extension's `tools` directory (`sds-check.exe` on Windows, `sds-check` on Linux/macOS).
+It does not require an installed SDS software pack, `CMSIS_PACK_ROOT`, or a separate Python installation.
+If the executable is missing, reinstall the extension for your platform. When running from source, download the bundled
+SDS tools as described in [CONTRIBUTING.md](CONTRIBUTING.md#bundled-sds-tools).
 
 ## Links
 

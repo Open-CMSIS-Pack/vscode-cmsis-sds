@@ -56,6 +56,46 @@ To make a successful contribution, please follow these steps:
 
 5. **Submit a Pull Request (PR)**: Open a pull request against the main repository.
 
+### Bundled SDS tools
+
+The `cmsis.sdsio` and `cmsis.sdsioNightly` settings in [package.json](package.json) select the
+SDS-Toolbox release and nightly workflow from ARM-software/SDS-Framework.
+The release download requires the configured release (currently 3.2.0) and its assets to have been published.
+
+```sh
+npm run download-tools -- --target win32-x64 --no-cache
+npm run download-tools:nightly -- --target win32-x64 --no-cache
+```
+
+CI uses nightly downloads for pull requests, branch builds, and manual runs. Published release builds use the
+configured release download instead. Nightly downloads require `GITHUB_TOKEN` with access to the upstream Actions
+artifacts.
+Supported targets are `win32-x64`, `linux-x64`, `linux-arm64`, and `darwin-arm64`.
+Windows ARM64 and Intel macOS downloads are not available; no cross-architecture fallback is used.
+
+[The downloader](scripts/download-tools.ts) selects `sds-toolbox-<platform>-v<version>.zip` on Windows
+and `.tar.gz` on Linux/macOS. Nightly artifacts come from `build_sds-toolbox.yml` and are uploaded
+with `archive: false`, so the downloader preserves the original archive filename and format.
+It extracts to a temporary directory and copies the contents of `sds-toolbox-<platform>/bin` directly
+into `tools`, preserving executable permissions. All bundled utilities are included, not just `sdsio-server`.
+
+When updating the release, update [third-party license metadata](docs/third-party-licenses.json),
+review the upstream utilities' bundled dependency notices, and regenerate the report with `npm run tpip:report`.
+The upstream toolbox build installs unpinned Python dependencies; the top-level SDS-Toolbox license entry
+is not an inventory of those embedded dependencies. Review their notices against the actual release artifacts
+before redistribution.
+
+Validate downloader changes with:
+
+```sh
+npm run compile:scripts
+npx vitest run test/unit/sds-toolbox.test.ts
+```
+
+The archive tests run without GitHub access. Before publishing, also download each target's real assets,
+check the VSIX contains the executables directly under `extension/tools`, and smoke-test the binaries on
+matching operating systems. POSIX executable-mode assertions in the tests run only on Linux/macOS.
+
 ### Review Process
 
 Our team will review your proposed changes as soon as possible and provide feedback.
