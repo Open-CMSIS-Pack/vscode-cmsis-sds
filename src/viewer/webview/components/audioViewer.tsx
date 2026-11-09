@@ -228,8 +228,9 @@ export function AudioViewer({ state, filename }: AudioViewerProps) {
     }, [onFit, stopPlaybackOnRangeChange]);
 
     const playLoadedSamples = useCallback(async (broadcast = true) => {
+        if (totalSamples <= 0) { return; }
         await play(viewRange, broadcast);
-    }, [play, viewRange]);
+    }, [play, totalSamples, viewRange]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {

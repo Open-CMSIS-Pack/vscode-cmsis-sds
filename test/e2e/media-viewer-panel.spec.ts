@@ -486,6 +486,32 @@ test.describe('Media Viewer — Image', () => {
 // ── Audio Viewer ────────────────────────────────────────────
 
 test.describe('Media Viewer — Audio', () => {
+    test('ignores keyboard and synchronized playback for empty audio', async ({ page }) => {
+        await page.addInitScript(() => {
+            Object.defineProperty(window, '__INITIAL_STATE__', {
+                configurable: true,
+                set(initial) {
+                    Object.defineProperty(window, '__INITIAL_STATE__', {
+                        configurable: true, writable: true,
+                        value: { ...initial, audio: { ...initial.audio, totalSamples: 0, samples: [] } }
+                    });
+                },
+            });
+        });
+        await page.goto(`${baseUrl}/audio`);
+        await expect(page.locator('button[title="Play Visible Range"]')).toBeDisabled();
+        await page.keyboard.press('Space');
+        await page.evaluate(() => window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            data: { type: 'broadcast', playbackState: 'playing', timeStamp: 0, fileName: 'other.sds' }
+        })));
+        await expect(page.locator('button[title="Play Visible Range"]')).toBeDisabled();
+        const requests = await page.evaluate(() => (window as unknown as {
+            __messages: { command?: string; payload?: { purpose?: string } }[];
+        }).__messages.filter(message => message.command === 'requestMediaAudioWindow' && message.payload?.purpose === 'playback'));
+        expect(requests).toEqual([]);
+    });
+
     test('continues into arriving audio and stops when playback catches the writer', async ({ page }) => {
         test.setTimeout(45000);
         await installPausedClock(page);
