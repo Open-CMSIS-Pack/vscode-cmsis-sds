@@ -673,13 +673,12 @@ describe('SdsMediaViewerPanel', () => {
         };
         sdsMockState.parseMetadataFile.mockReturnValue(metadata);
         sdsMockState.detectMediaType.mockReturnValue('image');
-        sdsMockState.indexSdsRecords.mockReturnValue([
-            { timestamp: 0, dataSize: 4, dataOffset: 0 },
-            { timestamp: 10, dataSize: 0, dataOffset: 4 },
-            { timestamp: 20, dataSize: 4, dataOffset: 8 },
-            { timestamp: 30, dataSize: 100, dataOffset: 999 },
-        ]);
-        sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([]));
+        sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([
+            { timestamp: 0, dataSize: 4, data: Buffer.alloc(4) },
+            { timestamp: 10, dataSize: 0, data: Buffer.alloc(0) },
+            { timestamp: 20, dataSize: 4, data: Buffer.alloc(4) },
+            { timestamp: 30, dataSize: 100, data: Buffer.alloc(100) },
+        ]));
         sdsMockState.decodeImageFrameToRGBA
             .mockReturnValueOnce(new Uint8Array([1, 2, 3, 4]))
             .mockImplementationOnce(() => {
@@ -742,7 +741,9 @@ describe('SdsMediaViewerPanel', () => {
         };
         sdsMockState.parseMetadataFile.mockReturnValue(metadata);
         sdsMockState.detectMediaType.mockReturnValue('video');
-        sdsMockState.indexSdsRecords.mockReturnValue([{ timestamp: 1000, dataSize: 4, dataOffset: 0 }]);
+        sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([
+            { timestamp: 1000, dataSize: 4, data: Buffer.alloc(4) },
+        ]));
         sdsMockState.decodeImageFrameToRGBA.mockReturnValue(new Uint8Array([5, 6, 7, 8]));
 
         SdsMediaViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
@@ -878,7 +879,10 @@ describe('SdsMediaViewerPanel', () => {
         });
         sdsMockState.detectMediaType.mockReturnValue('image');
         sdsMockState.parseSdsFile.mockReturnValue(createParsedFile([first]));
-        sdsMockState.indexSdsRecords.mockReturnValue([{ timestamp: 0, dataSize: 4, dataOffset: 8 }]);
+        sdsMockState.indexSdsRecords.mockReturnValue([
+            { timestamp: 0, dataSize: 4, dataOffset: 8 },
+            { timestamp: 1000, dataSize: 4, dataOffset: 20 },
+        ]);
         sdsMockState.decodeImageFrameToRGBA.mockImplementation(data => new Uint8Array([data[0], 0, 0, 255]));
         SdsMediaViewerPanel.createOrShow(vscode.Uri.file('/extension'), sdsPath, undefined, metaPath);
         const panel = latestPanel();

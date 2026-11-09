@@ -28,7 +28,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import {
     parseSdsFile,
-    indexSdsRecords,
     parseMetadataFile,
     decodeImageFrameToRGBA,
     decodeAudioBlock,
@@ -279,12 +278,11 @@ export class SdsMediaViewerPanel {
             if (append && this.parsedFile === previous) { return; }
             if (!append) {
                 this.recordIndex = [];
-                if (this.mediaType === 'image' || this.mediaType === 'video') {
-                    this.recordIndex = indexSdsRecords(this.sdsFilePath, { strict: false });
-                }
-            } else if (this.mediaType === 'image' || this.mediaType === 'video') {
-                let offset = previous.totalDataSize + previous.records.length * 8;
-                for (const record of this.parsedFile.records.slice(previous.records.length)) {
+            }
+            if (this.mediaType === 'image' || this.mediaType === 'video') {
+                let offset = append ? previous.totalDataSize + previous.records.length * 8 : 0;
+                const records = append ? this.parsedFile.records.slice(previous.records.length) : this.parsedFile.records;
+                for (const record of records) {
                     this.recordIndex.push({ timestamp: record.timestamp, dataSize: record.dataSize, dataOffset: offset + 8 });
                     offset += 8 + record.dataSize;
                 }
