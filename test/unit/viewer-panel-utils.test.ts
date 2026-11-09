@@ -132,6 +132,24 @@ describe('viewerPanelUtils', () => {
         expect(readSdsAppend(filePath, second)).toBe(second);
     });
 
+    it('replaces history after truncate-and-regrow even when the file grows and keeps its identity', () => {
+        const filePath = path.join(tmpDir, 'rewritten.sds');
+        const record = Buffer.alloc(12);
+        record.writeUInt32LE(4, 4);
+        fs.writeFileSync(filePath, Buffer.concat([record, record, record]));
+        const empty = { filePath, records: [], totalRecords: 0, totalDataSize: 0, durationMs: 0 };
+        const previous = readSdsAppend(filePath, empty);
+        const identity = fs.statSync(filePath).ino;
+        const changed = Buffer.from(record);
+        changed[8] = 42;
+        fs.writeFileSync(filePath, Buffer.concat([record, changed, record, record]));
+        expect(fs.statSync(filePath).ino).toBe(identity);
+        const replacement = readSdsAppend(filePath, previous);
+        expect(replacement.records).toHaveLength(4);
+        expect(replacement.records[0]).not.toBe(previous.records[0]);
+        expect(replacement.records[1].data[0]).toBe(42);
+    });
+
     it('classifies file appends and resets and disposes its external-file poller', () => {
         const watch = vi.spyOn(fs, 'watchFile').mockImplementation(() => undefined as never);
         const unwatch = vi.spyOn(fs, 'unwatchFile').mockImplementation(() => undefined);

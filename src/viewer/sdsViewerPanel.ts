@@ -207,9 +207,11 @@ export class SdsViewerPanel {
                 return;
             }
             const previous = this.parsedFile;
-            const append = fileReset === false && sameMetadata && previous !== undefined;
-            const parsed = append ? readSdsAppend(this.sdsFilePath, previous) : parseSdsFile(this.sdsFilePath, { strict: false });
-            if (append && parsed === previous) { return; }
+            const appendCandidate = fileReset === false && sameMetadata && previous !== undefined;
+            const parsed = appendCandidate ? readSdsAppend(this.sdsFilePath, previous) : parseSdsFile(this.sdsFilePath, { strict: false });
+            if (appendCandidate && parsed === previous) { return; }
+            const append = appendCandidate && previous.records.every((record, index) => parsed.records[index] === record);
+            if (appendCandidate && !append) { fileReset = true; }
             this.parsedFile = parsed;
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             this.stats = getSdsFileStats(parsed, tickFreq);

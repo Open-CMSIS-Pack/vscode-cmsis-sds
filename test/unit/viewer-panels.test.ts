@@ -397,8 +397,8 @@ describe('SdsViewerPanel', () => {
         viewerUtilsMockState.readSdsAppend.mockReturnValue(appended);
         refresh(false);
         expect(panel.webview.postMessage).not.toHaveBeenCalled();
-        sdsMockState.parseSdsFile.mockReturnValue(appended);
-        refresh(true);
+        viewerUtilsMockState.readSdsAppend.mockReturnValue(createParsedFile([{ ...first }, { ...second }]));
+        refresh(false);
         expect(panel.webview.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
             live: false, reset: true,
             payload: expect.objectContaining({ samples: [expect.objectContaining({ index: 0 }), expect.objectContaining({ index: 1 })] }),

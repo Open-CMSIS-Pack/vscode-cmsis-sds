@@ -39,10 +39,20 @@ export function readSdsAppend(filePath: string, previous: SdsParsedFile): SdsPar
     const offset = previous.totalDataSize + previous.records.length * 8;
     const descriptor = fs.openSync(filePath, 'r');
     try {
-        const length = Math.max(0, fs.fstatSync(descriptor).size - offset);
-        const buffer = Buffer.alloc(length);
-        const bytesRead = fs.readSync(descriptor, buffer, 0, length, offset);
-        const appended = parseSdsBuffer(buffer.subarray(0, bytesRead), filePath, { strict: false });
+        // Size and inode cannot distinguish an append from truncate-and-regrow between polls.
+        // Verify every retained record against the same snapshot used to parse the new tail.
+        const buffer = fs.readFileSync(descriptor);
+        let position = 0;
+        for (const record of previous.records) {
+            if (position + 8 + record.dataSize > buffer.length
+                || buffer.readUInt32LE(position) !== record.timestamp
+                || buffer.readUInt32LE(position + 4) !== record.dataSize
+                || !buffer.subarray(position + 8, position + 8 + record.dataSize).equals(record.data)) {
+                return parseSdsBuffer(buffer, filePath, { strict: false });
+            }
+            position += 8 + record.dataSize;
+        }
+        const appended = parseSdsBuffer(buffer.subarray(offset), filePath, { strict: false });
         if (!appended.records.length) { return previous; }
         const records = previous.records.concat(appended.records);
         return {

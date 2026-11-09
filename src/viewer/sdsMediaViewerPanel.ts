@@ -273,9 +273,12 @@ export class SdsMediaViewerPanel {
 
             this.mediaType = detectMediaType(metadata);
             const previous = this.parsedFile;
-            const append = fileReset === false && sameMetadata && previous !== undefined;
-            this.parsedFile = append ? readSdsAppend(this.sdsFilePath, previous) : parseSdsFile(this.sdsFilePath, { strict: false });
-            if (append && this.parsedFile === previous) { return; }
+            const appendCandidate = fileReset === false && sameMetadata && previous !== undefined;
+            const parsed = appendCandidate ? readSdsAppend(this.sdsFilePath, previous) : parseSdsFile(this.sdsFilePath, { strict: false });
+            if (appendCandidate && parsed === previous) { return; }
+            const append = appendCandidate && previous.records.every((record, index) => parsed.records[index] === record);
+            if (appendCandidate && !append) { fileReset = true; }
+            this.parsedFile = parsed;
             if (!append) {
                 this.recordIndex = [];
             }
