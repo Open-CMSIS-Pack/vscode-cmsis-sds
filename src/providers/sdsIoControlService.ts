@@ -274,36 +274,47 @@ export class SdsIoControlService {
             return false;
         }
 
-        if (this.monitorConnected) {
+        const sdsIoFile = this.configManager.getConfigFile();
+        if (!sdsIoFile) {
+            this.monitor.stop();
+            this.setMonitorConnected(false);
+            this.diagnostics.error(DiagnosticSource.Server, 'No SDSIO config file selected. Please select or create a .sdsio.yml file.');
+            return false;
+        }
+        const ownedPort = this.serverLauncher.getOwnedServerPort(sdsIoFile);
+        if (this.monitorConnected && ownedPort !== undefined) {
             this.diagnostics.info(DiagnosticSource.Server, 'Already connected to SDSIO monitor.');
             return true;
         }
 
         this.monitor.stop();
+        this.setMonitorConnected(false);
         this.monitorInfoReceived = false;
         let existingServer = false;
         const existingServerError = 'Unable to connect to the running SDSIO server. Please check and close the running SDSIO server process, then try connecting again.';
         try {
             const preferredPort = vscode.workspace.getConfiguration('cmsis-sds.sdsio')
                 .get<number>('monitorPort', DEFAULT_SDSIO_MONITOR_PORT);
-            const runningPort = await probeSdsioMonitor(preferredPort)
-                ? preferredPort
-                : await this.serverLauncher.getRunningServerPort(preferredPort);
-            if (generation !== this.connectionGeneration) {
-                return false;
+            if (ownedPort === undefined) {
+                const runningPort = await probeSdsioMonitor(preferredPort)
+                    ? preferredPort
+                    : await this.serverLauncher.getRunningServerPort(preferredPort);
+                if (generation !== this.connectionGeneration) {
+                    return false;
+                }
+                if (runningPort !== undefined || this.serverLauncher.hasTerminal()) {
+                    const message = 'A running SDSIO server cannot be verified as owned by this extension for the selected configuration. Disconnect this extension’s server, or manually close the external SDSIO server when safe, then connect again. No server was stopped.';
+                    this.diagnostics.error(DiagnosticSource.Server, message);
+                    void vscode.window.showErrorMessage(message);
+                    return false;
+                }
             }
-            existingServer = runningPort !== undefined;
-            let monitorPort = runningPort;
+            existingServer = ownedPort !== undefined;
+            let monitorPort = ownedPort;
             if (monitorPort === undefined) {
                 const basePath = this.extensionInstallPath;
                 if (!basePath) {
                     this.diagnostics.error(DiagnosticSource.Server, 'No workspace folder or extension install path available to locate server binary.');
-                    return false;
-                }
-
-                const sdsIoFile = this.configManager.getConfigFile();
-                if (!sdsIoFile) {
-                    this.diagnostics.error(DiagnosticSource.Server, 'No SDSIO config file selected. Please select or create a .sdsio.yml file.');
                     return false;
                 }
 

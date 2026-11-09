@@ -183,6 +183,9 @@ describe('SdsioServerLauncher', () => {
 
         await expect(launcher.start(options)).resolves.toBe(true);
         await expect(launcher.getRunningServerPort(6060)).resolves.toBe(49152);
+        expect(launcher.getOwnedServerPort(options.configFile)).toBe(49152);
+        expect(launcher.getOwnedServerPort(path.resolve(options.configFile))).toBe(49152);
+        expect(launcher.getOwnedServerPort('other.sdsio.yml')).toBeUndefined();
         await expect(launcher.start(options)).resolves.toBe(false);
         expect(vscode.window.createTerminal).toHaveBeenCalledTimes(1);
         expect(processList.execute).not.toHaveBeenCalled();
@@ -204,11 +207,13 @@ describe('SdsioServerLauncher', () => {
         });
 
         const stopPromise = launcher.stop('stop reason');
+        expect(launcher.getOwnedServerPort('sample.sdsio.yml')).toBeUndefined();
         vi.runAllTimers();
         await stopPromise;
 
         expect(mockTerminal.sendText).toHaveBeenCalledWith('x', false);
         expect(mockTerminal.dispose).toHaveBeenCalledTimes(1);
         expect(launcher.hasTerminal()).toBe(false);
+        expect(launcher.getOwnedServerPort('sample.sdsio.yml')).toBeUndefined();
     });
 });

@@ -224,9 +224,14 @@ default value. The SDSIO monitor-port setting is machine-scoped; when using a re
 
 ### The preferred monitor port is unavailable
 
-The local monitor uses TCP port `6060` by default. Before starting SDSIO, the extension checks for a valid SDSIO
-`INFO` greeting on the preferred port and reuses an identified monitor. Otherwise it checks port availability on
-`127.0.0.1`, matching the server's listening address. If the port is occupied or access is denied, the operating system
+The local monitor uses TCP port `6060` by default. The extension automatically reuses only a server it launched
+for the selected control file. An SDSIO `INFO` greeting identifies the protocol, not the server's configuration.
+If another server is detected, connection is refused without stopping it. Disconnect an extension-owned server
+or manually close an external server when safe, then connect again. Servers from other VS Code windows are
+also treated as external.
+
+When no server is detected, the extension checks port availability on `127.0.0.1`, matching the server's listening
+address. If the port is occupied by another application or access is denied, the operating system
 selects an available port, which is passed to both server and client. The selected port appears in the **Arm SDS**
 output channel; the setting itself is not changed. A TCP connection alone is not considered a successful monitor
 connection: the extension must receive SDSIO `INFO`, including after launching a new server.

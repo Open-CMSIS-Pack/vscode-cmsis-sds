@@ -25,6 +25,7 @@ const launcherState = {
 
 const launcherMock = {
     hasTerminal: vi.fn(() => launcherState.hasTerminal),
+    getOwnedServerPort: vi.fn((_configFile: string): number | undefined => undefined),
     getRunningServerPort: vi.fn(async (_preferredPort: number): Promise<number | undefined> => undefined),
     stop: vi.fn(async () => undefined),
     start: vi.fn(async () => true),
@@ -174,13 +175,14 @@ function createConfigManager(...args: [string?]): FakeConfigManager {
 describe('SdsIoControlService launcher delegation', () => {
     beforeEach(() => {
         vi.mocked(probeSdsioMonitor).mockReset().mockResolvedValue(false);
+        launcherMock.getOwnedServerPort.mockReset().mockReturnValue(undefined);
         launcherState.hasTerminal = false;
         launcherMock.hasTerminal.mockReset();
         launcherMock.hasTerminal.mockImplementation(() => launcherState.hasTerminal);
         launcherMock.getRunningServerPort.mockReset();
         launcherMock.getRunningServerPort.mockResolvedValue(undefined);
         launcherMock.stop.mockReset();
-        launcherMock.stop.mockResolvedValue(undefined);
+        launcherMock.stop.mockImplementation(async () => { launcherState.hasTerminal = false; });
         launcherMock.start.mockReset();
         launcherMock.start.mockResolvedValue(true);
         launcherMock.dispose.mockReset();
@@ -217,13 +219,43 @@ describe('SdsIoControlService launcher delegation', () => {
         });
     });
 
-    it('reuses a monitor identified by its INFO greeting without process discovery', async () => {
-        vi.mocked(probeSdsioMonitor).mockResolvedValue(true);
-        const service = new SdsIoControlService(createConfigManager() as never, new FakeMonitor() as never, 'extension');
-        await expect(service.connectServer()).resolves.toBe(true);
-        expect(probeSdsioMonitor).toHaveBeenCalledWith(6060);
-        expect(launcherMock.getRunningServerPort).not.toHaveBeenCalled();
+    it.each(['greeting', 'process', 'different configuration'])('refuses unverified server reuse detected through %s', async (source) => {
+        vi.mocked(probeSdsioMonitor).mockResolvedValue(source === 'greeting');
+        launcherMock.getRunningServerPort.mockResolvedValue(7070);
+        launcherState.hasTerminal = source === 'different configuration';
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
+        await expect(service.connectServer()).resolves.toBe(false);
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining('cannot be verified'));
+        expect(monitor.start).not.toHaveBeenCalled();
         expect(launcherMock.start).not.toHaveBeenCalled();
+        expect(launcherMock.stop).not.toHaveBeenCalled();
+        expect(selectSdsioMonitorPort).not.toHaveBeenCalled();
+    });
+
+    it('allows retry after the user closes an external server', async () => {
+        launcherMock.getRunningServerPort.mockResolvedValueOnce(7070);
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
+        await expect(service.connectServer()).resolves.toBe(false);
+        await expect(service.connectServer()).resolves.toBe(true);
+        expect(launcherMock.start).toHaveBeenCalledTimes(1);
+        expect(launcherMock.stop).not.toHaveBeenCalled();
+    });
+
+    it('does not keep an already-connected monitor after the selected configuration changes', async () => {
+        const configManager = createConfigManager('first.sdsio.yml');
+        const monitor = new FakeMonitor();
+        const service = new SdsIoControlService(configManager as never, monitor as never, 'extension');
+        launcherMock.getOwnedServerPort.mockImplementation(file => file === 'first.sdsio.yml' ? 6060 : undefined);
+        await expect(service.connectServer()).resolves.toBe(true);
+        configManager.getConfigFile.mockReturnValue('second.sdsio.yml');
+        launcherMock.getRunningServerPort.mockResolvedValue(6060);
+        monitor.start.mockClear();
+        await expect(service.connectServer()).resolves.toBe(false);
+        expect(service.canConnect()).toBe(true);
+        expect(monitor.start).not.toHaveBeenCalled();
+        expect(launcherMock.stop).not.toHaveBeenCalled();
     });
 
     it('does not accept a TCP connection without INFO after launching a server', async () => {
@@ -242,22 +274,24 @@ describe('SdsIoControlService launcher delegation', () => {
         }
     });
 
-    it('connects to a running server without stopping it or launching another', async () => {
-        launcherMock.getRunningServerPort.mockResolvedValue(7070);
+    it('reuses only an owned server for the selected configuration on its actual port', async () => {
+        launcherMock.getOwnedServerPort.mockReturnValue(7070);
         const monitor = new FakeMonitor();
         const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
 
         await expect(service.connectServer()).resolves.toBe(true);
 
-        expect(launcherMock.getRunningServerPort).toHaveBeenCalledWith(6060);
+        expect(launcherMock.getOwnedServerPort).toHaveBeenCalledWith('sample.sdsio.yml');
+        expect(launcherMock.getRunningServerPort).not.toHaveBeenCalled();
+        expect(probeSdsioMonitor).not.toHaveBeenCalled();
         expect(monitor.start).toHaveBeenCalledWith(7070);
         expect(selectSdsioMonitorPort).not.toHaveBeenCalled();
         expect(launcherMock.start).not.toHaveBeenCalled();
         expect(launcherMock.stop).not.toHaveBeenCalled();
     });
 
-    it('reports an unreachable running server without launching another', async () => {
-        launcherMock.getRunningServerPort.mockResolvedValue(6060);
+    it('reports an unreachable owned server without launching another', async () => {
+        launcherMock.getOwnedServerPort.mockReturnValue(6060);
         const monitor = new FakeMonitor();
         monitor.start.mockRejectedValueOnce(new Error('connection refused'));
         const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
@@ -270,10 +304,10 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(monitor.stop).toHaveBeenCalled();
     });
 
-    it('times out an existing server that accepts TCP but sends no monitor info', async () => {
+    it('times out an owned server that accepts TCP but sends no monitor info', async () => {
         vi.useFakeTimers();
         try {
-            launcherMock.getRunningServerPort.mockResolvedValue(6060);
+            launcherMock.getOwnedServerPort.mockReturnValue(6060);
             const monitor = new FakeMonitor();
             monitor.start.mockImplementationOnce(async () => { monitor.emit('connected'); });
             const service = new SdsIoControlService(createConfigManager() as never, monitor as never, 'extension');
@@ -1035,6 +1069,7 @@ describe('SdsIoControlService launcher delegation', () => {
         expect(monitor.start).not.toHaveBeenCalled();
         await expect(connectedService.connectServer()).resolves.toBe(true);
         monitor.start.mockClear();
+        launcherMock.getOwnedServerPort.mockReturnValue(6060);
         await expect(connectedService.connectServer()).resolves.toBe(true);
         expect(monitor.start).not.toHaveBeenCalled();
     });
@@ -1061,7 +1096,7 @@ describe('SdsIoControlService launcher delegation', () => {
 
     it('reuses its existing terminal when connecting', async () => {
         launcherState.hasTerminal = true;
-        launcherMock.getRunningServerPort.mockResolvedValue(6060);
+        launcherMock.getOwnedServerPort.mockReturnValue(6060);
         const monitor = new FakeMonitor();
         const configManager = createConfigManager('active.sdsio.yml');
         const service = new SdsIoControlService(

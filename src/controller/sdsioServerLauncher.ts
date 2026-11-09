@@ -29,7 +29,8 @@ export type SdsioServerLaunchOptions = {
 
 export class SdsioServerLauncher {
     private terminal?: vscode.Terminal | undefined;
-    private monitorPort?: number;
+    private monitorPort?: number | undefined;
+    private configFile?: string | undefined;
     private stoppingPromise?: Promise<void> | undefined;
     private readonly closeListener: vscode.Disposable;
 
@@ -43,6 +44,11 @@ export class SdsioServerLauncher {
 
     hasTerminal(): boolean {
         return this.terminal !== undefined;
+    }
+
+    getOwnedServerPort(configFile: string): number | undefined {
+        return this.terminal && !this.stoppingPromise && this.configFile === path.resolve(configFile)
+            ? this.monitorPort : undefined;
     }
 
     async getRunningServerPort(preferredPort: number): Promise<number | undefined> {
@@ -97,6 +103,8 @@ export class SdsioServerLauncher {
             terminal.dispose();
             if (this.terminal === terminal) {
                 this.terminal = undefined;
+                this.configFile = undefined;
+                this.monitorPort = undefined;
             }
         })();
 
@@ -118,6 +126,7 @@ export class SdsioServerLauncher {
 
         const configDir = path.dirname(options.configFile);
         this.monitorPort = options.monitorPort;
+        this.configFile = path.resolve(options.configFile);
 
         this.terminal = vscode.window.createTerminal({
             name: `SDSIO Server ${new Date().toLocaleTimeString()}`,
