@@ -716,11 +716,18 @@ test.describe('Media Viewer — Audio', () => {
             window as Window & { __audioEvents: { bufferLengths: number[] } }
         ).__audioEvents.bufferLengths.at(-1))).toBe(800);
 
+        const playbackStart = await page.evaluate(() => (window as unknown as {
+            __messages: { type?: string; playbackState?: string; timeStamp?: number }[];
+        }).__messages.find(message => message.playbackState === 'playing')!.timeStamp);
         await page.locator('button[title="Zoom In"]').first().click();
 
         await expect.poll(() => page.evaluate(() => (
             window as Window & { __audioEvents: { stopCount: number } }
         ).__audioEvents.stopCount)).toBe(1);
+        const playbackStop = await page.evaluate(() => (window as unknown as {
+            __messages: { playbackState?: string; timeStamp?: number }[];
+        }).__messages.find(message => message.playbackState === 'stopped')!.timeStamp);
+        expect(playbackStop).toBeCloseTo(playbackStart!, 8);
         await expect(page.locator('button[title="Play Visible Range"]')).toContainText('Play');
         await page.keyboard.press('Space');
         await expect(page.locator('button[title="Pause"]')).toBeVisible();

@@ -26,7 +26,7 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
     const contextRef = useRef<AudioContext | null>(null);
     const sourcesRef = useRef(new Set<AudioBufferSourceNode>());
     const sessionRef = useRef<{
-        nextTime: number; scheduledUntil: number; limit: number; follow: boolean;
+        startTime: number; nextTime: number; scheduledUntil: number; limit: number; follow: boolean;
         pending: number | null; broadcast: boolean;
     } | null>(null);
     const domainEndRef = useRef(domainEnd);
@@ -43,7 +43,9 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
         sourcesRef.current.clear();
         setIsPlaying(false);
         if (broadcast && session) {
-            broadcastMessage({ type: 'broadcast', timeStamp: session.nextTime, fileName: filename, playbackState: 'stopped' });
+            const remaining = Math.max(0, session.scheduledUntil - (contextRef.current?.currentTime ?? session.scheduledUntil));
+            const timeStamp = Math.max(session.startTime, session.nextTime - remaining);
+            broadcastMessage({ type: 'broadcast', timeStamp, fileName: filename, playbackState: 'stopped' });
         }
     }, [filename]);
 
@@ -70,7 +72,7 @@ export function useAudioPlayback(sampleRate: number, bitDepth: number, channels:
         const context = contextRef.current ?? new AudioContext({ sampleRate });
         contextRef.current = context;
         const session = {
-            nextTime: range[0], scheduledUntil: context.currentTime, limit: range[1],
+            startTime: range[0], nextTime: range[0], scheduledUntil: context.currentTime, limit: range[1],
             follow: Math.abs(range[1] - domainEndRef.current) <= 1 / sampleRate,
             pending: null as number | null, broadcast,
         };
