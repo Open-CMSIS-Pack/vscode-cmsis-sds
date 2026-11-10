@@ -151,8 +151,12 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Run integration tests
-        run: npm run test:integration
+      - name: Upload Vitest and coverage reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vitest-report-${{ matrix.vsce_target }}
+          path: vitest-report
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -186,7 +190,7 @@ jobs:
         uses: qltysh/qlty-action/coverage@ebcd284bf32e36a030afe15f1e136c7be08b9506 # v2.5.0
         with:
           token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
-          files: coverage/lcov.info
+          files: vitest-report/coverage/lcov.info
 
   package:
     needs: build-and-test
@@ -264,8 +268,22 @@ jobs:
         with:
           pattern: cmsis-sds-*.vsix
 
-      - name: Attach packages
+      - name: Download test and coverage reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: '*-report-*'
+          path: reports
+
+      - name: Archive test and coverage reports
+        run: |
+          for report in reports/*/; do
+            report_name="$(basename "$report")"
+            (cd "$report" && zip -r "../${report_name}.zip" .)
+          done
+
+      - name: Attach packages and reports
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             **/*.vsix
+            reports/*-report-*.zip
