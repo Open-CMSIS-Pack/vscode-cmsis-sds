@@ -33,4 +33,6 @@ coverage/**
 *.log
 *.tmp
 *.bak
-
+.qlty/*
+test/*
+scripts/*
