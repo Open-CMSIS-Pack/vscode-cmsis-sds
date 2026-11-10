@@ -230,7 +230,7 @@ jobs:
       - name: Download tools
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DOWNLOAD_SCRIPT: ${{ github.event_name == 'release' && 'download-tools' || 'download-tools:nightly' }}
+          DOWNLOAD_SCRIPT: 'download-tools:nightly'
         run: |
           npm ci
           npm run "$DOWNLOAD_SCRIPT" -- --target ${{ matrix.target }} --no-cache
