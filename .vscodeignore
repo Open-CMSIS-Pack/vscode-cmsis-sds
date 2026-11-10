@@ -13,6 +13,7 @@ out/src/studio/**
 out/src/viewer/**
 out/src/webview/**
 e2e-report/**
+vitest-report/**
 docs/SDS-Intro-F10.gif
 esbuild.js
 .gitignore
