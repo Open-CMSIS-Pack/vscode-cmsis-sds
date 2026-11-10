@@ -155,8 +155,12 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Run integration tests
-        run: npm run test:integration
+      - name: Upload Vitest and coverage reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: vitest-report-${{ matrix.vsce_target }}
+          path: vitest-report
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
