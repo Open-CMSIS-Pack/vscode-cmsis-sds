@@ -34,11 +34,12 @@ type FrameWindowViewerOptions = {
     getWindowSize: (quality: Quality) => number;
     getNearEdgeMargin: (loadedFrameCount: number) => number;
     stationaryRequestQuality: Quality;
+    followLatest?: boolean;
     onManualChangeStart?: () => void;
     onPlaybackStateChange?: (state: 'playing' | 'stopped') => void;
 };
 
-const DRAG_REQUEST_THROTTLE_MS = 80;
+const DRAG_REQUEST_THROTTLE_MS = 12;
 let frameWindowRequestSequence = 0;
 
 export function useFrameWindowViewer({
@@ -48,6 +49,7 @@ export function useFrameWindowViewer({
     getWindowSize,
     getNearEdgeMargin,
     stationaryRequestQuality,
+    followLatest = false,
     onManualChangeStart,
     onPlaybackStateChange,
 }: FrameWindowViewerOptions) {
@@ -67,6 +69,7 @@ export function useFrameWindowViewer({
     const lastRequestKeyRef = useRef('');
     const lastAppliedWindowRef = useRef<{ rangeStart: number; rangeEnd: number; quality: Quality } | null>(null);
     const needsPostDragHighRef = useRef(false);
+    const previousTotalRef = useRef(totalFrames);
 
     const getLoadedFrame = useCallback((absoluteIndex: number) => {
         const localIndex = absoluteIndex - windowStart;
@@ -167,11 +170,19 @@ export function useFrameWindowViewer({
     useEffect(() => {
         setWindowFrames(frames);
         setWindowStart(rangeStart);
+    }, [frames, rangeStart]);
+
+    useEffect(() => {
+        const previousTotal = previousTotalRef.current;
+        previousTotalRef.current = totalFrames;
         setIndex((prev) => {
+            if (followLatest && totalFrames > previousTotal && prev === Math.max(0, previousTotal - 1)) {
+                return totalFrames - 1;
+            }
             const next = Math.max(0, Math.min(totalFrames - 1, prev));
             return Number.isFinite(next) ? next : rangeStart;
         });
-    }, [frames, rangeStart, totalFrames]);
+    }, [followLatest, rangeStart, totalFrames]);
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
@@ -292,7 +303,7 @@ export function useFrameWindowViewer({
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- request helpers are recreated each render; depending on them would refetch windows excessively
-    }, [getNearEdgeMargin, index, isDragMode, stationaryRequestQuality, windowFrames.length, windowStart]);
+    }, [getNearEdgeMargin, index, isDragMode, stationaryRequestQuality, totalFrames, windowFrames.length, windowStart]);
 
     useEffect(() => {
         if (isDragMode || !needsPostDragHighRef.current) {

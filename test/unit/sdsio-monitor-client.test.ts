@@ -69,6 +69,7 @@ import {
     MON_FLAGS,
     MON_INFO,
     MON_OPEN,
+    probeSdsioMonitor,
     SdsioMonitorClient,
 } from '../../src/recorder/sdsio/sdsIoMonitorClient';
 
@@ -92,6 +93,44 @@ function fileFrame(cmd: number, fileName: string, mode = 0): Buffer {
     const payload = filePayload(fileName);
     return Buffer.concat([writeHeader(cmd, 0, mode, 0), payload]);
 }
+
+describe('SDSIO monitor identification', () => {
+    it('accepts a fragmented INFO greeting and closes the probe without sending commands', async () => {
+        const result = probeSdsioMonitor(6060);
+        const socket = netMockState.sockets.at(-1)!;
+        const frame = writeHeader(MON_INFO);
+        socket.emit('data', frame.subarray(0, 5));
+        socket.emit('data', frame.subarray(5));
+        await expect(result).resolves.toBe(true);
+        expect(socket.destroy).toHaveBeenCalled();
+        expect(socket.write).not.toHaveBeenCalled();
+    });
+
+    it.each([writeHeader(99), writeHeader(MON_INFO, 0, 0, 3), writeHeader(MON_INFO, 0, 0, 0xffffffff)])('rejects an invalid greeting', async (frame) => {
+        const result = probeSdsioMonitor(6060);
+        netMockState.sockets.at(-1)!.emit('data', frame);
+        await expect(result).resolves.toBe(false);
+    });
+
+    it.each(['error', 'close'])('rejects a connection ending with %s', async (event) => {
+        const result = probeSdsioMonitor(6060);
+        netMockState.sockets.at(-1)!.emit(event, new Error('unavailable'));
+        await expect(result).resolves.toBe(false);
+    });
+
+    it('times out a silent listener and destroys the socket', async () => {
+        vi.useFakeTimers();
+        try {
+            const result = probeSdsioMonitor(6060);
+            const socket = netMockState.sockets.at(-1)!;
+            await vi.advanceTimersByTimeAsync(500);
+            await expect(result).resolves.toBe(false);
+            expect(socket.destroy).toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
 
 describe('SdsioMonitorClient flag send API', () => {
     beforeEach(() => {

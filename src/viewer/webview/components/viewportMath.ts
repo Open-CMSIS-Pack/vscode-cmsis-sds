@@ -22,6 +22,21 @@ export type ViewportClampOptions = {
     minViewSpan: number;
 };
 
+export function growViewRange(view: ViewRange, previous: ViewRange, next: ViewRange): ViewRange {
+    if (next[0] !== previous[0] || next[1] < previous[1] || previous[1] <= previous[0]) {
+        return fitRange(next[0], next[1]);
+    }
+    const tolerance = Math.max(1e-9, (previous[1] - previous[0]) * 1e-6);
+    const atEnd = Math.abs(view[1] - previous[1]) <= tolerance;
+    if (atEnd && Math.abs(view[0] - previous[0]) <= tolerance) {
+        return fitRange(next[0], next[1]);
+    }
+    if (atEnd) {
+        return [next[1] - (view[1] - view[0]), next[1]];
+    }
+    return view;
+}
+
 export function clampViewRange(start: number, end: number, options: ViewportClampOptions): ViewRange {
     const { domainStart, domainEnd, minViewSpan } = options;
 

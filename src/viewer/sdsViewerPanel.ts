@@ -33,6 +33,7 @@ import {
     SdsMetadata,
     SDS_METADATA_EXTENSION,
     SdsDecodedSample,
+    SdsParsedFile,
 } from '../sds';
 import { ViewerSettings } from './viewerSettings';
 import { WebviewMessage } from '../webview/protocol';
@@ -40,6 +41,8 @@ import {
     buildViewerWebviewHtml,
     registerViewerWebview,
     registerMetadataRefresh,
+    registerSdsRefresh,
+    readSdsAppend,
     resolveMetadataPathForSdsFile,
 } from './viewerPanelUtils';
 import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
@@ -71,6 +74,7 @@ export class SdsViewerPanel {
     private stats: ReturnType<typeof getSdsFileStats> | undefined;
     private metadata: SdsMetadata | undefined;
     private hasViewerState = false;
+    private parsedFile: SdsParsedFile | undefined;
 
     public static createOrShow(
         extensionUri: vscode.Uri,
@@ -145,6 +149,7 @@ export class SdsViewerPanel {
         this.panel.iconPath = new vscode.ThemeIcon('graph-line');
         this.update();
         this.disposables.push(registerMetadataRefresh(this.panel, this.metadataPath, () => this.update(true)));
+        this.disposables.push(registerSdsRefresh(this.sdsFilePath, reset => this.update(true, reset)));
 
         this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
@@ -191,30 +196,43 @@ export class SdsViewerPanel {
         }
     }
 
-    private update(inPlace = false): void {
+    private update(inPlace = false, fileReset?: boolean): void {
         try {
             let metadata: SdsMetadata | undefined;
             if (this.metadataPath && fs.existsSync(this.metadataPath)) {
                 metadata = parseMetadataFile(this.metadataPath, { sdsFilePath: this.sdsFilePath, inferMissingSampleFrequency: true });
             }
-            if (inPlace && this.hasViewerState && JSON.stringify(this.metadata) === JSON.stringify(metadata)) {
+            const sameMetadata = JSON.stringify(this.metadata) === JSON.stringify(metadata);
+            if (inPlace && this.hasViewerState && sameMetadata && fileReset === undefined) {
                 return;
             }
-            const parsed = parseSdsFile(this.sdsFilePath, { strict: false });
+            const previous = this.parsedFile;
+            const appendCandidate = fileReset === false && sameMetadata && previous !== undefined;
+            const parsed = appendCandidate ? readSdsAppend(this.sdsFilePath, previous) : parseSdsFile(this.sdsFilePath, { strict: false });
+            if (appendCandidate && parsed === previous) { return; }
+            const append = appendCandidate && previous.records.every((record, index) => parsed.records[index] === record);
+            if (appendCandidate && !append) { fileReset = true; }
+            this.parsedFile = parsed;
             const tickFreq = metadata?.sds['tick-frequency'] ?? 1000;
             this.stats = getSdsFileStats(parsed, tickFreq);
 
-            this.decodedSamples = [];
+            const oldCount = append ? this.decodedSamples.length : 0;
+            if (!append) { this.decodedSamples = []; }
             this.channelNames = [];
             this.metadata = metadata;
+            const newRecords = append ? parsed.records.slice(previous.records.length) : parsed.records;
 
             if (metadata) {
-                this.decodedSamples = decodeAllRecords(parsed, metadata);
+                const decoded = decodeAllRecords({ ...parsed, records: newRecords }, metadata);
+                for (const sample of decoded) {
+                    sample.index += oldCount;
+                    this.decodedSamples.push(sample);
+                }
                 this.channelNames = metadata.sds.content.map(c => c.value ?? 'unknown');
             } else {
                 // Without metadata, show raw record sizes over time
                 this.channelNames = ['data_size'];
-                for (const record of parsed.records) {
+                for (const record of newRecords) {
                     this.decodedSamples.push({
                         timestamp: record.timestamp,
                         timeSeconds: record.timestamp / tickFreq,
@@ -226,7 +244,8 @@ export class SdsViewerPanel {
 
             const domainStart = this.decodedSamples.length > 0 ? this.decodedSamples[0].timeSeconds : 0;
             const domainEnd = this.decodedSamples.length > 0 ? this.decodedSamples[this.decodedSamples.length - 1].timeSeconds : 1;
-            const initialSamples = this.getVisibleRangeSamples(domainStart, domainEnd, 1200, 'high');
+            const initialSamples = append && inPlace && this.hasViewerState
+                ? [] : this.getVisibleRangeSamples(domainStart, domainEnd, 1200, 'high');
 
             const initialState = {
                 samples: initialSamples,
@@ -239,7 +258,7 @@ export class SdsViewerPanel {
                 decimationPreset: ViewerSettings.getDecimationPreset(),
             };
             if (inPlace && this.hasViewerState) {
-                void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: initialState });
+                void this.panel.webview.postMessage({ command: 'viewerStateChanged', payload: initialState, live: append, reset: fileReset === true });
             } else {
                 this.panel.webview.html = this.getHtml(initialState);
                 this.hasViewerState = true;
