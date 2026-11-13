@@ -39,6 +39,17 @@ describe('package.json contributions for merged explorer/flags UI', () => {
         extensionDependencies: string[];
         activationEvents: string[];
         contributes: {
+            walkthroughs: Array<{
+                id: string;
+                title: string;
+                description: string;
+                steps: Array<{
+                    id: string;
+                    description: string;
+                    media: { image: string; altText: string };
+                    completionEvents: string[];
+                }>;
+            }>;
             commands: CommandContribution[];
             configuration: { properties: Record<string, unknown> };
             views: Record<string, Array<{ id: string }>>;
@@ -52,6 +63,35 @@ describe('package.json contributions for merged explorer/flags UI', () => {
 
     it.each(['arm-sds.viewer', 'arm-sds.mediaViewer'])('activates when VS Code restores %s', viewType => {
         expect(packageJson.activationEvents).toContain(`onWebviewPanel:${viewType}`);
+    });
+
+    it('contributes an SDS walkthrough with working command references and packaged images', () => {
+        const walkthrough = packageJson.contributes.walkthroughs.find(entry => entry.id === 'arm-sds.getStarted');
+        expect(walkthrough).toBeDefined();
+        expect(walkthrough?.title).toBe('Get Started with Arm SDS');
+        expect(walkthrough?.description).toBeTruthy();
+        const steps = walkthrough!.steps;
+        expect(steps.map(step => step.id)).toEqual([
+            'openData', 'metadata', 'media', 'configuration', 'recordAndPlay', 'export',
+        ]);
+        const commands = new Set(packageJson.contributes.commands.map(command => command.command));
+
+        for (const step of steps) {
+            const links = [...step.description.matchAll(/\]\(command:([^)]+)\)/g)];
+            expect(links.length).toBeGreaterThan(0);
+            for (const link of links) {
+                expect(commands.has(link[1])).toBe(true);
+            }
+            expect(step.completionEvents.length).toBeGreaterThan(0);
+            for (const event of step.completionEvents) {
+                expect(event.startsWith('onCommand:')).toBe(true);
+                expect(commands.has(event.slice('onCommand:'.length))).toBe(true);
+            }
+            expect(step.media.altText).toBeTruthy();
+            expect(fs.existsSync(path.join(process.cwd(), step.media.image))).toBe(true);
+        }
+
+        expect(steps[0].description).toContain('(command:arm-sds.openViewer)');
     });
 
     it('contributes a user-only monitor port with valid TCP port bounds', () => {
