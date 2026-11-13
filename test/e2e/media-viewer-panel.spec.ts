@@ -41,6 +41,12 @@ test.afterAll(async () => {
     server.close();
 });
 
+async function installPausedClock(page: Page) {
+    // Freeze before navigation so page loading and protocol latency cannot move past the pause time.
+    await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+    await page.clock.pauseAt(new Date('2026-01-02T00:00:00Z'));
+}
+
 async function clickSliderAt(page: Page, sliderLocator: string, ratio: number) {
     const slider = page.locator(sliderLocator).first();
     await expect(slider).toBeVisible();
@@ -59,10 +65,9 @@ async function clickSliderAt(page: Page, sliderLocator: string, ratio: number) {
 
 test.describe('Media Viewer — Image', () => {
     test('metadata frequency updates preserve the canvas, zoom, and playback position', async ({ page }) => {
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');
-        await page.clock.pauseAt(new Date());
         const updateFrequency = (interval: string) => page.evaluate(frequency => {
             const initial = (window as unknown as { __INITIAL_STATE__: { image: Record<string, unknown> } }).__INITIAL_STATE__;
             window.dispatchEvent(new MessageEvent('message', {
@@ -274,10 +279,9 @@ test.describe('Media Viewer — Image', () => {
                 },
             });
         });
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');
-        await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1)));
         await page.locator('.controls button').first().click();
         await page.clock.runFor(3500);
         const selectedIndex = Number(await page.locator('.ant-slider-handle').getAttribute('aria-valuenow'));
@@ -329,10 +333,9 @@ test.describe('Media Viewer — Image', () => {
                 },
             });
         });
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('canvas');
-        await page.clock.pauseAt(new Date(await page.evaluate(() => Date.now() + 1)));
         await page.evaluate(() => {
             type WindowRequest = {
                 command?: string;
@@ -389,11 +392,9 @@ test.describe('Media Viewer — Image', () => {
     });
 
     test('Space toggles playback', async ({ page }) => {
-        await page.clock.install();
+        await installPausedClock(page);
         await page.goto(`${baseUrl}/image`);
         await page.waitForSelector('.controls');
-        // Keep the short recording from ending before the playback assertions.
-        await page.clock.pauseAt(await page.evaluate(() => Date.now()));
 
         const playButton = page.locator('.controls button').first();
         await page.locator('.media-page').focus();
