@@ -55,7 +55,7 @@ interface ChartPlotLike {
             }[];
         };
         getDataByXY: (point: ChartCoordinateLike, options?: { shared: boolean }) => Record<string, ChartSample> | undefined;
-        emit?: (event: string, payload: { data: { channel: string; value: unknown } }) => void;
+        emit?: (event: string, payload: { data: { channel: string; value?: unknown; values?: unknown[] } }) => void;
         on?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
         off?: (event: string, handler: (e: ChartPointerEvent) => void) => void;
     };
@@ -401,6 +401,9 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
         ...(restAxis ?? {}),
         x: {
             ...(restAxis?.x ?? {}),
+            labelAutoRotate: false,
+            labelAutoHide: true,
+            labelAngle: 0,
             labelFormatter,
         },
     }), [restAxis, labelFormatter]);
@@ -507,9 +510,6 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
             };
 
             const handleLegendClick = (event: ChartPointerEvent) => {
-                if (!event.shiftKey && !event.nativeEvent?.shiftKey) {
-                    return;
-                }
                 let item = event.target;
                 while (item && !item.className?.split(/\s+/).includes('items-item')) {
                     item = item.parentNode ?? undefined;
@@ -520,16 +520,30 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                     return;
                 }
                 event.stopPropagation?.();
+                if (event.type === 'click' || event.buttons !== 1) {
+                    return;
+                }
                 const value = domain[index];
                 const selectedValues = selectedValuesRef.current;
-                const reset = selectedValues?.length === 1 && selectedValues[0] === value;
-                plot.chart?.emit?.(reset ? 'legend:reset' : 'legend:focus', { data: { channel: 'color', value } });
+                if (event.shiftKey || event.nativeEvent?.shiftKey) {
+                    const reset = selectedValues?.length === 1 && selectedValues[0] === value;
+                    selectedValuesRef.current = reset ? undefined : [value];
+                    plot.chart?.emit?.(reset ? 'legend:reset' : 'legend:focus', { data: { channel: 'color', value } });
+                } else {
+                    const currentValues = selectedValues ?? domain;
+                    const values = currentValues.includes(value)
+                        ? currentValues.filter(selected => selected !== value)
+                        : [...currentValues, value];
+                    selectedValuesRef.current = values;
+                    plot.chart?.emit?.('legend:filter', { data: { channel: 'color', values } });
+                }
             };
 
             const chartCanvas = plot.chart?.getContext().canvas;
             plot.chart?.on?.('legend:filter', handleLegendFilter);
             plot.chart?.on?.('legend:focus', handleLegendFocus);
             plot.chart?.on?.('legend:reset', handleLegendReset);
+            chartCanvas?.addEventListener('pointerdown', handleLegendClick, true);
             chartCanvas?.addEventListener('click', handleLegendClick, true);
             chartCanvas?.addEventListener(pointerClickEvent, handlePointerEvent, true);
             chartCanvas?.addEventListener(pointerMoveEvent, handlePointerEvent, true);
@@ -538,6 +552,7 @@ export const BaseChartViewer: React.FC<BaseChartViewerProps> = ({
                 plot.chart?.off?.('legend:filter', handleLegendFilter);
                 plot.chart?.off?.('legend:focus', handleLegendFocus);
                 plot.chart?.off?.('legend:reset', handleLegendReset);
+                chartCanvas?.removeEventListener('pointerdown', handleLegendClick, true);
                 chartCanvas?.removeEventListener('click', handleLegendClick, true);
                 chartCanvas?.removeEventListener(pointerClickEvent, handlePointerEvent, true);
                 chartCanvas?.removeEventListener(pointerMoveEvent, handlePointerEvent, true);

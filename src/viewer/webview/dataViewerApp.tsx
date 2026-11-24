@@ -74,6 +74,7 @@ function DataViewerApp() {
     const [initial, setInitial] = useState(() => getInitialState<InitialState>({}));
     const [activeChannels, setActiveChannels] = useState(() => new Set(initial.channelNames));
     const [samples, setSamples] = useState<Sample[]>(() => initial.samples ?? []);
+    const [liveSampleRange, setLiveSampleRange] = useState<[number, number] | null>(null);
     const [currentBlock, setCurrentBlock] = useState<number | null>(() => initial.samples?.[0]?.index ?? null);
     const [resetKey, setResetKey] = useState(0);
     const channelNames = useMemo(() => initial.channelNames ?? [], [initial.channelNames]);
@@ -95,6 +96,8 @@ function DataViewerApp() {
         onSliderChange,
         onSliderAfterChange,
     } = useViewportRange({ domainStart, domainEnd, resetKey });
+    const chartRange = liveSampleRange ?? viewRange;
+    const isLive = liveSampleRange !== null;
 
     const [highlightedTime, setHighlightedTime] = useState<number | null>(() => initial.samples?.[0]?.timeSeconds ?? null);
     const [viewWidth, setViewWidth] = useState<number>(() => Math.max(640, window.innerWidth));
@@ -166,12 +169,23 @@ function DataViewerApp() {
                 if (!update.live || update.reset) {
                     latestAppliedSeqRef.current = requestSeqRef.current + 1;
                 }
-                setInitial(update.payload);
+                setInitial(previous => {
+                    if (previous.channelNames
+                        && previous.channelNames.length === update.payload.channelNames?.length
+                        && previous.channelNames.every((name, index) => name === update.payload.channelNames?.[index])) {
+                        return { ...update.payload, channelNames: previous.channelNames };
+                    }
+                    return update.payload;
+                });
+                setLiveSampleRange(current => update.live && !update.reset ? current ?? viewRange : null);
                 if (update.reset) { setResetKey(current => current + 1); }
                 if (!update.live) { setSamples(update.payload.samples ?? []); }
-                setActiveChannels(current => new Set((update.payload.channelNames ?? []).filter(channel => {
-                    return !channelNames.includes(channel) || current.has(channel);
-                })));
+                setActiveChannels(current => {
+                    const next = new Set((update.payload.channelNames ?? []).filter(channel => {
+                        return !channelNames.includes(channel) || current.has(channel);
+                    }));
+                    return next.size === current.size && [...next].every(channel => current.has(channel)) ? current : next;
+                });
                 if (!update.live) {
                     setHighlightedTime(update.payload.samples?.[0]?.timeSeconds ?? null);
                     setCurrentBlock(update.payload.samples?.[0]?.index ?? null);
@@ -208,14 +222,16 @@ function DataViewerApp() {
                 return;
             }
 
-            setSamples(response.payload.samples);
+            const { rangeStart, rangeEnd, samples: rangeSamples } = response.payload;
+            setSamples(rangeSamples);
+            setLiveSampleRange(current => current === null ? null : [rangeStart, rangeEnd]);
         };
 
         window.addEventListener('message', handleMessage);
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [blockIndexFromTime, channelNames, filename]);
+    }, [blockIndexFromTime, channelNames, filename, viewRange]);
 
     useEffect(() => {
         if (initial.error) {
@@ -226,12 +242,12 @@ function DataViewerApp() {
 
         const handle = window.setTimeout(() => {
             requestVisibleRangeData(viewRange[0], viewRange[1], quality);
-        }, isDragging ? 10 : 100);
+        }, isDragging ? 10 : isLive ? 0 : 100);
 
         return () => {
             window.clearTimeout(handle);
         };
-    }, [initial, isDragging, requestVisibleRangeData, viewRange]);
+    }, [initial, isDragging, isLive, requestVisibleRangeData, viewRange]);
 
     useEffect(() => {
         if (initial.error) {
@@ -276,7 +292,7 @@ function DataViewerApp() {
     const colors = useMemo(() => ['#4fc3f7', '#81c784', '#ffb74d', '#e57373', '#ba68c8', '#4db6ac', '#fff176', '#f06292', '#90a4ae', '#aed581'], []);
 
     const chartData = useMemo<ChartSample[]>(() => {
-        const [start, end] = viewRange;
+        const [start, end] = chartRange;
         const active = channelNames.filter((name) => activeChannels.has(name));
         const dataByChannel = new Map<string, ChartSample[]>();
 
@@ -315,7 +331,7 @@ function DataViewerApp() {
         }
 
         return reduced.sort((a, b) => a.x - b.x);
-    }, [activeChannels, channelNames, decimationPreset, isDragging, samples, viewRange, viewWidth]);
+    }, [activeChannels, channelNames, chartRange, decimationPreset, isDragging, samples, viewWidth]);
 
     const onCursorChange = useCallback((time: number, block: number | null) => {
         setHighlightedTime(time);
@@ -389,7 +405,7 @@ function DataViewerApp() {
                     color={colors}
                     smooth={false}
                     highlightedX={highlightedTime}
-                    xRange={viewRange}
+                    xRange={chartRange}
                     onCursorChange={onCursorChange}
                     onZoomRangeChange={(range) => setViewRangeClamped(range[0], range[1])}
                     theme={getIsDarkTheme() ? 'classicDark' : 'classic'}
