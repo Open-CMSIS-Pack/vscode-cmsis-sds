@@ -38,7 +38,7 @@ function probePort(port: number): Promise<number> {
     return new Promise((resolve, reject) => {
         const server = net.createServer();
         server.once('error', reject);
-        server.listen({ host: '0.0.0.0', port, exclusive: true }, () => {
+        server.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
             const address = server.address() as net.AddressInfo;
             // Release the probe before the separately launched SDSIO process binds the port.
             server.close((error) => {

@@ -173,6 +173,20 @@ Open an `.sds` file from the SDS View. Its
 the stream is decoded and displayed. The SDS Viewer shows values and charts, while the Media Viewer handles audio,
 image, and video. Related viewers synchronize by timestamp so you can correlate algorithm input and output streams.
 
+Open viewers refresh automatically as complete records are appended to the recording. For data and audio charts:
+
+- A view fitted to the entire recording expands to include new data.
+- A zoomed historical range keeps its zoom and position.
+- A zoomed range at the end follows incoming data while keeping the same time span.
+
+Audio waveforms and playback use windowed requests. Playback starts at the left edge of the visible range. When that
+range reaches the recording's end, playback can continue into arriving audio while enough data is available. Playback
+stops when it catches up with the recording and does not restart automatically. A historical range plays only to its
+selected end.
+
+A paused image viewer follows new frames only when its last frame is selected. Selecting an older frame keeps that
+selection, and incoming frames preserve spatial zoom and scroll.
+
 ![Synchronized data and video](media/screenshots/data-video-telemetry.png)
 
 ![Synchronized data and audio](media/screenshots/data-audio.png)
@@ -210,9 +224,17 @@ default value. The SDSIO monitor-port setting is machine-scoped; when using a re
 
 ### The preferred monitor port is unavailable
 
-The local monitor uses TCP port `6060` by default. Before starting SDSIO, the extension checks the preferred port. If
-it is occupied or access is denied, the operating system selects an available port, which is passed to both server and
-client. The selected port appears in the **Arm SDS** output channel; the setting itself is not changed.
+The local monitor uses TCP port `6060` by default. The extension automatically reuses only a server it launched
+for the selected control file. An SDSIO `INFO` greeting identifies the protocol, not the server's configuration.
+If another server is detected, connection is refused without stopping it. Disconnect an extension-owned server
+or manually close an external server when safe, then connect again. Servers from other VS Code windows are
+also treated as external.
+
+When no server is detected, the extension checks port availability on `127.0.0.1`, matching the server's listening
+address. If the port is occupied by another application or access is denied, the operating system
+selects an available port, which is passed to both server and client. The selected port appears in the **Arm SDS**
+output channel; the setting itself is not changed. A TCP connection alone is not considered a successful monitor
+connection: the extension must receive SDSIO `INFO`, including after launching a new server.
 
 This check cannot detect firewall filtering, and another process could claim the port before server startup. If
 problems persist, allow the SDSIO-Server through the local firewall or choose another

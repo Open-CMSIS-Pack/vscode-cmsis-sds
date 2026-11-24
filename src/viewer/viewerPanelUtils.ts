@@ -21,6 +21,49 @@ import { webviewBus } from '../webview/webview-bus';
 import { isMessage } from '../webview/guard';
 import { SDS_FILE_MATCHER } from '../webview/utilities';
 import type { SdsioConfigManager } from '../controller/sdsioConfigManager';
+import { parseSdsBuffer } from '../sds/parser';
+import type { SdsParsedFile } from '../sds/types';
+
+export function registerSdsRefresh(filePath: string, onChange: (reset: boolean) => void): vscode.Disposable {
+    const listener = (current: fs.Stats, previous: fs.Stats) => {
+        if (!current.nlink || (current.size === previous.size && current.mtimeMs === previous.mtimeMs)) { return; }
+        const reset = !previous.nlink || current.ino !== previous.ino || current.birthtimeMs !== previous.birthtimeMs
+            || current.size <= previous.size;
+        onChange(reset);
+    };
+    fs.watchFile(filePath, { interval: 500, persistent: false }, listener);
+    return new vscode.Disposable(() => fs.unwatchFile(filePath, listener));
+}
+
+export function readSdsAppend(filePath: string, previous: SdsParsedFile): SdsParsedFile {
+    const offset = previous.totalDataSize + previous.records.length * 8;
+    const descriptor = fs.openSync(filePath, 'r');
+    try {
+        // Size and inode cannot distinguish an append from truncate-and-regrow between polls.
+        // Verify every retained record against the same snapshot used to parse the new tail.
+        const buffer = fs.readFileSync(descriptor);
+        let position = 0;
+        for (const record of previous.records) {
+            if (position + 8 + record.dataSize > buffer.length
+                || buffer.readUInt32LE(position) !== record.timestamp
+                || buffer.readUInt32LE(position + 4) !== record.dataSize
+                || !buffer.subarray(position + 8, position + 8 + record.dataSize).equals(record.data)) {
+                return parseSdsBuffer(buffer, filePath, { strict: false });
+            }
+            position += 8 + record.dataSize;
+        }
+        const appended = parseSdsBuffer(buffer.subarray(offset), filePath, { strict: false });
+        if (!appended.records.length) { return previous; }
+        const records = previous.records.concat(appended.records);
+        return {
+            filePath, records, totalRecords: records.length,
+            totalDataSize: previous.totalDataSize + appended.totalDataSize,
+            durationMs: records[records.length - 1].timestamp - records[0].timestamp,
+        };
+    } finally {
+        fs.closeSync(descriptor);
+    }
+}
 
 /**
  * Resolve the metadata (.sds.yml) file path for a given .sds file.

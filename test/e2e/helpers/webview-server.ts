@@ -48,7 +48,23 @@ const MOCK_VSCODE_API = `
     };
     window.acquireVsCodeApi = function() {
         return {
-            postMessage: function(msg) { window.__messages.push(msg); },
+            postMessage: function(msg) {
+                window.__messages.push(msg);
+                if (msg.command === 'requestMediaAudioWindow' && window.__INITIAL_STATE__?.audio) {
+                    const audio = window.__INITIAL_STATE__.audio;
+                    const start = msg.payload.rangeStart;
+                    const end = msg.payload.rangeEnd;
+                    const samples = audio.samples.flatMap(frame => {
+                        const first = Math.max(0, Math.ceil((start - frame.timestamp) * audio.sampleRate - 1e-7));
+                        const last = Math.min(frame.samples.length, Math.ceil((end - frame.timestamp) * audio.sampleRate - 1e-7));
+                        return last > first ? [{ timestamp: frame.timestamp + first / audio.sampleRate, samples: frame.samples.slice(first, last) }] : [];
+                    });
+                    setTimeout(() => window.dispatchEvent(new MessageEvent('message', {
+                        origin: window.location.origin,
+                        data: { command: 'mediaAudioWindowData', requestId: msg.requestId, payload: { rangeStart: start, rangeEnd: end, samples } },
+                    })), 0);
+                }
+            },
             getState: function() { return window.__state || {}; },
             setState: function(s) { window.__state = s; },
         };
