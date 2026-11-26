@@ -129,7 +129,8 @@ export class SdsioServerLauncher {
             sdsio?: { 'write-flush-records'?: unknown };
         } | null;
         const flushArgs = config?.sdsio?.['write-flush-records'] === undefined
-            ? ['--write-flush-records', '0'] : [];
+            ? ['--write-flush-records', '0'] // always flush if not specified in config
+            : []; // use the value from the config if specified
         const configDir = path.dirname(options.configFile);
         this.monitorPort = options.monitorPort;
         this.configFile = path.resolve(options.configFile);
