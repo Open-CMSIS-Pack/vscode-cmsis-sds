@@ -45,6 +45,91 @@
         "redhat.vscode-yaml"
     ],
     "contributes": {
+        "walkthroughs": [
+            {
+                "id": "arm-sds.getStarted",
+                "title": "Get Started with Arm SDS",
+                "description": "Open recorded SDS data, inspect streams, and set up recording or playback.",
+                "steps": [
+                    {
+                        "id": "openData",
+                        "title": "Open recorded SDS data",
+                        "description": "Already have a recording? Select a .sds file to inspect its sensor data in the SDS Viewer. You do not need an SDSIO configuration to open an existing file. Keep the matching .sds.yml metadata with your recording so the viewer can decode the channels.\n[Open SDS Viewer](command:arm-sds.openViewer)\n[Quick Open a Workspace Recording](command:arm-sds.quickOpen)",
+                        "media": {
+                            "image": "media/screenshots/data-video-telemtry.png",
+                            "altText": "SDS sensor data charts alongside a synchronized video stream."
+                        },
+                        "completionEvents": [
+                            "onCommand:arm-sds.openViewer",
+                            "onCommand:arm-sds.quickOpen"
+                        ]
+                    },
+                    {
+                        "id": "metadata",
+                        "title": "Describe your stream with metadata",
+                        "description": "Metadata describes the sample frequency, channel names, data types, and units. For example, sensor.0.sds uses sensor.sds.yml. Select a recording to create or edit its metadata, and replace template values with the actual stream layout before decoding or exporting data.\n[Create or Edit Metadata](command:arm-sds.createMetadata)",
+                        "media": {
+                            "image": "media/screenshots/sds-file-context-menu.png",
+                            "altText": "SDS file context menu with metadata, viewer, and export actions."
+                        },
+                        "completionEvents": [
+                            "onCommand:arm-sds.createMetadata"
+                        ]
+                    },
+                    {
+                        "id": "media",
+                        "title": "Inspect audio, images, or video",
+                        "description": "For recordings containing media, select a .sds file with matching media metadata to open the Media Viewer. Open related sensor recordings in the SDS Viewer to inspect synchronized cursors by timestamp. Skip this step for sensor-only data.\n[Open Media Viewer](command:arm-sds.openMediaViewer)",
+                        "media": {
+                            "image": "media/screenshots/data-audio.png",
+                            "altText": "SDS audio recording displayed with waveform and playback controls."
+                        },
+                        "completionEvents": [
+                            "onCommand:arm-sds.openMediaViewer"
+                        ]
+                    },
+                    {
+                        "id": "configuration",
+                        "title": "Set up an SDS workspace (optional)",
+                        "description": "To organize streams in the Arm SDS Activity Bar view or use SDSIO, open an existing .sdsio.yml configuration or create one in an open workspace folder. Set workdir to your recordings directory and metadir to your metadata directory. Opening a configuration outside the current workspace opens its folder.\n[Open Configuration](command:arm-sds.sds.openConfig)\n[Create Configuration](command:arm-sds.sds.newConfig)",
+                        "media": {
+                            "image": "media/screenshots/sds-view-open-configuration.png",
+                            "altText": "Arm SDS view showing an active configuration and grouped recording files."
+                        },
+                        "completionEvents": [
+                            "onCommand:arm-sds.sds.openConfig",
+                            "onCommand:arm-sds.sds.newConfig",
+                            "onCommand:arm-sds.sds.selectConfig"
+                        ]
+                    },
+                    {
+                        "id": "recordAndPlay",
+                        "title": "Record or play back streams (optional)",
+                        "description": "With an active configuration, an available SDSIO server, and a configured target connection, use Connect SDSIO Monitor in the Arm SDS toolbar. Record captures target data, Play runs the configuration's play steps, and Stop ends the session. Review your interface and stream settings before starting.\n[Edit Active Configuration](command:arm-sds.sds.editConfig)",
+                        "media": {
+                            "image": "media/screenshots/toolbar.png",
+                            "altText": "Arm SDS toolbar with playback, recording, stop, connection, and configuration controls."
+                        },
+                        "completionEvents": [
+                            "onCommand:arm-sds.sdsinterface.record",
+                            "onCommand:arm-sds.sdsinterface.play"
+                        ]
+                    },
+                    {
+                        "id": "export",
+                        "title": "Export sensor data to CSV",
+                        "description": "Select a sensor recording, then choose where to save its decoded CSV data for further analysis. Export requires the matching .sds.yml metadata alongside the recording.\n[Export SDS to CSV](command:arm-sds.exportCsv)",
+                        "media": {
+                            "image": "media/screenshots/sds-file-context-menu.png",
+                            "altText": "SDS file context menu including Export SDS to CSV."
+                        },
+                        "completionEvents": [
+                            "onCommand:arm-sds.exportCsv"
+                        ]
+                    }
+                ]
+            }
+        ],
         "commands": [
             {
                 "command": "arm-sds.openViewer",
