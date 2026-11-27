@@ -67,6 +67,7 @@ describe('SdsioServerLauncher', () => {
         vi.clearAllMocks();
         processList.execute.mockReset();
         tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sdsio-launcher-'));
+        fs.writeFileSync(path.join(tmpDir, 'sample.sdsio.yml'), 'sdsio: {}\n');
         mockTerminal = {
             sendText: vi.fn(),
             show: vi.fn(),
@@ -95,6 +96,8 @@ describe('SdsioServerLauncher', () => {
         const serverBinary = path.join(toolsDir, binaryName);
         fs.writeFileSync(serverBinary, '');
         const configFile = path.join(tmpDir, 'workspace with spaces', 'sample config.sdsio.yml');
+        fs.mkdirSync(path.dirname(configFile), { recursive: true });
+        fs.writeFileSync(configFile, 'sdsio: {}\n');
         defaultProfile = profile;
 
         const launcher = new SdsioServerLauncher(diagnostics);
@@ -110,13 +113,38 @@ describe('SdsioServerLauncher', () => {
             name: expect.stringMatching(/^SDSIO Server /),
             cwd: path.dirname(configFile),
             shellPath: serverBinary,
-            shellArgs: ['--control', configFile, '--mon-port', '6060'],
+            shellArgs: ['--control', configFile, '--mon-port', '6060', '--write-flush-records', '0'],
             iconPath: expect.objectContaining({ id: 'arm-sds-sds-icon' }),
             hideFromUser: true,
         });
         expect(vscode.workspace.getConfiguration).not.toHaveBeenCalled();
         expect(mockTerminal.show).toHaveBeenCalledExactlyOnceWith(true);
         expect(mockTerminal.sendText).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['sdsio: {}', true],
+        ['', true],
+        ['sdsio:\n  # write-flush-records: 12\n  streams: []', true],
+        ['write-flush-records: 12\nsdsio: {}', true],
+        ['sdsio:\n  write-flush-records: 0', false],
+        ['sdsio:\n  write-flush-records: 12', false],
+    ])('defaults write flushing only when omitted in %j', async (yaml, useDefault) => {
+        const toolsDir = path.join(tmpDir, 'tools');
+        fs.mkdirSync(toolsDir, { recursive: true });
+        fs.writeFileSync(path.join(toolsDir, 'sdsio-server.exe'), '');
+        const configFile = path.join(tmpDir, 'sample.sdsio.yml');
+        fs.writeFileSync(configFile, yaml);
+        const launcher = new SdsioServerLauncher(diagnostics);
+
+        await launcher.start({ basePath: tmpDir, configFile, monitorPort: 6060 });
+
+        expect(vscode.window.createTerminal).toHaveBeenCalledWith(expect.objectContaining({
+            shellArgs: [
+                '--control', configFile, '--mon-port', '6060',
+                ...(useDefault ? ['--write-flush-records', '0'] : []),
+            ],
+        }));
     });
 
     it('logs an error and returns false when server binary is missing', async () => {
@@ -179,7 +207,7 @@ describe('SdsioServerLauncher', () => {
         fs.mkdirSync(toolsDir, { recursive: true });
         fs.writeFileSync(path.join(toolsDir, 'sdsio-server.exe'), '');
         const launcher = new SdsioServerLauncher(diagnostics);
-        const options = { basePath: tmpDir, configFile: 'sample.sdsio.yml', monitorPort: 49152 };
+        const options = { basePath: tmpDir, configFile: path.join(tmpDir, 'sample.sdsio.yml'), monitorPort: 49152 };
 
         await expect(launcher.start(options)).resolves.toBe(true);
         await expect(launcher.getRunningServerPort(6060)).resolves.toBe(49152);
@@ -202,7 +230,7 @@ describe('SdsioServerLauncher', () => {
         const launcher = new SdsioServerLauncher(diagnostics);
         await launcher.start({
             basePath: tmpDir,
-            configFile: 'sample.sdsio.yml',
+            configFile: path.join(tmpDir, 'sample.sdsio.yml'),
             monitorPort: 6060,
         });
 

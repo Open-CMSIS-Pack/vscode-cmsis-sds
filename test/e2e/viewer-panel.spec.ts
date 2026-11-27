@@ -194,6 +194,7 @@ test.describe('Viewer Panel — Interactions', () => {
         await captureCanvasLabels(page);
         await openViewer(page);
         await expect.poll(() => getXAxisLabels(page)).toEqual(['1', '2', '3']);
+        const previousTicks = await getXAxisTicks(page);
         await page.evaluate(() => {
             const initial = (window as unknown as { __INITIAL_STATE__: Record<string, unknown> }).__INITIAL_STATE__;
             window.dispatchEvent(new MessageEvent('message', {
@@ -204,6 +205,7 @@ test.describe('Viewer Panel — Interactions', () => {
         await page.waitForFunction(() => (window as unknown as {
             __messages: { command: string; payload?: { rangeEnd: number } }[];
         }).__messages.some(message => message.command === 'requestVisibleRangeData' && message.payload?.rangeEnd === 0.05));
+        expect(await getXAxisTicks(page)).toEqual(previousTicks);
         await page.evaluate(() => {
             const state = window as unknown as {
                 __INITIAL_STATE__: Record<string, unknown>;
@@ -468,7 +470,7 @@ test.describe('Viewer Panel — Interactions', () => {
         await expect.poll(visibleSignals).toEqual([false, false, false]);
     });
 
-    test('preserves hidden signals when clicking and dragging the time cursor', async ({ page }) => {
+    test('preserves legend clicks across live updates and time cursor changes', async ({ page }) => {
         await captureCanvasLabels(page);
         await openViewer(page);
 
@@ -497,7 +499,31 @@ test.describe('Viewer Panel — Interactions', () => {
             return labels.find(label => label.text === 'y');
         });
         expect(legendLabel).toBeDefined();
-        await canvas.click({ position: { x: legendLabel!.x + 3, y: legendLabel!.y } });
+        const canvasBounds = (await canvas.boundingBox())!;
+        await page.mouse.move(canvasBounds.x + legendLabel!.x + 3, canvasBounds.y + legendLabel!.y);
+        await page.mouse.down();
+        const beforeUpdate = await canvas.evaluate(element => (element as HTMLCanvasElement).toDataURL());
+        await page.evaluate(() => {
+            const initial = (window as unknown as {
+                __INITIAL_STATE__: { samples: { values: Record<string, number> }[] };
+            }).__INITIAL_STATE__;
+            window.dispatchEvent(new MessageEvent('message', {
+                origin: window.location.origin,
+                data: {
+                    command: 'viewerStateChanged',
+                    payload: {
+                        ...initial,
+                        samples: initial.samples.map(sample => ({
+                            ...sample,
+                            values: { ...sample.values, x: sample.values.x + 0.25, y: sample.values.y + 0.25 },
+                        })),
+                    },
+                },
+            }));
+        });
+        await expect.poll(() => canvas.evaluate((element, previous) =>
+            (element as HTMLCanvasElement).toDataURL() !== previous, beforeUpdate)).toBe(true);
+        await page.mouse.up();
         await expect.poll(signalPixelCount).toBe(0);
 
         const bounds = (await canvas.boundingBox())!;

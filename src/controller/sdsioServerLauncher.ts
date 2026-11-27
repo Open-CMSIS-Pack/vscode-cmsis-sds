@@ -19,6 +19,7 @@ import { execFile } from 'child_process';
 import path from 'path';
 import { promisify } from 'util';
 import * as vscode from 'vscode';
+import { parse as parseYaml } from 'yaml';
 import { DiagnosticSource, SdsDiagnostics } from '../diagnostics/sdsDiagnostics';
 
 export type SdsioServerLaunchOptions = {
@@ -124,6 +125,12 @@ export class SdsioServerLauncher {
             return false;
         }
 
+        const config = parseYaml(fs.readFileSync(options.configFile, 'utf8')) as {
+            sdsio?: { 'write-flush-records'?: unknown };
+        } | null;
+        const flushArgs = config?.sdsio?.['write-flush-records'] === undefined
+            ? ['--write-flush-records', '0'] // always flush if not specified in config
+            : []; // use the value from the config if specified
         const configDir = path.dirname(options.configFile);
         this.monitorPort = options.monitorPort;
         this.configFile = path.resolve(options.configFile);
@@ -135,6 +142,7 @@ export class SdsioServerLauncher {
             shellArgs: [
                 '--control', options.configFile,
                 '--mon-port', String(options.monitorPort),
+                ...flushArgs,
             ],
             iconPath: new vscode.ThemeIcon('arm-sds-sds-icon'),
             hideFromUser: true,
